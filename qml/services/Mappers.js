@@ -122,6 +122,11 @@ function toGalleryPost(raw) {
         authorImage: raw.author_image_url || "",
         date: raw.publish_date || "",
         images: imgs,
+        // A dynamicRoles ListModel wraps the `images` array into a nested model
+        // whose .get(i) loses the bare URL strings (returns empty objects), so
+        // the feed card reads this newline-joined scalar instead — scalars
+        // survive the ListModel intact. URLs never contain a raw newline.
+        imagesStr: imgs.join("\n"),
         caption: raw.title || "",
         votes: toInt(raw.voter_count),
         flaggers: voterNames(raw.flaggers),

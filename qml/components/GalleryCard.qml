@@ -67,14 +67,14 @@ Item {
     // images may arrive as a plain JS array (fresh map) or a wrapped
     // ListModel (dynamicRoles re-binding); normalise to a plain array.
     function _images() {
+        // Prefer the scalar `imagesStr` — a dynamicRoles ListModel destroys the
+        // wrapped `images` array (its .get(i) returns empty objects, not URLs),
+        // whereas the joined string survives intact.
+        if (typeof p.imagesStr === "string" && p.imagesStr.length > 0)
+            return p.imagesStr.split("\n");
         var v = p.images;
         if (!v) return [];
         if (typeof v.length === "number") return v;
-        if (typeof v.count === "number") {
-            var out = [];
-            for (var i = 0; i < v.count; i++) out.push(v.get(i));
-            return out;
-        }
         return [];
     }
 
