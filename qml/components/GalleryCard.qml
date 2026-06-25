@@ -28,7 +28,9 @@ Item {
         root.isFollowing = false;
         if (Session.isLoggedIn && p.author && p.author !== Session.username) {
             FollowService.status(Config.baseUrl, Session.username, p.author,
-                function (following) { root.isFollowing = following; },
+                // `root` may be null if the delegate was recycled before the
+                // async response arrived — guard against the destroyed card.
+                function (following) { if (root) root.isFollowing = following; },
                 function (err) { /* keep default false */ });
         }
     }
@@ -273,13 +275,14 @@ Item {
             onCommentRequested: root.clicked()
         }
 
-        // Caption
+        // Caption (Lomiri Label has no top/bottomPadding in Components 1.3,
+        // so spacing is provided by visible-gated spacer Items — the Column
+        // positioner skips invisible children.)
+        Item { width: 1; height: Style.spacingXs; visible: (p.caption || "") !== "" }
         Label {
             visible: (p.caption || "") !== ""
             width: parent.width - Style.spacingM * 2
             x: Style.spacingM
-            topPadding: Style.spacingXs
-            bottomPadding: Style.spacingS
             text: p.caption || ""
             font.pixelSize: Style.fontRegular
             font.family: Style.fontFamily
@@ -288,6 +291,7 @@ Item {
             maximumLineCount: 2
             elide: Text.ElideRight
         }
+        Item { width: 1; height: Style.spacingS; visible: (p.caption || "") !== "" }
 
         Rectangle { width: parent.width; height: units.dp(1); color: Style.divider }
     }

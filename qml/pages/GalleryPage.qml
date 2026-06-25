@@ -78,12 +78,15 @@ Page {
             onRequireLogin: page.pageStack.push(Qt.resolvedUrl("LoginPage.qml"))
         }
 
+        // Constant-height footer: a conditional height feeds back into
+        // contentHeight/atYEnd and trips a "height" binding loop.
         footer: Item {
             width: list.width
-            height: page.loading ? units.gu(6) : 0
+            height: units.gu(6)
             ActivityIndicator {
                 anchors.centerIn: parent
                 running: page.loading && galleryModel.count > 0
+                visible: running
             }
         }
 

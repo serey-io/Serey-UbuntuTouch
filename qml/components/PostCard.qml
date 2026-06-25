@@ -51,7 +51,9 @@ Item {
         root.isFollowing = false;
         if (Session.isLoggedIn && p.author && p.author !== Session.username) {
             FollowService.status(Config.baseUrl, Session.username, p.author,
-                function (following) { root.isFollowing = following; },
+                // `root` may be null if the delegate was recycled before the
+                // async response arrived — guard against the destroyed card.
+                function (following) { if (root) root.isFollowing = following; },
                 function (err) { /* keep default false */ });
         }
     }

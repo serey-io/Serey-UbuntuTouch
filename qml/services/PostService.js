@@ -27,11 +27,13 @@ function listNew(baseUrl, params, token, onOk, onErr) {
     _list(baseUrl, "/serey-web/list-by-new", params, token, onOk, onErr);
 }
 
-// Gallery: the dedicated /serey-web/list-gallery-post* endpoints reject every
-// parameter combination tried ("Invalid parameter"), so we reuse the working
-// list-by-new feed and keep only posts that actually carry an image.
+// Gallery: the dedicated image-post feed. Takes limit + offset (offset=0 is
+// sent as "0", which the backend accepts), and community_id to narrow by region
+// exactly like the blog feeds. Requires only optional auth; the token, when
+// present, personalises voters/flaggers state. Mapped via toGalleryPost, which
+// already expects this endpoint's fields (image_url, voter_count, serey_value…).
 function listGallery(baseUrl, params, token, onOk, onErr) {
-    Http.get(baseUrl, "/serey-web/list-by-new", params, token, function (data) {
+    Http.get(baseUrl, "/serey-web/list-gallery-post-by-new", params, token, function (data) {
         var posts = (data.posts || []).map(M.toGalleryPost).filter(function (p) {
             return p.images.length > 0;
         });
