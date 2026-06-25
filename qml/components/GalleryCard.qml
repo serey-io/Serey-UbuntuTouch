@@ -212,7 +212,9 @@ Item {
                 source: root.imgs.length > 0 ? root.imgs[0] : ""
                 fillMode: Image.PreserveAspectCrop
                 asynchronous: true
-                sourceSize.width: cover.width
+                // Showcase photo in a square crop — decode at 2× display width so
+                // PreserveAspectCrop downsamples (sharp) instead of upscaling (blur).
+                sourceSize.width: cover.width * 2
                 Behavior on opacity { NumberAnimation { duration: 200 } }
                 opacity: status === Image.Ready ? 1.0 : 0.0
             }
