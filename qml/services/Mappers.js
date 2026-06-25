@@ -106,6 +106,18 @@ function toVideo(raw) {
     };
 }
 
+function toCommunity(raw) {
+    raw = raw || {};
+    return {
+        id: raw.id,
+        title: raw.title || "",
+        dns: raw.dns || "",
+        icon: raw.icon_url || raw.logo_url || "",
+        country: raw.country || "",
+        level: toInt(raw.level)
+    };
+}
+
 function toUser(username, raw) {
     raw = raw || {};
     var name = raw.full_name;

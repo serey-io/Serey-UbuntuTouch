@@ -26,9 +26,23 @@ Page {
                 onTriggered: page.reload()
             }
         ]
+        extension: Sections {
+            id: sourceSections
+            anchors { left: parent.left; leftMargin: units.gu(2); bottom: parent.bottom }
+            model: Config.sourceNames
+            onSelectedIndexChanged: if (selectedIndex !== Config.sourceIndex) Config.sourceIndex = selectedIndex
+        }
     }
 
     ListModel { id: feedModel; dynamicRoles: true }
+
+    Connections {
+        target: Config
+        onSourceIndexChanged: {
+            sourceSections.selectedIndex = Config.sourceIndex;
+            page.reload();
+        }
+    }
 
     function reload() {
         offset = 0;
@@ -42,7 +56,10 @@ Page {
         if (loading || endReached) return;
         loading = true;
         errorMsg = "";
-        VideoService.listVideos(Config.baseUrl, { limit: Config.pageSize, offset: page.offset }, Session.token,
+        var params = { limit: Config.pageSize, offset: page.offset };
+        if (Config.communityId > 0)
+            params.community_id = Config.communityId;
+        VideoService.listVideos(Config.baseUrl, params, Session.token,
             function (result) {
                 loading = false;
                 for (var i = 0; i < result.length; i++)
@@ -56,7 +73,10 @@ Page {
             });
     }
 
-    Component.onCompleted: loadMore()
+    Component.onCompleted: {
+        sourceSections.selectedIndex = Config.sourceIndex;
+        loadMore();
+    }
 
     ListView {
         id: list

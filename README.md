@@ -5,8 +5,10 @@ network. It reuses the existing production backend (`serey-api`) and provides
 four sections — **Home**, **Blog**, **Video** and **Settings** — wired end-to-end
 to the live API, including login and persisted authentication.
 
-This is the first milestone scaffold; more sections (gallery, drum, wallet, …)
-will follow.
+This is the first milestone scaffold. The app is evolving toward a **hybrid**
+design (native sections + an embedded web "Homepage"); see
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the target design and
+[`docs/API_REFERENCE.md`](docs/API_REFERENCE.md) for the backend contract.
 
 ---
 
@@ -99,8 +101,10 @@ quirks, so the QML always works with clean objects (`title`, `body`, `thumbnail`
 | Logout        | `DELETE /auth/logout` |
 | Profile       | `GET /accounts/details-by-username/:username` |
 
-Lists are paginated with `?limit=&offset=` only. **Note:** sending `community_id`
-to the list endpoints is rejected (`Invalid parameter`), so it is not used.
+Lists are paginated with `?limit=&offset=`. The list endpoints **also accept
+`?community_id=`**, which filters server-side and recursively (a parent community
+includes its children) — this is how regional sources (Serey Netherlands `99`,
+US `26`, Global `1`) are implemented. See [`docs/`](docs/) for the full picture.
 
 Authenticated calls send `Authorization: Bearer <token>`. Tokens last ~24h with
 no refresh endpoint; on a 401 the user re-logs in.

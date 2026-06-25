@@ -42,13 +42,13 @@ MainView {
             id: homeStack
             anchors.fill: parent
             visible: root.currentTab === 0
-            Component.onCompleted: push(Qt.resolvedUrl("pages/HomePage.qml"))
+            Component.onCompleted: push(Qt.resolvedUrl("pages/HomepagePage.qml"))
         }
         PageStack {
-            id: blogStack
+            id: newsStack
             anchors.fill: parent
             visible: root.currentTab === 1
-            Component.onCompleted: push(Qt.resolvedUrl("pages/BlogPage.qml"))
+            Component.onCompleted: push(Qt.resolvedUrl("pages/NewsPage.qml"))
         }
         PageStack {
             id: videoStack
@@ -82,8 +82,8 @@ MainView {
 
             Repeater {
                 model: [
-                    { label: i18n.tr("Home"),     icon: "home" },
-                    { label: i18n.tr("Blog"),     icon: "stock_note" },
+                    { label: i18n.tr("Homepage"), icon: "home" },
+                    { label: i18n.tr("News"),     icon: "stock_note" },
                     { label: i18n.tr("Video"),    icon: "camcorder" },
                     { label: i18n.tr("Settings"), icon: "settings" }
                 ]
