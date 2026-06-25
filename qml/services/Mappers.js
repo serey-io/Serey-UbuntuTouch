@@ -49,16 +49,24 @@ function stripHtml(html, max) {
     return text;
 }
 
+// YouTube's maxresdefault.jpg is missing for many videos (404). hqdefault.jpg
+// always exists, so prefer it.
+function fixThumb(url) {
+    if (url && url.indexOf("img.youtube.com") >= 0)
+        return url.replace("maxresdefault", "hqdefault");
+    return url;
+}
+
 // Pick a thumbnail for a post: explicit list field, else first <img> in the body.
 function firstImage(raw) {
     var imgs = parseList(raw.image_url);
     if (imgs.length)
-        return imgs[0];
+        return fixThumb(imgs[0]);
     if (raw.thumbnail_url)
-        return raw.thumbnail_url;
+        return fixThumb(raw.thumbnail_url);
     var desc = raw.description || raw.post_description || "";
     var m = /<img[^>]+src=["']([^"']+)["']/i.exec(desc);
-    return m ? m[1] : "";
+    return m ? fixThumb(m[1]) : "";
 }
 
 // Normalise a voters/flaggers list to plain usernames. The API sends either
@@ -130,7 +138,7 @@ function toVideo(raw) {
         title: raw.title || "(untitled)",
         body: raw.description || raw.post_description || "",
         excerpt: stripHtml(raw.description || raw.post_description || "", 180),
-        thumbnail: raw.thumbnail_url || "",
+        thumbnail: fixThumb(raw.thumbnail_url || ""),
         authorImage: raw.author_image_url || raw.post_author_image_url || "",
         date: raw.publish_date || "",
         votes: toInt(raw.voter_count),

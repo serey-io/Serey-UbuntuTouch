@@ -1,5 +1,5 @@
 {
-    "name": "serey.tehenglay",
+    "name": "serey.draxler",
     "description": "Serey network client for Ubuntu Touch — feed, blog, videos and account.",
     "architecture": "$ENV{ARCH}",
     "title": "Serey",
@@ -10,6 +10,6 @@
         }
     },
     "version": "0.1.0",
-    "maintainer": "Teh Englay <tehenglay098@gmail.com>",
+    "maintainer": "Draxler <hengthegoat@gmail.com>",
     "framework": "$ENV{CLICK_FRAMEWORK}"
 }

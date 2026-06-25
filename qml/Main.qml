@@ -13,7 +13,7 @@ import "services/AccountService.js" as AccountService
 MainView {
     id: root
     objectName: "mainView"
-    applicationName: "serey.tehenglay"
+    applicationName: "serey.draxler"
     automaticOrientation: true
 
     width: units.gu(45)

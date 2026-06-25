@@ -94,7 +94,7 @@ Page {
 
         footer: Item {
             width: list.width
-            height: page.loading && feedModel.count > 0 ? units.gu(6) : 0
+            height: page.loading ? units.gu(6) : 0
             ActivityIndicator {
                 anchors.centerIn: parent
                 running: page.loading && feedModel.count > 0
