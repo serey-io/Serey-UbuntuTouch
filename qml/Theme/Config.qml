@@ -42,4 +42,13 @@ QtObject {
     readonly property int communityId: sources[sourceIndex].id
     readonly property string communityDns: sources[sourceIndex].dns
     readonly property string communityName: sources[sourceIndex].name
+
+    // Map of community dns -> icon URL, fetched from the backend at startup
+    // (see Main.qml) so the source switcher shows each country's real icon.
+    property var iconByDns: ({})
+
+    function communityIcon(dns) {
+        var u = iconByDns[dns];
+        return u ? u : "";
+    }
 }

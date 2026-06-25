@@ -90,12 +90,26 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         width: units.gu(5); height: width
                         radius: width / 2
-                        color: index === Config.sourceIndex ? Style.brand : Style.iconBackground
+                        color: Style.iconBackground
+                        clip: true
+                        border.width: index === Config.sourceIndex ? units.dp(2) : 0
+                        border.color: Style.brand
+
+                        Image {
+                            id: commIcon
+                            anchors.fill: parent
+                            anchors.margins: units.dp(2)
+                            source: Config.communityIcon(modelData.dns)
+                            fillMode: Image.PreserveAspectCrop
+                            asynchronous: true
+                            visible: source != "" && status === Image.Ready
+                        }
                         Icon {
                             anchors.centerIn: parent
                             width: units.gu(2.5); height: width
                             name: "language-chooser"
-                            color: index === Config.sourceIndex ? Style.textOnBrand : Style.textSecondary
+                            color: index === Config.sourceIndex ? Style.brand : Style.textSecondary
+                            visible: !commIcon.visible
                         }
                     }
                     Label {

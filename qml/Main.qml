@@ -4,6 +4,7 @@ import "Theme"
 import "Session"
 import "components"
 import "services/AccountService.js" as AccountService
+import "services/CommunityService.js" as CommunityService
 
 /*
  * Application shell: a persistent bottom tab bar with one PageStack per tab so
@@ -35,6 +36,11 @@ MainView {
                 function (account) { /* token still valid */ },
                 function (err) { Session.clear(); });
         }
+        // Fetch each community's real icon so the source switcher shows the
+        // country images instead of a generic globe.
+        CommunityService.listAll(Config.baseUrl,
+            function (list) { Config.iconByDns = CommunityService.iconMap(list); },
+            function (err) { /* keep globe fallback */ });
     }
 
     // --- Global header (community pill + logo) ----------------------------

@@ -41,12 +41,27 @@ Rectangle {
             }
             spacing: Style.spacingXs
 
-            Icon {
+            Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
-                width: units.gu(2.5)
-                height: width
-                name: "language-chooser"
-                color: Style.textPrimary
+                width: units.gu(2.6); height: width
+                radius: width / 2
+                color: "transparent"
+                clip: true
+                Image {
+                    id: pillIcon
+                    anchors.fill: parent
+                    source: Config.communityIcon(Config.communityDns)
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                    visible: source != "" && status === Image.Ready
+                }
+                Icon {
+                    anchors.centerIn: parent
+                    width: units.gu(2.5); height: width
+                    name: "language-chooser"
+                    color: Style.textPrimary
+                    visible: !pillIcon.visible
+                }
             }
             Label {
                 anchors.verticalCenter: parent.verticalCenter
