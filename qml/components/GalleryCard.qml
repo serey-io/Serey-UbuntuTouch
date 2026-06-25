@@ -123,24 +123,10 @@ Item {
                         }
                     }
 
-                    Image {
-                        id: galAvatarImg
+                    CircleImage {
                         anchors.fill: parent
                         source: p.authorImage || ""
-                        fillMode: Image.PreserveAspectCrop
-                        asynchronous: true
-                        visible: false
-                    }
-                    Rectangle {
-                        id: galAvatarMask
-                        anchors.fill: parent
-                        radius: width / 2
-                        visible: false
-                    }
-                    OpacityMask {
-                        anchors.fill: parent
-                        source: galAvatarImg
-                        maskSource: galAvatarMask
+                        decode: units.gu(9)
                         visible: (p.authorImage || "") !== ""
                     }
                 }
