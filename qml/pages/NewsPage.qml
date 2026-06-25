@@ -6,9 +6,9 @@ import "../components"
 import "../services/PostService.js" as PostService
 
 /*
- * News feed: Trending / Hot / New posts, filtered by the selected regional
- * source (community_id from Config). The source is chosen via the global
- * AppHeader community pill and shared app-wide through Config.sourceIndex.
+ * News feed: Trending / New posts, filtered by the selected regional source
+ * (community_id from Config). The source is chosen via the global AppHeader
+ * community pill and shared app-wide through Config.sourceIndex.
  */
 Page {
     id: page
@@ -35,8 +35,7 @@ Page {
     }
 
     function feedFn() {
-        if (feedIndex === 1) return PostService.listHot;
-        if (feedIndex === 2) return PostService.listNew;
+        if (feedIndex === 1) return PostService.listNew;
         return PostService.listTrending;
     }
 
@@ -74,7 +73,7 @@ Page {
     SectionTabs {
         id: tabs
         anchors { top: parent.top; left: parent.left; right: parent.right }
-        model: [i18n.tr("Trending"), i18n.tr("Hot"), i18n.tr("New")]
+        model: [i18n.tr("Trending"), i18n.tr("New")]
         currentIndex: page.feedIndex
         onSelected: {
             page.feedIndex = index;
