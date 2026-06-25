@@ -145,7 +145,7 @@ Page {
                         anchors.verticalCenter: parent.verticalCenter
                         spacing: units.gu(0.5)
                         Label {
-                            text: page.profile ? page.profile.fullName : ""
+                            text: (page.profile && page.profile.fullName) ? page.profile.fullName : ""
                             font.pixelSize: Style.fontLarge
                             font.weight: Font.DemiBold
                             font.family: Style.fontFamily
