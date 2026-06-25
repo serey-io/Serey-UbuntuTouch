@@ -19,41 +19,25 @@ Page {
 
     function reload() { webLoader.active = false; webLoader.active = true; }
 
-    header: PageHeader {
-        title: i18n.tr("Homepage")
-        trailingActionBar.actions: [
-            Action {
-                iconName: "reload"
-                text: i18n.tr("Reload")
-                onTriggered: page.reload()
-            },
-            Action {
-                iconName: "external-link"
-                text: i18n.tr("Open in browser")
-                onTriggered: Qt.openUrlExternally(page.siteUrl())
-            }
-        ]
-        extension: Sections {
-            id: sourceSections
-            anchors { left: parent.left; leftMargin: units.gu(2); bottom: parent.bottom }
-            model: Config.sourceNames
-            onSelectedIndexChanged: if (selectedIndex !== Config.sourceIndex) Config.sourceIndex = selectedIndex
-        }
-    }
+    // Zero-height header: the global AppHeader is the real top bar; this keeps
+    // the Page off Lomiri's deprecated Page.head path.
+    header: Item { height: 0 }
 
+    // Source switching lives in the global AppHeader community pill; reload the
+    // embedded site when it changes.
     Connections {
         target: Config
         function onSourceIndexChanged() {
-            sourceSections.selectedIndex = Config.sourceIndex;
             page.reload();
         }
     }
 
     Loader {
         id: webLoader
-        anchors { top: page.header.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
+        anchors { top: parent.top; left: parent.left; right: parent.right; bottom: parent.bottom }
         active: true
         source: Qt.resolvedUrl("../components/VideoWebView.qml")
+        // wrap stays false → load the community site as a top-level page.
         onItemChanged: if (item) item.embedUrl = page.siteUrl()
         onStatusChanged: {
             if (status === Loader.Error)
@@ -75,5 +59,4 @@ Page {
         }
     }
 
-    Component.onCompleted: sourceSections.selectedIndex = Config.sourceIndex
 }

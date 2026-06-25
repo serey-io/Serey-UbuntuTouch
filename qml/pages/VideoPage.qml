@@ -17,29 +17,17 @@ Page {
     property bool endReached: false
     property string errorMsg: ""
 
-    header: PageHeader {
-        title: i18n.tr("Videos")
-        trailingActionBar.actions: [
-            Action {
-                iconName: "reload"
-                text: i18n.tr("Refresh")
-                onTriggered: page.reload()
-            }
-        ]
-        extension: Sections {
-            id: sourceSections
-            anchors { left: parent.left; leftMargin: units.gu(2); bottom: parent.bottom }
-            model: Config.sourceNames
-            onSelectedIndexChanged: if (selectedIndex !== Config.sourceIndex) Config.sourceIndex = selectedIndex
-        }
-    }
+    // Zero-height header keeps the Page off Lomiri's deprecated Page.head path;
+    // the global AppHeader is the real top bar.
+    header: Item { height: 0 }
 
     ListModel { id: feedModel; dynamicRoles: true }
 
+    // Source switching lives in the global AppHeader community pill; the list
+    // just reloads when Config.sourceIndex changes.
     Connections {
         target: Config
         function onSourceIndexChanged() {
-            sourceSections.selectedIndex = Config.sourceIndex;
             page.reload();
         }
     }
@@ -73,14 +61,11 @@ Page {
             });
     }
 
-    Component.onCompleted: {
-        sourceSections.selectedIndex = Config.sourceIndex;
-        loadMore();
-    }
+    Component.onCompleted: loadMore()
 
     ListView {
         id: list
-        anchors { top: page.header.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
+        anchors { top: parent.top; left: parent.left; right: parent.right; bottom: parent.bottom }
         clip: true
         model: feedModel
         cacheBuffer: units.gu(60)

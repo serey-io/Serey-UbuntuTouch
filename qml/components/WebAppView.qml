@@ -1,0 +1,206 @@
+import QtQuick 2.7
+import Lomiri.Components 1.3
+import QtWebEngine 1.10
+import "../Theme"
+
+/*
+ * Embedded "mini app" web view (ported from serey-ubutu). Loads a Serey web
+ * surface (e.g. a community site) in QtWebEngine with a forced mobile viewport,
+ * and exposes a small JS bridge so the page can talk to the native shell:
+ *
+ *   window.messageHandler(method, params) -> Promise
+ *     getDeviceInfo  -> { os, version, apiData:{ baseUrlV1, baseUrlV2 } }
+ *     getUserInfo    -> { token, username, community_id, community_name }
+ *     setAuthToken   -> stores a token pushed from the web side
+ *     openCommunity  -> asks the shell to switch community
+ *     openExternalBrowser -> opens a URL in the system browser
+ *
+ * The page posts requests via `console.log("UBUNTU_BRIDGE:" + json)`, which we
+ * intercept in onJavaScriptConsoleMessage and answer with receiveResponse().
+ *
+ * Cleanups vs the reference: the bridge handlers read real component properties
+ * (apiBaseV1/V2, authToken, username, communityName) instead of an undefined
+ * `root.*`, and a single persistent WebEngineProfile is reused for caching.
+ */
+Item {
+    id: webAppView
+
+    property string url: ""
+    property bool loading: true
+    property string communityId: ""
+    property string communityName: ""
+    property string apiBaseV1: "https://global-api.serey.io/api/v1"
+    property string apiBaseV2: "https://global-api.serey.io/api/v2"
+    property string authToken: ""
+    property string username: ""
+
+    readonly property string mobileUA: "Mozilla/5.0 (Linux; Android 13; Pixel 3a) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+
+    signal getUserInfoRequested()
+    signal authTokenChanged(string token, string username)
+    signal openCommunityRequested(string communityId)
+    signal openExternalBrowserRequested(string url)
+
+    WebEngineProfile {
+        id: mobileProfile
+        storageName: "SereyMiniApp"
+        httpUserAgent: webAppView.mobileUA
+        offTheRecord: false
+    }
+
+    WebEngineView {
+        id: webView
+        anchors.fill: parent
+        profile: mobileProfile
+        zoomFactor: webAppView.width > 0 ? webAppView.width / 412 : 1.0
+        settings.showScrollBars: false
+
+        userScripts: [
+            WebEngineScript {
+                injectionPoint: WebEngineScript.DocumentCreation
+                worldId: WebEngineScript.MainWorld
+                runOnSubframes: true
+                sourceCode: "" +
+                    "Object.defineProperty(navigator, 'userAgent', { get: function() { return '" + webAppView.mobileUA + "'; }, configurable: true });" +
+                    "Object.defineProperty(navigator, 'platform', { get: function() { return 'Linux armv8l'; }, configurable: true });" +
+                    "Object.defineProperty(navigator, 'maxTouchPoints', { get: function() { return 5; }, configurable: true });" +
+                    "Object.defineProperty(window, 'innerWidth', { get: function() { return 412; }, configurable: true });" +
+                    "Object.defineProperty(window, 'outerWidth', { get: function() { return 412; }, configurable: true });" +
+                    "Object.defineProperty(document.documentElement, 'clientWidth', { get: function() { return 412; }, configurable: true });" +
+                    "Object.defineProperty(screen, 'width', { get: function() { return 412; }, configurable: true });" +
+                    "Object.defineProperty(screen, 'availWidth', { get: function() { return 412; }, configurable: true });" +
+                    "var meta = document.createElement('meta'); meta.name = 'viewport';" +
+                    "meta.content = 'width=412, initial-scale=1, maximum-scale=1, user-scalable=no';" +
+                    "(document.head || document.documentElement).appendChild(meta);"
+            }
+        ]
+
+        onLoadingChanged: {
+            if (loadRequest.status === WebEngineLoadRequest.LoadSucceededStatus) {
+                webAppView.loading = false;
+                webAppView._injectBridge();
+            } else if (loadRequest.status === WebEngineLoadRequest.LoadStartedStatus) {
+                webAppView.loading = true;
+            } else if (loadRequest.status === WebEngineLoadRequest.LoadFailedStatus) {
+                webAppView.loading = false;
+            }
+        }
+
+        onJavaScriptConsoleMessage: {
+            if (message.indexOf("UBUNTU_BRIDGE:") === 0)
+                webAppView._handleBridgeMessage(message.substring(14));
+        }
+    }
+
+    // Defer the load slightly so the profile/web view are ready first.
+    Timer {
+        id: loadTimer
+        interval: 100
+        repeat: false
+        onTriggered: webView.url = webAppView.url
+    }
+
+    onUrlChanged: if (url !== "") loadTimer.restart()
+    Component.onCompleted: if (url !== "") loadTimer.start()
+
+    Rectangle {
+        anchors.fill: parent
+        color: Style.surface
+        visible: webAppView.loading
+        ActivityIndicator {
+            anchors.centerIn: parent
+            running: webAppView.loading
+            visible: webAppView.loading
+        }
+    }
+
+    function reload() {
+        webView.url = "";
+        loadTimer.restart();
+    }
+
+    function _injectBridge() {
+        var bridgeScript = "" +
+            "(function() {" +
+            "  if (window.__ubuntuBridgeInjected) return;" +
+            "  window.__ubuntuBridgeInjected = true;" +
+            "  var callbackRegistry = {}; var requestId = 0;" +
+            "  window.messageHandler = function(method, params) {" +
+            "    return new Promise(function(resolve, reject) {" +
+            "      var id = 'req_' + (requestId++);" +
+            "      callbackRegistry[id] = { resolve: resolve, reject: reject };" +
+            "      console.log('UBUNTU_BRIDGE:' + JSON.stringify({ id: id, method: method, params: params || {} }));" +
+            "    });" +
+            "  };" +
+            "  window.receiveResponse = function(response) {" +
+            "    var cb = callbackRegistry[response.id];" +
+            "    if (cb) {" +
+            "      if (response.error) cb.reject(new Error(response.error)); else cb.resolve(response.result);" +
+            "      delete callbackRegistry[response.id];" +
+            "    }" +
+            "  };" +
+            "  if (!window.webkit) window.webkit = {};" +
+            "  if (!window.webkit.messageHandlers) window.webkit.messageHandlers = {};" +
+            "  window.webkit.messageHandlers.iOSBridge = { postMessage: function(msg) { console.log('UBUNTU_BRIDGE:' + msg); } };" +
+            "})();";
+        webView.runJavaScript(bridgeScript);
+    }
+
+    function _handleBridgeMessage(msgStr) {
+        try {
+            var msg = JSON.parse(msgStr);
+            var id = msg.id;
+            var method = msg.method;
+            var params = msg.params || {};
+
+            switch (method) {
+            case "getDeviceInfo":
+                _sendResponse(id, {
+                    os: "UbuntuTouch",
+                    version: "0.1.0",
+                    apiData: { baseUrlV1: webAppView.apiBaseV1, baseUrlV2: webAppView.apiBaseV2 }
+                });
+                break;
+            case "getUserInfo":
+                _sendResponse(id, {
+                    token: webAppView.authToken,
+                    username: webAppView.username,
+                    community_id: webAppView.communityId,
+                    community_name: webAppView.communityName
+                });
+                webAppView.getUserInfoRequested();
+                break;
+            case "setAuthToken":
+                if (params.token) {
+                    webAppView.authToken = params.token;
+                    webAppView.authTokenChanged(params.token, params.username || "");
+                }
+                _sendResponse(id, {});
+                break;
+            case "openCommunity":
+                if (params.community_id)
+                    webAppView.openCommunityRequested(String(params.community_id));
+                _sendResponse(id, { status: "ok", message: "Community opened" });
+                break;
+            case "openExternalBrowser":
+                if (params.url) {
+                    Qt.openUrlExternally(params.url);
+                    webAppView.openExternalBrowserRequested(params.url);
+                }
+                _sendResponse(id, { status: "ok", message: "URL opened" });
+                break;
+            default:
+                _sendError(id, "Unknown method: " + method);
+            }
+        } catch (e) {
+            console.log("WebAppView bridge parse error: " + e);
+        }
+    }
+
+    function _sendResponse(id, result) {
+        webView.runJavaScript("receiveResponse(" + JSON.stringify({ id: id, result: result }) + ");");
+    }
+    function _sendError(id, errorMsg) {
+        webView.runJavaScript("receiveResponse(" + JSON.stringify({ id: id, error: errorMsg }) + ");");
+    }
+}

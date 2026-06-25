@@ -5,10 +5,10 @@ import "../Session"
 import "../services/CommentService.js" as CommentService
 
 /*
- * A single comment row. Indents by `comment.depth` to show reply nesting, and
- * embeds a compact VoteBar (like-toggle) for the comment. Own comments (with a
- * server-assigned permlink) can be deleted; deletion is reported up via
- * deleted(permlink) so the page can drop it from the list.
+ * A single comment row (serey-ubutu style): avatar + author + relative time,
+ * body, and a compact like-toggle VoteBar. Indents by `comment.depth` to show
+ * reply nesting. Own comments (with a server-assigned permlink) can be deleted;
+ * deletion is reported up via deleted(permlink) so the page drops it.
  */
 Item {
     id: item
@@ -39,13 +39,6 @@ Item {
     width: parent ? parent.width : units.gu(40)
     implicitHeight: col.implicitHeight + Style.spacingM
 
-    Rectangle {
-        anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
-        width: units.dp(2)
-        x: (c.depth || 0) * units.gu(2)
-        color: (c.depth || 0) > 0 ? Style.divider : "transparent"
-    }
-
     Column {
         id: col
         anchors {
@@ -58,29 +51,67 @@ Item {
         }
         spacing: Style.spacingXs
 
-        Row {
-            spacing: Style.spacingS
-            Label {
-                text: "@" + (c.author || "")
-                textSize: Label.Small
-                font.weight: Font.DemiBold
-                color: Style.brand
+        // Author row: avatar + name + time on the left, delete on the right
+        Item {
+            width: parent.width
+            height: nameCol.height
+
+            Row {
+                anchors.left: parent.left
+                spacing: Style.spacingS
+
+                Rectangle {
+                    anchors.verticalCenter: nameCol.verticalCenter
+                    width: units.gu(3.5); height: width
+                    radius: width / 2
+                    color: Style.avatarTint(c.author || "")
+                    clip: true
+                    Label {
+                        anchors.centerIn: parent
+                        visible: (c.authorImage || "") === ""
+                        text: (c.author || "?").charAt(0).toUpperCase()
+                        font.pixelSize: Style.fontSmall
+                        font.bold: true
+                        color: Style.brand
+                    }
+                    Image {
+                        anchors.fill: parent
+                        source: c.authorImage || ""
+                        fillMode: Image.PreserveAspectCrop
+                        asynchronous: true
+                        visible: (c.authorImage || "") !== ""
+                    }
+                }
+
+                Column {
+                    id: nameCol
+                    spacing: 0
+                    Label {
+                        text: c.author || ""
+                        font.pixelSize: Style.fontSmall
+                        font.weight: Font.DemiBold
+                        color: Style.textPrimary
+                    }
+                    Label {
+                        text: Style.formatTimeAgo(c.date || "")
+                        font.pixelSize: Style.fontXSmall
+                        color: Style.textSecondary
+                    }
+                }
             }
-            Label {
-                text: c.date || ""
-                textSize: Label.Small
-                color: Style.textSecondary
-            }
+
             AbstractButton {
                 visible: item.canDelete
                 enabled: !item.deleting
-                height: deleteLabel.height
-                width: deleteLabel.width
+                anchors { right: parent.right; verticalCenter: parent.verticalCenter }
+                height: deleteLabel.height + Style.spacingXs
+                width: deleteLabel.width + Style.spacingS
                 onClicked: item.doDelete()
                 Label {
                     id: deleteLabel
+                    anchors.centerIn: parent
                     text: item.deleting ? i18n.tr("Deleting…") : i18n.tr("Delete")
-                    textSize: Label.Small
+                    font.pixelSize: Style.fontXSmall
                     color: Style.danger
                 }
             }
@@ -89,6 +120,7 @@ Item {
         Label {
             width: parent.width
             text: c.body || ""
+            font.pixelSize: Style.fontRegular
             font.family: Style.fontFamily
             color: Style.textPrimary
             wrapMode: Text.WordWrap
@@ -99,6 +131,7 @@ Item {
             permlink: c.permlink || ""
             voteType: "comment"
             showComments: false
+            showShare: false
             votes: c.votes || 0
             upvoted: (c.voters || []).indexOf(Session.username) >= 0
             width: parent.width

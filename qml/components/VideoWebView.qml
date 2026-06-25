@@ -2,20 +2,25 @@ import QtQuick 2.7
 import Morph.Web 0.1
 
 /*
- * Thin wrapper around the Morph WebView for playing third-party embeds
- * (YouTube / TikTok / Facebook). The API returns `embed_video` as a player URL,
- * but pointing the WebView straight at it tends to render a black frame on
- * device (no document origin / referrer, embed refusals). So we wrap the URL in
- * a minimal full-bleed HTML document with an <iframe>, loaded with a real base
- * URL. If the engine is unavailable the Loader hosting this file fails and the
- * detail page's "Open in browser" fallback takes over.
+ * Morph WebView wrapper used in two modes:
+ *  - Direct (wrap=false): load `embedUrl` as a top-level page. Used by the
+ *    Homepage tab to show a community site (those sites set X-Frame-Options /
+ *    frame-ancestors, so they MUST be loaded top-level, not iframed).
+ *  - Wrapped (wrap=true): embed `embedUrl` inside a minimal full-bleed HTML
+ *    <iframe> document. Used for third-party players (YouTube / TikTok /
+ *    Facebook), which render a black frame when pointed at directly on device.
+ *
+ * If the engine is unavailable the Loader hosting this file fails and the
+ * caller's "Open in browser" fallback takes over.
  */
 WebView {
     id: wv
     property string embedUrl: ""
+    property bool wrap: false
 
-    onEmbedUrlChanged: if (embedUrl.length > 0) _loadEmbed()
-    Component.onCompleted: if (embedUrl.length > 0) _loadEmbed()
+    onEmbedUrlChanged: _load()
+    onWrapChanged: _load()
+    Component.onCompleted: _load()
 
     function _baseUrl() {
         if (embedUrl.indexOf("youtube") >= 0) return "https://www.youtube.com/";
@@ -34,11 +39,16 @@ WebView {
                'allowfullscreen></iframe></body></html>';
     }
 
-    function _loadEmbed() {
-        if (typeof wv.loadHtml === "function") {
-            wv.loadHtml(_html(), _baseUrl());
+    function _load() {
+        if (embedUrl.length === 0)
+            return;
+        if (wrap) {
+            if (typeof wv.loadHtml === "function")
+                wv.loadHtml(_html(), _baseUrl());
+            else
+                wv.url = "data:text/html;charset=utf-8," + encodeURIComponent(_html());
         } else {
-            wv.url = "data:text/html;charset=utf-8," + encodeURIComponent(_html());
+            wv.url = embedUrl;
         }
     }
 }

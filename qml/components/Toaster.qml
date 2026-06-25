@@ -22,7 +22,7 @@ Item {
         width: Math.min(toaster.width - units.gu(4), label.implicitWidth + units.gu(4))
         height: label.implicitHeight + units.gu(2)
         radius: units.gu(0.75)
-        color: Toast.isError ? Style.danger : "#323232"
+        color: Toast.isError ? Style.danger : Style.toastBg
         opacity: 0
         visible: opacity > 0
 
@@ -34,7 +34,7 @@ Item {
             wrapMode: Text.WordWrap
             maximumLineCount: 3
             elide: Text.ElideRight
-            color: "white"
+            color: Style.textOnBrand
             font.family: Style.fontFamily
             text: Toast.message
         }

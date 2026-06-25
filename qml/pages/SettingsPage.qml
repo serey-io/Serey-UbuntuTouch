@@ -19,9 +19,9 @@ Page {
     property bool loading: false
     property string errorMsg: ""
 
-    header: PageHeader {
-        title: i18n.tr("Settings")
-    }
+    // Zero-height header: the global AppHeader is the real top bar; this keeps
+    // the Page off Lomiri's deprecated Page.head path (avoids a height loop).
+    header: Item { height: 0 }
 
     function refreshProfile() {
         if (!Session.isLoggedIn) {
@@ -56,7 +56,7 @@ Page {
     }
 
     Flickable {
-        anchors { top: page.header.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
+        anchors { top: parent.top; left: parent.left; right: parent.right; bottom: parent.bottom }
         contentWidth: width
         contentHeight: col.height
         clip: true
@@ -205,9 +205,9 @@ Page {
         }
     }
 
-    LoadingState {
+    ActivityIndicator {
         anchors.centerIn: parent
-        width: units.gu(20); height: units.gu(20)
-        visible: page.loading && page.profile === null
+        running: page.loading && page.profile === null
+        visible: running
     }
 }

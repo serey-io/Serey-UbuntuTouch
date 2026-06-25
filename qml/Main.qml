@@ -21,6 +21,14 @@ MainView {
 
     property int currentTab: 0
 
+    // Depth of the active tab's stack. The global header only shows at a tab's
+    // root (depth 1); pushed sub-pages (detail/login) bring their own back-bar.
+    property int activeDepth: currentTab === 0 ? homeStack.depth
+                            : currentTab === 1 ? newsStack.depth
+                            : currentTab === 2 ? videoStack.depth
+                            : settingsStack.depth
+    readonly property bool showHeader: activeDepth <= 1
+
     Component.onCompleted: {
         if (Session.isLoggedIn) {
             AccountService.verify(Config.baseUrl, Session.token,
@@ -29,13 +37,22 @@ MainView {
         }
     }
 
+    // --- Global header (community pill + logo) ----------------------------
+    AppHeader {
+        id: appHeader
+        anchors { left: parent.left; right: parent.right; top: parent.top }
+        height: root.showHeader ? units.gu(6) : 0
+        visible: root.showHeader
+        onCommunityButtonClicked: communityPicker.open()
+    }
+
     // --- Content area: four stacks, only the active one visible ----------
     Item {
         id: body
         anchors {
             left: parent.left
             right: parent.right
-            top: parent.top
+            top: appHeader.bottom
             bottom: navBar.top
         }
 
@@ -115,6 +132,9 @@ MainView {
             }
         }
     }
+
+    // --- Community / source selector (bottom sheet) overlay ---------------
+    CommunityPicker { id: communityPicker }
 
     // --- Transient notifications (snackbar) overlay -----------------------
     Toaster { }

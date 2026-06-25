@@ -7,8 +7,8 @@ import "../services/PostService.js" as PostService
 
 /*
  * News feed: Trending / Hot / New posts, filtered by the selected regional
- * source (community_id from Config). The source is chosen via the header
- * Sections control and shared app-wide through Config.sourceIndex.
+ * source (community_id from Config). The source is chosen via the global
+ * AppHeader community pill and shared app-wide through Config.sourceIndex.
  */
 Page {
     id: page
@@ -19,29 +19,17 @@ Page {
     property string errorMsg: ""
     property int feedIndex: 0
 
-    header: PageHeader {
-        title: i18n.tr("News")
-        trailingActionBar.actions: [
-            Action {
-                iconName: "reload"
-                text: i18n.tr("Refresh")
-                onTriggered: page.reload()
-            }
-        ]
-        extension: Sections {
-            id: sourceSections
-            anchors { left: parent.left; leftMargin: units.gu(2); bottom: parent.bottom }
-            model: Config.sourceNames
-            onSelectedIndexChanged: if (selectedIndex !== Config.sourceIndex) Config.sourceIndex = selectedIndex
-        }
-    }
+    // Zero-height header: the global AppHeader provides the top bar, but giving
+    // the Page an explicit header keeps it off Lomiri's deprecated Page.head path.
+    header: Item { height: 0 }
 
     ListModel { id: feedModel; dynamicRoles: true }
 
+    // Source switching now lives in the global AppHeader community pill; the feed
+    // just reloads when Config.sourceIndex changes.
     Connections {
         target: Config
         function onSourceIndexChanged() {
-            sourceSections.selectedIndex = Config.sourceIndex;
             page.reload();
         }
     }
@@ -81,14 +69,11 @@ Page {
             });
     }
 
-    Component.onCompleted: {
-        sourceSections.selectedIndex = Config.sourceIndex;
-        loadMore();
-    }
+    Component.onCompleted: loadMore()
 
     SectionTabs {
         id: tabs
-        anchors { top: page.header.bottom; left: parent.left; right: parent.right }
+        anchors { top: parent.top; left: parent.left; right: parent.right }
         model: [i18n.tr("Trending"), i18n.tr("Hot"), i18n.tr("New")]
         currentIndex: page.feedIndex
         onSelected: {
@@ -112,6 +97,7 @@ Page {
                 page.pageStack.push(Qt.resolvedUrl("PostDetailPage.qml"),
                     { author: p.author, permlink: p.permlink, title: p.title });
             }
+            onRequireLogin: page.pageStack.push(Qt.resolvedUrl("LoginPage.qml"))
         }
 
         footer: Item {

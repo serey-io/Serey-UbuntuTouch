@@ -6,13 +6,14 @@ import "../Session"
 import "../services/VoteService.js" as VoteService
 
 /*
- * Upvote / downvote / comment action row for a post, video or comment.
+ * Upvote / downvote / comment / share action row for a post, video or comment.
  * Self-contained: gates on login, posts to VoteService, updates its own counts
  * optimistically and reports outcome via Toast. `voteType` is "post" (default)
  * or "comment" (a like-toggle; flagging is disabled by the backend).
  *
  * Emits requireLogin() when an action needs auth, and commentRequested() when
- * the comment affordance is tapped.
+ * the comment affordance is tapped. Styling follows the serey-ubutu action bar:
+ * Suru icons + counts, right-aligned SEREY coin pill.
  */
 RowLayout {
     id: bar
@@ -30,13 +31,16 @@ RowLayout {
     property bool flagged: false
     property bool busy: false
     property bool showComments: true
+    property bool showShare: true
 
     readonly property bool allowFlag: voteType !== "comment"
+    readonly property string shareUrl: (author.length > 0 && permlink.length > 0)
+        ? ("https://serey.io/authors/@" + author + "/" + permlink) : ""
 
     signal requireLogin()
     signal commentRequested()
 
-    spacing: Style.spacingL
+    spacing: Style.spacingM
 
     function _guard() {
         if (!Session.isLoggedIn) {
@@ -86,7 +90,7 @@ RowLayout {
 
     // Upvote / like
     AbstractButton {
-        Layout.preferredHeight: units.gu(4)
+        Layout.preferredHeight: units.gu(3.5)
         Layout.preferredWidth: upRow.implicitWidth
         enabled: !bar.busy
         onClicked: bar.doUpvote()
@@ -94,15 +98,17 @@ RowLayout {
             id: upRow
             anchors.verticalCenter: parent.verticalCenter
             spacing: Style.spacingXs
-            Label {
-                text: "▲"
-                font.pixelSize: units.gu(2)
-                color: bar.upvoted ? Style.brand : Style.textSecondary
+            Icon {
+                anchors.verticalCenter: parent.verticalCenter
+                width: units.gu(2.5); height: width
+                name: "like"
+                color: bar.upvoted ? Style.brand : Style.textPrimary
             }
             Label {
-                text: bar.votes
                 anchors.verticalCenter: parent.verticalCenter
-                color: bar.upvoted ? Style.brand : Style.textSecondary
+                text: bar.votes
+                font.pixelSize: Style.fontRegular
+                color: bar.upvoted ? Style.brand : Style.textPrimary
             }
         }
     }
@@ -110,7 +116,7 @@ RowLayout {
     // Downvote / flag
     AbstractButton {
         visible: bar.allowFlag
-        Layout.preferredHeight: units.gu(4)
+        Layout.preferredHeight: units.gu(3.5)
         Layout.preferredWidth: downRow.implicitWidth
         enabled: !bar.busy
         onClicked: bar.doFlag()
@@ -118,15 +124,17 @@ RowLayout {
             id: downRow
             anchors.verticalCenter: parent.verticalCenter
             spacing: Style.spacingXs
-            Label {
-                text: "▼"
-                font.pixelSize: units.gu(2)
-                color: bar.flagged ? Style.danger : Style.textSecondary
+            Icon {
+                anchors.verticalCenter: parent.verticalCenter
+                width: units.gu(2.5); height: width
+                name: "thumb-down"
+                color: bar.flagged ? Style.accentRed : Style.textPrimary
             }
             Label {
-                text: bar.flaggers
                 anchors.verticalCenter: parent.verticalCenter
-                color: bar.flagged ? Style.danger : Style.textSecondary
+                text: bar.flaggers
+                font.pixelSize: Style.fontRegular
+                color: bar.flagged ? Style.accentRed : Style.textPrimary
             }
         }
     }
@@ -134,39 +142,53 @@ RowLayout {
     // Comments
     AbstractButton {
         visible: bar.showComments
-        Layout.preferredHeight: units.gu(4)
+        Layout.preferredHeight: units.gu(3.5)
         Layout.preferredWidth: cmtRow.implicitWidth
         onClicked: bar.commentRequested()
         Row {
             id: cmtRow
             anchors.verticalCenter: parent.verticalCenter
             spacing: Style.spacingXs
-            Label {
-                text: "✦"
-                font.pixelSize: units.gu(2)
-                color: Style.textSecondary
-            }
-            Label {
-                text: bar.comments
+            Icon {
                 anchors.verticalCenter: parent.verticalCenter
-                color: Style.textSecondary
+                width: units.gu(2.5); height: width
+                name: "message"
+                color: Style.textPrimary
             }
+            Label {
+                anchors.verticalCenter: parent.verticalCenter
+                text: bar.comments
+                font.pixelSize: Style.fontRegular
+                color: Style.textPrimary
+            }
+        }
+    }
+
+    // Share
+    AbstractButton {
+        visible: bar.showShare && bar.shareUrl.length > 0
+        Layout.preferredHeight: units.gu(3.5)
+        Layout.preferredWidth: units.gu(3)
+        onClicked: Qt.openUrlExternally(bar.shareUrl)
+        Icon {
+            anchors.centerIn: parent
+            width: units.gu(2.5); height: width
+            name: "share"
+            color: Style.textPrimary
         }
     }
 
     Item { Layout.fillWidth: true }
 
-    // Busy indicator / payout
+    // Busy indicator / payout pill
     ActivityIndicator {
         running: bar.busy
         visible: bar.busy
         Layout.preferredHeight: units.gu(2.5)
         Layout.preferredWidth: units.gu(2.5)
     }
-    Label {
+    CoinValue {
         visible: !bar.busy && bar.payout.length > 0
-        text: bar.payout
-        textSize: Label.Small
-        color: Style.textSecondary
+        value: bar.payout
     }
 }

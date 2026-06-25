@@ -64,7 +64,7 @@ Page {
                 id: stage
                 width: parent.width
                 height: width * 9 / 16
-                color: "#000000"
+                color: Style.videoStage
                 clip: true
 
                 Image {
@@ -101,6 +101,7 @@ Page {
                             item.fallbackUrl = page.video.videoLink || page.video.embedUrl || "";
                             item.source = page.video.videoLink || page.video.embedUrl || "";
                         } else {
+                            item.wrap = true;
                             item.embedUrl = page.video.embedUrl || "";
                         }
                     }
