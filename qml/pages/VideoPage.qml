@@ -16,6 +16,10 @@ Page {
     property bool loading: false
     property bool endReached: false
     property string errorMsg: ""
+    // Request generation: bumped on reload() so a late response from a previous
+    // community can't append stale rows into the freshly-cleared model.
+    property int reqEpoch: 0
+    property var inflight: null
 
     // Zero-height header keeps the Page off Lomiri's deprecated Page.head path;
     // the global AppHeader is the real top bar.
@@ -33,8 +37,11 @@ Page {
     }
 
     function reload() {
+        page.reqEpoch++;
+        if (inflight) { inflight.abort(); inflight = null; }
         offset = 0;
         endReached = false;
+        loading = false;
         errorMsg = "";
         feedModel.clear();
         loadMore();
@@ -44,18 +51,23 @@ Page {
         if (loading || endReached) return;
         loading = true;
         errorMsg = "";
+        var epoch = page.reqEpoch;
         var params = { limit: Config.pageSize, offset: page.offset };
         if (Config.communityId > 0)
             params.community_id = Config.communityId;
-        VideoService.listVideos(Config.baseUrl, params, Session.token,
-            function (result) {
+        inflight = VideoService.listVideos(Config.baseUrl, params, Session.token,
+            function (result, rawCount) {
+                if (epoch !== page.reqEpoch) return;   // stale response — ignore
+                inflight = null;
                 loading = false;
                 for (var i = 0; i < result.length; i++)
                     feedModel.append(result[i]);
-                page.offset += result.length;
-                if (result.length < Config.pageSize) page.endReached = true;
+                page.offset += rawCount;
+                if (rawCount < Config.pageSize) page.endReached = true;
             },
             function (err) {
+                if (epoch !== page.reqEpoch) return;
+                inflight = null;
                 loading = false;
                 page.errorMsg = err.message;
             });
@@ -89,7 +101,7 @@ Page {
             }
         }
 
-        onContentYChanged: {
+        onAtYEndChanged: {
             if (atYEnd && !page.loading && !page.endReached && feedModel.count > 0)
                 page.loadMore();
         }

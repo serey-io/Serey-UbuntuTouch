@@ -20,8 +20,11 @@ QtObject {
 
     readonly property bool isLoggedIn: token.length > 0
 
+    property var _dbHandle: null
     function _db() {
-        return LocalStorage.openDatabaseSync("SereyAuth", "1.0", "Serey auth store", 100000);
+        if (!_dbHandle)
+            _dbHandle = LocalStorage.openDatabaseSync("SereyAuth", "1.0", "Serey auth store", 100000);
+        return _dbHandle;
     }
 
     function _load() {

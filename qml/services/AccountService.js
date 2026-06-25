@@ -19,11 +19,10 @@ function login(baseUrl, username, password, onOk, onErr) {
     }, onErr);
 }
 
-function verify(baseUrl, token, onOk, onErr) {
-    Http.post(baseUrl, "/auth/authenticated", {}, token, function (data) {
-        onOk(data.account || {});
-    }, onErr);
-}
+// NOTE: there is deliberately NO startup token-verify here. POST /auth/authenticated
+// also runs isDeviceJwtAuthenticated, which needs a device JWT the native client
+// never has, so it always 401s — calling it on launch would wrongly log the user
+// out. Trust the stored token; every endpoint the app uses needs only isJwtAuthenticated.
 
 function logout(baseUrl, token, onOk, onErr) {
     Http.del(baseUrl, "/auth/logout", token, onOk, onErr);

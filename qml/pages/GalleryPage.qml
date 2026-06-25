@@ -17,6 +17,10 @@ Page {
     property bool loading: false
     property bool endReached: false
     property string errorMsg: ""
+    // Request generation: bumped on reload() so a late response from a previous
+    // community can't append stale rows into the freshly-cleared model.
+    property int reqEpoch: 0
+    property var inflight: null
 
     header: Item { height: 0 }
 
@@ -30,8 +34,11 @@ Page {
     }
 
     function reload() {
+        page.reqEpoch++;
+        if (inflight) { inflight.abort(); inflight = null; }
         offset = 0;
         endReached = false;
+        loading = false;
         errorMsg = "";
         galleryModel.clear();
         loadMore();
@@ -41,18 +48,25 @@ Page {
         if (loading || endReached) return;
         loading = true;
         errorMsg = "";
+        var epoch = page.reqEpoch;
         var params = { limit: Config.pageSize, offset: page.offset };
         if (Config.communityId > 0)
             params.community_id = Config.communityId;
-        PostService.listGallery(Config.baseUrl, params, Session.token,
-            function (result) {
+        inflight = PostService.listGallery(Config.baseUrl, params, Session.token,
+            function (result, rawCount) {
+                if (epoch !== page.reqEpoch) return;   // stale response — ignore
+                inflight = null;
                 loading = false;
                 for (var i = 0; i < result.length; i++)
                     galleryModel.append(result[i]);
-                page.offset += result.length;
-                if (result.length < Config.pageSize) page.endReached = true;
+                // Advance by RAW server count (not the image-filtered length) so
+                // the next page doesn't re-request already-seen rows.
+                page.offset += rawCount;
+                if (rawCount < Config.pageSize) page.endReached = true;
             },
             function (err) {
+                if (epoch !== page.reqEpoch) return;
+                inflight = null;
                 loading = false;
                 page.errorMsg = err.message;
             });
@@ -90,7 +104,7 @@ Page {
             }
         }
 
-        onContentYChanged: {
+        onAtYEndChanged: {
             if (atYEnd && !page.loading && !page.endReached && galleryModel.count > 0)
                 page.loadMore();
         }

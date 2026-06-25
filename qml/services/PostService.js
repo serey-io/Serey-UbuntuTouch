@@ -8,23 +8,26 @@
  * Responses come back as { posts: [...] }; detail as { content: {...}, replies: [...] }.
  */
 
+// onOk receives (posts, rawCount). rawCount is the number of rows the server
+// returned *before* any client-side filtering, so callers paginate/`endReached`
+// against the true server offset rather than a filtered length.
 function _list(baseUrl, path, params, token, onOk, onErr) {
-    Http.get(baseUrl, path, params, token, function (data) {
-        var posts = (data.posts || []).map(M.toPost);
-        onOk(posts);
+    return Http.get(baseUrl, path, params, token, function (data) {
+        var raw = data.posts || [];
+        onOk(raw.map(M.toPost), raw.length);
     }, onErr);
 }
 
 function listTrending(baseUrl, params, token, onOk, onErr) {
-    _list(baseUrl, "/serey-web/list-by-trending", params, token, onOk, onErr);
+    return _list(baseUrl, "/serey-web/list-by-trending", params, token, onOk, onErr);
 }
 
 function listHot(baseUrl, params, token, onOk, onErr) {
-    _list(baseUrl, "/serey-web/list-by-hot", params, token, onOk, onErr);
+    return _list(baseUrl, "/serey-web/list-by-hot", params, token, onOk, onErr);
 }
 
 function listNew(baseUrl, params, token, onOk, onErr) {
-    _list(baseUrl, "/serey-web/list-by-new", params, token, onOk, onErr);
+    return _list(baseUrl, "/serey-web/list-by-new", params, token, onOk, onErr);
 }
 
 // Gallery: the dedicated image-post feed. Takes limit + offset (offset=0 is
@@ -33,11 +36,15 @@ function listNew(baseUrl, params, token, onOk, onErr) {
 // present, personalises voters/flaggers state. Mapped via toGalleryPost, which
 // already expects this endpoint's fields (image_url, voter_count, serey_value…).
 function listGallery(baseUrl, params, token, onOk, onErr) {
-    Http.get(baseUrl, "/serey-web/list-gallery-post-by-new", params, token, function (data) {
-        var posts = (data.posts || []).map(M.toGalleryPost).filter(function (p) {
+    return Http.get(baseUrl, "/serey-web/list-gallery-post-by-new", params, token, function (data) {
+        var raw = data.posts || [];
+        var posts = raw.map(M.toGalleryPost).filter(function (p) {
             return p.images.length > 0;
         });
-        onOk(posts);
+        // Pass the RAW server count, not the filtered length, so GalleryPage
+        // advances offset correctly (filtering image-less rows must not shrink
+        // the next page's offset or it re-requests the same rows forever).
+        onOk(posts, raw.length);
     }, onErr);
 }
 
