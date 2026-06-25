@@ -20,7 +20,7 @@ App-focused subset of the Serey v2 API. Pairs with [`ARCHITECTURE.md`](ARCHITECT
 | Method · Path | Auth | Key params | Key response |
 |---|---|---|---|
 | `POST /auth/login` | — | body `{username, password}` | `data.token`, `data.user_device_id` |
-| `POST /auth/authenticated` | JWT | — | `account{...}` (validates token) |
+| `POST /auth/authenticated` | JWT **+ device JWT** | — | `account{...}`. ⚠️ Also runs `isDeviceJwtAuthenticated` — needs a device token the native client doesn't have, so it **always 401s for us**. Do NOT use it to validate the session on startup (it would clear a valid login). Trust the stored token; other endpoints need only `isJwtAuthenticated`. |
 | `DELETE /auth/logout` | JWT | — | `message` |
 | `POST /auth/social-login` | — | `{auth_type, social_token}` | `data.token` |
 
@@ -42,6 +42,26 @@ voter_count, answer_count` (comments), `serey_value` (payout string),
 
 > `?community_id=` filters **server-side and recursively** (parent includes child
 > communities). Verified: `list-by-new?community_id=99` → only Netherlands posts.
+
+## Voting & Comments (interactions)
+
+Serey is a Steem-fork blockchain. Votes/comments are **signed server-side** with
+the posting key carried in the JWT — the client only sends the fields below.
+
+| Method · Path | Auth | Key params | Notes |
+|---|---|---|---|
+| `POST /vote/vote` | JWT | `{author, permlink, weight, vote_type}` | upvote; `weight` 1–100 (% strength). `vote_type` = `post`\|`comment`\|`quotepost`. On a comment this is a like-toggle. |
+| `POST /vote/flag` | JWT | `{author, permlink, weight, vote_type}` | downvote/flag; `weight` **negative** (−1…−100). Not allowed on comments or your own post. |
+| `POST /vote/remove-vote` | JWT | `{author, permlink, vote_type}` | clear an existing vote |
+| `POST /serey-web/create-or-update-comment` | JWT | `{parent_author, parent_permlink, maincategory, body, images?}` | new comment when `permlink` omitted; `maincategory` = parent post's primary category |
+| `POST /serey-web/delete-post-or-comment` | JWT | body `{username, permlink}` | delete own comment/post; author taken from token (`username` only satisfies schema). **POST alias** of the same-named DELETE route — Qt/QML `XMLHttpRequest` can't attach a body to a DELETE, so native clients use POST. |
+
+> Vote response `data`: `{voter_count, flagger_count, voters[], flaggers[], serey_value}`.
+> Detail content carries `voters[]`/`flaggers[]` (usernames) → seed initial vote state.
+> Mounted at `/api/v2/vote` and `/api/v2/serey-web`. Client wrappers:
+> `qml/services/VoteService.js`, `qml/services/CommentService.js`.
+> Backend: `routes/vote_route.js`, `services/vote_service.js`,
+> `controllers/post_controller.js:1014` (createOrUpdateComment).
 
 ## Communities (regional sources + creator homepages)
 
