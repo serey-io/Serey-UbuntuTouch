@@ -65,7 +65,7 @@ Page {
         anchors.fill: parent
         clip: true
         model: galleryModel
-        cacheBuffer: units.gu(40)
+        cacheBuffer: units.gu(12)
 
         delegate: GalleryCard {
             width: list.width

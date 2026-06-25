@@ -83,26 +83,11 @@ Item {
                     }
                 }
 
-                // Rectangle.clip only clips to the bounding box (not rounded
-                // corners), so the photo is masked instead, for a true circle.
-                Image {
-                    id: avatarImg
+                // Masked to a true circle (Rectangle.clip ignores radius).
+                CircleImage {
                     anchors.fill: parent
                     source: c.authorImage || ""
-                    fillMode: Image.PreserveAspectCrop
-                    asynchronous: true
-                    visible: false
-                }
-                Rectangle {
-                    id: avatarMask
-                    anchors.fill: parent
-                    radius: width / 2
-                    visible: false
-                }
-                OpacityMask {
-                    anchors.fill: parent
-                    source: avatarImg
-                    maskSource: avatarMask
+                    decode: units.gu(8)
                     visible: (c.authorImage || "") !== ""
                 }
             }

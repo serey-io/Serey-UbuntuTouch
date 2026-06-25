@@ -68,7 +68,7 @@ Page {
         anchors { top: parent.top; left: parent.left; right: parent.right; bottom: parent.bottom }
         clip: true
         model: feedModel
-        cacheBuffer: units.gu(60)
+        cacheBuffer: units.gu(16)
 
         delegate: VideoCard {
             width: list.width
@@ -77,12 +77,15 @@ Page {
                 { video: feedModel.get(index) })
         }
 
+        // Constant-height footer: a conditional height feeds back into
+        // contentHeight/atYEnd and trips a "height" binding loop.
         footer: Item {
             width: list.width
-            height: page.loading ? units.gu(6) : 0
+            height: units.gu(6)
             ActivityIndicator {
                 anchors.centerIn: parent
                 running: page.loading && feedModel.count > 0
+                visible: running
             }
         }
 

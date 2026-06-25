@@ -86,7 +86,7 @@ Page {
         anchors { top: tabs.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
         clip: true
         model: feedModel
-        cacheBuffer: units.gu(40)
+        cacheBuffer: units.gu(12)
 
         delegate: PostCard {
             width: list.width

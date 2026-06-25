@@ -72,6 +72,7 @@ Page {
                     source: page.video.thumbnail || ""
                     fillMode: Image.PreserveAspectCrop
                     asynchronous: true
+                    sourceSize.width: stage.width
                     visible: !page.playing && status === Image.Ready
                 }
 

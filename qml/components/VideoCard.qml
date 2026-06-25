@@ -51,6 +51,7 @@ AbstractButton {
                     source: v.thumbnail || ""
                     fillMode: Image.PreserveAspectCrop
                     asynchronous: true
+                    sourceSize.width: width
                     Behavior on opacity { NumberAnimation { duration: 200 } }
                     opacity: status === Image.Ready ? 1.0 : 0.0
                 }
@@ -105,6 +106,7 @@ AbstractButton {
                     source: v.authorImage || ""
                     fillMode: Image.PreserveAspectCrop
                     asynchronous: true
+                    sourceSize.width: units.gu(9)
                     visible: (v.authorImage || "") !== ""
                 }
                 Icon {
