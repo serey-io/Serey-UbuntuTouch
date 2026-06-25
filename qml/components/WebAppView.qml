@@ -37,7 +37,7 @@ Item {
     readonly property string mobileUA: "Mozilla/5.0 (Linux; Android 13; Pixel 3a) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
 
     signal getUserInfoRequested()
-    signal authTokenChanged(string token, string username)
+    signal authTokenReceived(string token, string username)
     signal openCommunityRequested(string communityId)
     signal openExternalBrowserRequested(string url)
 
