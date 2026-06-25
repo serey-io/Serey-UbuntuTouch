@@ -173,7 +173,7 @@ Item {
             case "setAuthToken":
                 if (params.token) {
                     webAppView.authToken = params.token;
-                    webAppView.authTokenChanged(params.token, params.username || "");
+                    webAppView.authTokenReceived(params.token, params.username || "");
                 }
                 _sendResponse(id, {});
                 break;
