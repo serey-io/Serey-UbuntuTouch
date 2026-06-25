@@ -18,6 +18,9 @@ Item {
 
     property var post: ({})
     readonly property var p: post ? post : ({})
+    // Computed once per bind — _images() splits a string / walks the model and
+    // was previously re-run 3–4× per card inside bindings.
+    readonly property var imgs: _images()
     property bool isFollowing: false
 
     signal clicked()
@@ -208,50 +211,43 @@ Item {
             }
         }
 
-        // Image carousel
+        // Cover: feed cards show only the first image (a SwipeView per recycled
+        // delegate is expensive); the swipeable carousel lives on the detail page.
         Item {
             id: cover
             width: parent.width
             height: width
 
-            SwipeView {
-                id: swipe
-                anchors.fill: parent
-                clip: true
+            Rectangle { anchors.fill: parent; color: Style.iconBackground }
 
-                Repeater {
-                    model: root._images()
-                    delegate: Image {
-                        source: modelData
-                        fillMode: Image.PreserveAspectCrop
-                        asynchronous: true
-                        Behavior on opacity { NumberAnimation { duration: 200 } }
-                        opacity: status === Image.Ready ? 1.0 : 0.0
-                        Rectangle {
-                            anchors.fill: parent
-                            color: Style.iconBackground
-                            visible: parent.status !== Image.Ready
-                            z: -1
-                        }
-                    }
-                }
+            Image {
+                id: coverImg
+                anchors.fill: parent
+                source: root.imgs.length > 0 ? root.imgs[0] : ""
+                fillMode: Image.PreserveAspectCrop
+                asynchronous: true
+                sourceSize.width: cover.width
+                Behavior on opacity { NumberAnimation { duration: 200 } }
+                opacity: status === Image.Ready ? 1.0 : 0.0
             }
 
             MouseArea { anchors.fill: parent; onClicked: root.clicked() }
 
-            // Page dots
-            Row {
-                visible: root._images().length > 1
-                anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom; bottomMargin: Style.spacingS }
-                spacing: Style.spacingXs
-
-                Repeater {
-                    model: root._images().length
-                    delegate: Rectangle {
-                        width: units.dp(7); height: units.dp(7)
-                        radius: width / 2
-                        color: swipe.currentIndex === index ? Style.brand : Style.dotInactive
-                    }
+            // "+N" badge when the post has multiple photos.
+            Rectangle {
+                visible: root.imgs.length > 1
+                anchors { top: parent.top; right: parent.right; topMargin: Style.spacingS; rightMargin: Style.spacingS }
+                width: moreLabel.width + Style.spacingS
+                height: units.gu(2.5)
+                radius: units.dp(4)
+                color: Qt.rgba(0, 0, 0, 0.6)
+                Label {
+                    id: moreLabel
+                    anchors.centerIn: parent
+                    text: "+" + (root.imgs.length - 1)
+                    font.pixelSize: Style.fontXSmall
+                    font.weight: Font.DemiBold
+                    color: Style.textOnBrand
                 }
             }
         }

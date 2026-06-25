@@ -115,27 +115,11 @@ Item {
                     }
                 }
 
-                // Photo, masked to a true circle. Rectangle.clip only clips to
-                // the bounding box (not the rounded corners), so a plain
-                // Image+clip would render square — OpacityMask crops correctly.
-                Image {
-                    id: avatarImg
+                // Photo, masked to a true circle (Rectangle.clip ignores radius).
+                CircleImage {
                     anchors.fill: parent
                     source: p.authorImage || ""
-                    fillMode: Image.PreserveAspectCrop
-                    asynchronous: true
-                    visible: false
-                }
-                Rectangle {
-                    id: avatarMask
-                    anchors.fill: parent
-                    radius: width / 2
-                    visible: false
-                }
-                OpacityMask {
-                    anchors.fill: parent
-                    source: avatarImg
-                    maskSource: avatarMask
+                    decode: units.gu(9)
                     visible: (p.authorImage || "") !== ""
                 }
             }
@@ -244,6 +228,7 @@ Item {
                 source: p.thumbnail || ""
                 fillMode: Image.PreserveAspectCrop
                 asynchronous: true
+                sourceSize.width: cover.width
                 visible: false
                 Behavior on opacity { NumberAnimation { duration: 200 } }
                 opacity: status === Image.Ready ? 1.0 : 0.0

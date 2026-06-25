@@ -13,6 +13,9 @@ Item {
     id: root
 
     property url source: ""
+    // Cap the decoded resolution (px). Remote avatars/icons are large; decoding
+    // them at full size into a tiny circle wastes texture memory. 0 = uncapped.
+    property int decode: 0
     readonly property bool loaded: img.status === Image.Ready && String(source) !== ""
 
     Rectangle {
@@ -28,6 +31,8 @@ Item {
         source: root.source
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
+        sourceSize.width: root.decode
+        sourceSize.height: root.decode
         layer.enabled: true
         layer.effect: OpacityMask { maskSource: mask }
     }
