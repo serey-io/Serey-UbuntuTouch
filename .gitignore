@@ -1,0 +1,13 @@
+# Clickable / build artifacts
+build/
+.clickable/
+*.click
+*.pyc
+__pycache__/
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

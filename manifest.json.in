@@ -1,0 +1,15 @@
+{
+    "name": "serey.tehenglay",
+    "description": "Serey network client for Ubuntu Touch — feed, blog, videos and account.",
+    "architecture": "$ENV{ARCH}",
+    "title": "Serey",
+    "hooks": {
+        "serey": {
+            "apparmor": "serey.apparmor",
+            "desktop": "serey.desktop"
+        }
+    },
+    "version": "0.1.0",
+    "maintainer": "Teh Englay <tehenglay098@gmail.com>",
+    "framework": "$ENV{CLICK_FRAMEWORK}"
+}

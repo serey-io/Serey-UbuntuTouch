@@ -1,0 +1,8 @@
+clickable_minimum_required: 8.8.0
+
+# Ubuntu Touch 24.04-1.x QML-only application.
+# Clickable picks the matching Docker image and AppArmor policy from this framework.
+framework: ubuntu-touch-24.04-1.x
+
+builder: pure-qml-cmake
+kill: qmlscene

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Serey
+Comment=Serey network client — feed, blog, videos and account
+Exec=qmlscene %u qml/Main.qml
+Icon=assets/logo.svg
+Terminal=false
+Type=Application
+X-Lomiri-Touch=true
+X-Lomiri-StageHint=SideStage
+X-Lomiri-Gettext-Domain=serey
