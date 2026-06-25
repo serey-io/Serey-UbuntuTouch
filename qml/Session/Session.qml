@@ -1,11 +1,16 @@
 pragma Singleton
 import QtQuick 2.7
-import Qt.labs.settings 1.0
+import QtQuick.LocalStorage 2.0
 
 /*
- * Authentication state, persisted across launches via Qt.labs.settings.
- * `token` and `username` are mirrored into the settings store by the aliases
- * below, so they survive an app restart. UI binds to `isLoggedIn`.
+ * Authentication state, persisted across launches in a local SQLite database.
+ *
+ * We use Qt.labs.LocalStorage rather than Qt.labs.Settings because Settings
+ * (QSettings) buffers writes and only flushes on a clean shutdown — when the
+ * user swipe-kills the app the token is lost. LocalStorage transactions commit
+ * to disk synchronously, so the token survives even an abrupt kill.
+ *
+ * UI binds to `isLoggedIn`.
  */
 QtObject {
     id: session
@@ -15,20 +20,49 @@ QtObject {
 
     readonly property bool isLoggedIn: token.length > 0
 
-    // Persistent backing store. Aliases bind storage <-> session properties.
-    property Settings store: Settings {
-        category: "auth"
-        property alias token: session.token
-        property alias username: session.username
+    function _db() {
+        return LocalStorage.openDatabaseSync("SereyAuth", "1.0", "Serey auth store", 100000);
+    }
+
+    function _load() {
+        try {
+            _db().transaction(function (tx) {
+                tx.executeSql("CREATE TABLE IF NOT EXISTS auth(k TEXT PRIMARY KEY, v TEXT)");
+                var rs = tx.executeSql("SELECT k, v FROM auth");
+                for (var i = 0; i < rs.rows.length; i++) {
+                    var row = rs.rows.item(i);
+                    if (row.k === "token") session.token = row.v;
+                    else if (row.k === "username") session.username = row.v;
+                }
+            });
+        } catch (e) {
+            console.log("Session load error: " + e);
+        }
+    }
+
+    function _save() {
+        try {
+            _db().transaction(function (tx) {
+                tx.executeSql("CREATE TABLE IF NOT EXISTS auth(k TEXT PRIMARY KEY, v TEXT)");
+                tx.executeSql("INSERT OR REPLACE INTO auth(k, v) VALUES('token', ?)", [session.token]);
+                tx.executeSql("INSERT OR REPLACE INTO auth(k, v) VALUES('username', ?)", [session.username]);
+            });
+        } catch (e) {
+            console.log("Session save error: " + e);
+        }
     }
 
     function setAuth(newToken, newUsername) {
         token = newToken;
         username = newUsername;
+        _save();
     }
 
     function clear() {
         token = "";
         username = "";
+        _save();
     }
+
+    Component.onCompleted: _load()
 }

@@ -3,7 +3,6 @@ import Lomiri.Components 1.3
 import "Theme"
 import "Session"
 import "components"
-import "services/AccountService.js" as AccountService
 import "services/CommunityService.js" as CommunityService
 
 /*
@@ -31,19 +30,14 @@ MainView {
     readonly property bool showHeader: activeDepth <= 1
 
     Component.onCompleted: {
-        if (Session.isLoggedIn) {
-            // Validate the stored token, but only drop the session if the server
-            // explicitly rejects it (401/403). Transient/network/other errors on
-            // startup must NOT log the user out — keep them signed in optimistically.
-            AccountService.verify(Config.baseUrl, Session.token,
-                function (account) { /* token still valid */ },
-                function (err) {
-                    if (err && (err.status === 401 || err.status === 403))
-                        Session.clear();
-                });
-        }
-        // Fetch each community's real icon so the source switcher shows the
-        // country images instead of a generic globe.
+        // NOTE: we deliberately do NOT validate the token via /auth/authenticated
+        // on startup. That endpoint additionally requires a *device* JWT
+        // (isDeviceJwtAuthenticated) which the native client never has, so it
+        // always returns 401 — calling it would wrongly clear a perfectly valid
+        // session on every launch (the original "logged out on reopen" bug). The
+        // stored token is trusted; it works for every endpoint the app uses
+        // (those need only isJwtAuthenticated). A genuinely stale token simply
+        // surfaces as a normal API error when used.
         CommunityService.listAll(Config.baseUrl,
             function (list) { Config.iconByDns = CommunityService.iconMap(list); },
             function (err) { /* keep globe fallback */ });
