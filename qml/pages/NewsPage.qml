@@ -40,7 +40,7 @@ Page {
 
     Connections {
         target: Config
-        onSourceIndexChanged: {
+        function onSourceIndexChanged() {
             sourceSections.selectedIndex = Config.sourceIndex;
             page.reload();
         }
@@ -115,7 +115,7 @@ Page {
         }
 
         footer: Item {
-            width: parent.width
+            width: list.width
             height: page.loading && feedModel.count > 0 ? units.gu(6) : 0
             ActivityIndicator {
                 anchors.centerIn: parent

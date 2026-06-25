@@ -52,7 +52,7 @@ Page {
 
     Connections {
         target: Session
-        onTokenChanged: page.refreshProfile()
+        function onTokenChanged() { page.refreshProfile(); }
     }
 
     Flickable {

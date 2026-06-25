@@ -27,14 +27,15 @@ QtObject {
     readonly property string uploadHost: "https://upload.serey.io"
 
     // --- Regional sources (verified community IDs) -----------------------
-    // id 0 = "All" (no community filter). Keep `sourceNames` in the same order.
+    // Three communities. "Global" (id 0) applies no community filter, so its
+    // News/Video feeds combine content from every community. Keep `sourceNames`
+    // in the same order as `sources`.
     readonly property var sources: [
-        { "name": "All",           "id": 0,  "dns": "serey.io" },
+        { "name": "Global",        "id": 0,  "dns": "serey.io" },
         { "name": "Netherlands",   "id": 99, "dns": "netherlands.serey.io" },
-        { "name": "United States", "id": 26, "dns": "us.serey.io" },
-        { "name": "Global",        "id": 1,  "dns": "serey.io" }
+        { "name": "United States", "id": 26, "dns": "us.serey.io" }
     ]
-    readonly property var sourceNames: ["All", "Netherlands", "United States", "Global"]
+    readonly property var sourceNames: ["Global", "Netherlands", "United States"]
 
     property int sourceIndex: 0
 

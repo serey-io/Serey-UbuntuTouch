@@ -10,6 +10,9 @@ import "../Theme"
 AbstractButton {
     id: root
     property var post: ({})
+    // Guard: the delegate may rebind `post` to undefined while the model is
+    // cleared/recycled. `p` is always a safe object to read from.
+    readonly property var p: post ? post : ({})
 
     width: parent ? parent.width : units.gu(40)
     implicitHeight: Math.max(Style.thumbSize, content.implicitHeight) + Style.spacingM * 2
@@ -40,7 +43,7 @@ AbstractButton {
 
             Image {
                 anchors.fill: parent
-                source: root.post.thumbnail || ""
+                source: p.thumbnail || ""
                 fillMode: Image.PreserveAspectCrop
                 asynchronous: true
                 visible: status === Image.Ready
@@ -51,7 +54,7 @@ AbstractButton {
                 height: width
                 name: "stock_image"
                 color: Style.textSecondary
-                visible: !(root.post.thumbnail)
+                visible: !(p.thumbnail)
             }
         }
 
@@ -61,9 +64,10 @@ AbstractButton {
 
             Label {
                 Layout.fillWidth: true
-                text: root.post.title || ""
+                text: p.title || ""
                 textSize: Label.Large
                 font.weight: Font.DemiBold
+                font.family: Style.fontFamily
                 color: Style.textPrimary
                 wrapMode: Text.WordWrap
                 maximumLineCount: 2
@@ -71,8 +75,9 @@ AbstractButton {
             }
             Label {
                 Layout.fillWidth: true
-                text: root.post.excerpt || ""
+                text: p.excerpt || ""
                 textSize: Label.Small
+                font.family: Style.fontFamily
                 color: Style.textSecondary
                 wrapMode: Text.WordWrap
                 maximumLineCount: 2
@@ -84,25 +89,25 @@ AbstractButton {
                 spacing: Style.spacingM
 
                 Label {
-                    text: "@" + (root.post.author || "")
+                    text: "@" + (p.author || "")
                     textSize: Label.Small
                     color: Style.brand
                     elide: Text.ElideRight
                     Layout.maximumWidth: units.gu(16)
                 }
                 Label {
-                    text: "▲ " + (root.post.votes || 0)
+                    text: "▲ " + (p.votes || 0)
                     textSize: Label.Small
                     color: Style.textSecondary
                 }
                 Label {
-                    text: "✦ " + (root.post.comments || 0)
+                    text: "✦ " + (p.comments || 0)
                     textSize: Label.Small
                     color: Style.textSecondary
                 }
                 Item { Layout.fillWidth: true }
                 Label {
-                    text: root.post.payout || ""
+                    text: p.payout || ""
                     textSize: Label.Small
                     color: Style.textSecondary
                     visible: text.length > 0

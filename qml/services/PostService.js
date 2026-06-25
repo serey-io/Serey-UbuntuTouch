@@ -37,6 +37,7 @@ function detail(baseUrl, author, permlink, token, onOk, onErr) {
     Http.get(baseUrl, "/serey-web/details-by-permlink-and-author",
              { author: author, permlink: permlink }, token, function (data) {
         var content = data.content || {};
-        onOk({ post: M.toPost(content), replies: data.replies || [] });
+        var replies = (data.replies || []).map(M.toComment);
+        onOk({ post: M.toPost(content), replies: replies });
     }, onErr);
 }

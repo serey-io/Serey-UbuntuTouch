@@ -38,4 +38,15 @@ QtObject {
     readonly property real radius: units.gu(1)
     readonly property real thumbSize: units.gu(10)
     readonly property real avatarSize: units.gu(4)
+
+    // Typography. The bundled Noto Sans Khmer covers Khmer (and Latin), so
+    // labels that can contain Khmer set `font.family: Style.fontFamily`.
+    // (Qt's automatic glyph fallback ignores app-added fonts on fontconfig
+    // platforms, so the family must be set explicitly — loading alone isn't
+    // enough.) Falls back to the default sans family if the file is missing.
+    property FontLoader fontLoader: FontLoader {
+        source: Qt.resolvedUrl("../../assets/fonts/NotoSansKhmer-Regular.ttf")
+    }
+    readonly property string fontFamily: fontLoader.status === FontLoader.Ready
+                                         ? fontLoader.name : "Ubuntu"
 }

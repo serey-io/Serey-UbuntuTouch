@@ -93,6 +93,7 @@ Page {
                 text: page.video.title || ""
                 textSize: Label.Large
                 font.weight: Font.DemiBold
+                font.family: Style.fontFamily
                 color: Style.textPrimary
                 wrapMode: Text.WordWrap
             }
@@ -112,12 +113,19 @@ Page {
                     textSize: Label.Small
                     color: Style.textSecondary
                 }
-                Item { width: units.gu(1); height: 1 }
-                Label {
-                    text: "▲ " + (page.video.votes || 0)
-                    textSize: Label.Small
-                    color: Style.textSecondary
-                }
+            }
+
+            VoteBar {
+                width: parent.width - Style.spacingM * 2
+                anchors.horizontalCenter: parent.horizontalCenter
+                author: page.video.author || ""
+                permlink: page.video.permlink || ""
+                voteType: "post"
+                votes: page.video.votes || 0
+                comments: page.video.comments || 0
+                payout: page.video.payout || ""
+                showComments: false
+                onRequireLogin: page.pageStack.push(Qt.resolvedUrl("LoginPage.qml"))
             }
 
             Label {
@@ -125,6 +133,7 @@ Page {
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: page.video.body || ""
                 textFormat: Text.RichText
+                font.family: Style.fontFamily
                 wrapMode: Text.WordWrap
                 color: Style.textPrimary
                 onLinkActivated: Qt.openUrlExternally(link)

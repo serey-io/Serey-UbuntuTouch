@@ -1,102 +1,79 @@
 import QtQuick 2.7
 import Lomiri.Components 1.3
 import "../Theme"
-import "../components"
-import "../services/CommunityService.js" as CommunityService
 
 /*
- * Homepage tab: a directory of Serey communities / creator sites (the brief's
- * "overview of homepages"). Tapping a row opens that community's website in an
- * embedded WebView (WebAppPage). Grouped by source type via list sections.
+ * Homepage tab: the selected community's branded website, embedded in a
+ * top-level WebView. The community is chosen via the header Sections selector
+ * (shared app-wide through Config.sourceIndex), so picking Netherlands here also
+ * scopes the News/Video tabs. "Global" shows the main serey.io site.
+ *
+ * The WebView is loaded lazily (components/VideoWebView) so a missing webview
+ * engine — e.g. on some desktop previews — degrades to "Open in browser"
+ * instead of breaking the tab.
  */
 Page {
     id: page
 
-    property bool loading: false
-    property string errorMsg: ""
+    function siteUrl() { return "https://" + Config.communityDns + "/"; }
+
+    function reload() { webLoader.active = false; webLoader.active = true; }
 
     header: PageHeader {
         title: i18n.tr("Homepage")
         trailingActionBar.actions: [
             Action {
                 iconName: "reload"
-                text: i18n.tr("Refresh")
-                onTriggered: page.load()
+                text: i18n.tr("Reload")
+                onTriggered: page.reload()
+            },
+            Action {
+                iconName: "external-link"
+                text: i18n.tr("Open in browser")
+                onTriggered: Qt.openUrlExternally(page.siteUrl())
             }
         ]
+        extension: Sections {
+            id: sourceSections
+            anchors { left: parent.left; leftMargin: units.gu(2); bottom: parent.bottom }
+            model: Config.sourceNames
+            onSelectedIndexChanged: if (selectedIndex !== Config.sourceIndex) Config.sourceIndex = selectedIndex
+        }
     }
 
-    ListModel { id: communityModel; dynamicRoles: true }
-
-    function siteUrl(c) {
-        return (c.dns && c.dns.length > 0) ? ("https://" + c.dns + "/")
-                                           : ("https://serey.io/community/" + c.id);
+    Connections {
+        target: Config
+        function onSourceIndexChanged() {
+            sourceSections.selectedIndex = Config.sourceIndex;
+            page.reload();
+        }
     }
 
-    function load() {
-        loading = true;
-        errorMsg = "";
-        communityModel.clear();
-        CommunityService.getCommunities(Config.baseUrl,
-            function (list) {
-                loading = false;
-                for (var i = 0; i < list.length; i++)
-                    communityModel.append(list[i]);
-            },
-            function (err) {
-                loading = false;
-                page.errorMsg = err.message;
-            });
-    }
-
-    Component.onCompleted: load()
-
-    ListView {
-        id: list
+    Loader {
+        id: webLoader
         anchors { top: page.header.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
-        clip: true
-        model: communityModel
-
-        section.property: "group"
-        section.criteria: ViewSection.FullString
-        section.delegate: Rectangle {
-            width: list.width
-            height: units.gu(4)
-            color: Style.divider
-            Label {
-                anchors { left: parent.left; verticalCenter: parent.verticalCenter; leftMargin: Style.spacingM }
-                text: section
-                textSize: Label.Small
-                font.weight: Font.DemiBold
-                color: Style.textSecondary
-            }
-        }
-
-        delegate: CommunityCard {
-            width: list.width
-            community: communityModel.get(index)
-            onClicked: {
-                var c = communityModel.get(index);
-                page.pageStack.push(Qt.resolvedUrl("WebAppPage.qml"),
-                    { url: page.siteUrl(c), pageTitle: c.title });
-            }
+        active: true
+        source: Qt.resolvedUrl("../components/VideoWebView.qml")
+        onItemChanged: if (item) item.embedUrl = page.siteUrl()
+        onStatusChanged: {
+            if (status === Loader.Error)
+                Qt.openUrlExternally(page.siteUrl());
         }
     }
 
-    LoadingState {
-        anchors.fill: list
-        visible: page.loading && communityModel.count === 0
+    LomiriShape {
+        anchors.fill: webLoader
+        visible: webLoader.status === Loader.Error
+        backgroundColor: Style.surface
+        Label {
+            anchors.centerIn: parent
+            width: parent.width - Style.spacingL * 2
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.WordWrap
+            text: i18n.tr("Couldn't open %1 in-app. Use \"Open in browser\".").arg(Config.communityName)
+            color: Style.textSecondary
+        }
     }
-    ErrorState {
-        anchors.fill: list
-        visible: page.errorMsg !== "" && communityModel.count === 0
-        message: page.errorMsg
-        onRetry: page.load()
-    }
-    EmptyState {
-        anchors.fill: list
-        visible: !page.loading && page.errorMsg === "" && communityModel.count === 0
-        iconName: "view-grid-symbolic"
-        message: i18n.tr("No communities found")
-    }
+
+    Component.onCompleted: sourceSections.selectedIndex = Config.sourceIndex
 }

@@ -61,6 +61,22 @@ function firstImage(raw) {
     return m ? m[1] : "";
 }
 
+// Normalise a voters/flaggers list to plain usernames. The API sends either
+// ["alice", ...] (detail content) or [{voter:"alice"}, ...] (some endpoints).
+function voterNames(arr) {
+    if (!arr || !Array.isArray(arr))
+        return [];
+    var out = [];
+    for (var i = 0; i < arr.length; i++) {
+        var v = arr[i];
+        if (typeof v === "string")
+            out.push(v);
+        else if (v && v.voter)
+            out.push(v.voter);
+    }
+    return out;
+}
+
 function toPost(raw) {
     raw = raw || {};
     return {
@@ -77,8 +93,31 @@ function toPost(raw) {
         comments: toInt(raw.answer_count),
         payout: raw.serey_value || "",
         categories: parseList(raw.categories),
+        voters: voterNames(raw.voters),
+        flaggers: voterNames(raw.flaggers),
         community: raw.community_title || "",
         checkmark: raw.checkmark_icon || ""
+    };
+}
+
+// A comment/reply node. Recurses into nested `replies` so the detail page can
+// flatten the tree with indentation.
+function toComment(raw) {
+    raw = raw || {};
+    var kids = [];
+    if (raw.replies && raw.replies.length) {
+        for (var i = 0; i < raw.replies.length; i++)
+            kids.push(toComment(raw.replies[i]));
+    }
+    return {
+        author: raw.author || "",
+        permlink: raw.permlink || "",
+        body: stripHtml(raw.description || raw.body || ""),
+        date: raw.publish_date || "",
+        votes: toInt(raw.voter_count),
+        voters: voterNames(raw.voters),
+        authorImage: raw.author_image_url || "",
+        replies: kids
     };
 }
 
