@@ -48,6 +48,9 @@ QtObject {
     property var iconByDns: ({})
 
     function communityIcon(dns) {
+        // Global uses a bundled multi-flag globe icon instead of the backend logo.
+        if (dns === sources[0].dns)
+            return Qt.resolvedUrl("../../assets/global.png");
         var u = iconByDns[dns];
         return u ? u : "";
     }
