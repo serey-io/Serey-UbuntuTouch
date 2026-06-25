@@ -41,26 +41,20 @@ Rectangle {
             }
             spacing: Style.spacingXs
 
-            Rectangle {
+            Item {
                 anchors.verticalCenter: parent.verticalCenter
                 width: units.gu(2.6); height: width
-                radius: width / 2
-                color: "transparent"
-                clip: true
-                Image {
+                CircleImage {
                     id: pillIcon
                     anchors.fill: parent
                     source: Config.communityIcon(Config.communityDns)
-                    fillMode: Image.PreserveAspectCrop
-                    asynchronous: true
-                    visible: source != "" && status === Image.Ready
                 }
                 Icon {
                     anchors.centerIn: parent
                     width: units.gu(2.5); height: width
                     name: "language-chooser"
                     color: Style.textPrimary
-                    visible: !pillIcon.visible
+                    visible: !pillIcon.loaded
                 }
             }
             Label {
