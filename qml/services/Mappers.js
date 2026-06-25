@@ -110,6 +110,28 @@ function toPost(raw) {
 
 // A comment/reply node. Recurses into nested `replies` so the detail page can
 // flatten the tree with indentation.
+// Gallery post: like toPost, but keeps every image (not just the cover) for
+// the swipeable carousel.
+function toGalleryPost(raw) {
+    raw = raw || {};
+    var imgs = parseList(raw.image_url).map(fixThumb);
+    return {
+        id: raw.id,
+        author: raw.author || "",
+        permlink: raw.permlink || "",
+        authorImage: raw.author_image_url || "",
+        date: raw.publish_date || "",
+        images: imgs,
+        caption: raw.title || "",
+        votes: toInt(raw.voter_count),
+        flaggers: voterNames(raw.flaggers),
+        comments: toInt(raw.answer_count),
+        payout: raw.serey_value || "",
+        voters: voterNames(raw.voters),
+        checkmark: raw.checkmark_icon || ""
+    };
+}
+
 function toComment(raw) {
     raw = raw || {};
     var kids = [];

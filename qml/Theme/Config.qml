@@ -26,6 +26,11 @@ QtObject {
     // Upstream media host used to normalise some relative asset paths.
     readonly property string uploadHost: "https://upload.serey.io"
 
+    // Homepage mini-app: a single fixed site (matches serey-ubutu), filtered
+    // client-side via a `community_id` query param rather than switching
+    // domains per source.
+    readonly property string homeLandingPageUrl: "https://khmer.serey.io"
+
     // --- Regional sources (verified community IDs) -----------------------
     // Three communities. "Global" (id 0) applies no community filter, so its
     // News/Video feeds combine content from every community. Keep `sourceNames`

@@ -25,7 +25,8 @@ MainView {
     // root (depth 1); pushed sub-pages (detail/login) bring their own back-bar.
     property int activeDepth: currentTab === 0 ? homeStack.depth
                             : currentTab === 1 ? newsStack.depth
-                            : currentTab === 2 ? videoStack.depth
+                            : currentTab === 2 ? galleryStack.depth
+                            : currentTab === 3 ? videoStack.depth
                             : settingsStack.depth
     readonly property bool showHeader: activeDepth <= 1
 
@@ -75,15 +76,21 @@ MainView {
             Component.onCompleted: push(Qt.resolvedUrl("pages/NewsPage.qml"))
         }
         PageStack {
-            id: videoStack
+            id: galleryStack
             anchors.fill: parent
             visible: root.currentTab === 2
+            Component.onCompleted: push(Qt.resolvedUrl("pages/GalleryPage.qml"))
+        }
+        PageStack {
+            id: videoStack
+            anchors.fill: parent
+            visible: root.currentTab === 3
             Component.onCompleted: push(Qt.resolvedUrl("pages/VideoPage.qml"))
         }
         PageStack {
             id: settingsStack
             anchors.fill: parent
-            visible: root.currentTab === 3
+            visible: root.currentTab === 4
             Component.onCompleted: push(Qt.resolvedUrl("pages/SettingsPage.qml"))
         }
     }
@@ -108,11 +115,12 @@ MainView {
                 model: [
                     { label: i18n.tr("Homepage"), icon: "home" },
                     { label: i18n.tr("News"),     icon: "stock_note" },
+                    { label: i18n.tr("Gallery"),  icon: "image-x-generic-symbolic" },
                     { label: i18n.tr("Video"),    icon: "camcorder" },
                     { label: i18n.tr("Settings"), icon: "settings" }
                 ]
                 delegate: AbstractButton {
-                    width: navBar.width / 4
+                    width: navBar.width / 5
                     height: navBar.height
                     property bool active: root.currentTab === index
 

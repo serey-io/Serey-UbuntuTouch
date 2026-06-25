@@ -1,4 +1,5 @@
 import QtQuick 2.7
+import QtGraphicalEffects 1.0
 import Lomiri.Components 1.3
 import "../Theme"
 import "../Session"
@@ -10,6 +11,12 @@ import "../services/CommentService.js" as CommentService
  * Full post view. Receives author/permlink (and an optional title for the
  * header) when pushed; fetches the full body + replies from the detail
  * endpoint. Provides upvote/downvote (VoteBar) and a comment composer + list.
+ *
+ * Body rendering: the API returns raw HTML with inline styles and unconstrained
+ * <img> tags that Lomiri's Text.RichText can't lay out sanely (broken styles,
+ * images overflowing the viewport). _parseBody() strips that down to alternating
+ * plain-text blocks (bold/italic/links preserved) and full-width rounded images,
+ * rendered as native Image/Label items instead of one big RichText blob.
  */
 Page {
     id: page
@@ -24,30 +31,50 @@ Page {
     property bool loading: false
     property bool posting: false
     property string errorMsg: ""
+    // Set while replying to a specific comment (rather than the post itself);
+    // cleared after posting or via the composer's "Cancel" affordance.
+    property var replyTarget: null
 
-    header: PageHeader {
-        title: page.title || i18n.tr("Post")
+    // Minimal header: just a back button, no title text.
+    header: Rectangle {
+        height: units.gu(6)
+        color: Style.surface
+
+        AbstractButton {
+            anchors {
+                left: parent.left
+                leftMargin: Style.spacingS
+                verticalCenter: parent.verticalCenter
+            }
+            width: units.gu(4); height: width
+            onClicked: page.pageStack.pop()
+
+            Rectangle {
+                anchors.fill: parent
+                radius: width / 2
+                color: Style.surface
+                border.width: units.dp(1)
+                border.color: Style.divider
+            }
+            Icon {
+                anchors.centerIn: parent
+                width: units.gu(2.2); height: width
+                name: "back"
+                color: Style.textPrimary
+            }
+        }
+
+        Rectangle {
+            anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
+            height: units.dp(1)
+            color: "#CCCCCC"
+        }
     }
 
     function maincategory() {
         if (page.post && page.post.categories && page.post.categories.length > 0)
             return page.post.categories[0];
         return "serey";
-    }
-
-    // Flatten the reply tree into a list carrying a `depth` for indentation.
-    function flattenComments(list, depth, out) {
-        out = out || [];
-        if (!list)
-            return out;
-        for (var i = 0; i < list.length; i++) {
-            var c = list[i];
-            out.push({ author: c.author, permlink: c.permlink, body: c.body, date: c.date,
-                       votes: c.votes, voters: c.voters, depth: depth });
-            if (c.replies && c.replies.length)
-                page.flattenComments(c.replies, depth + 1, out);
-        }
-        return out;
     }
 
     function load() {
@@ -58,7 +85,10 @@ Page {
                 loading = false;
                 page.post = result.post;
                 page.commentCount = result.post.comments;
-                page.comments = page.flattenComments(result.replies, 0, []);
+                // result.replies is already a proper tree (Mappers.toComment
+                // recurses into nested `replies`), so no flattening needed.
+                page.comments = result.replies || [];
+                page._parseBody();
             },
             function (err) {
                 loading = false;
@@ -70,15 +100,33 @@ Page {
         page.pageStack.push(Qt.resolvedUrl("LoginPage.qml"));
     }
 
-    function removeComment(permlink) {
+    // Recursively drop a comment by permlink, wherever it sits in the tree.
+    function _removeFrom(list, permlinkToRemove) {
         var out = [];
-        for (var i = 0; i < page.comments.length; i++) {
-            if (page.comments[i].permlink !== permlink)
-                out.push(page.comments[i]);
+        for (var i = 0; i < list.length; i++) {
+            if (list[i].permlink === permlinkToRemove)
+                continue;
+            var node = list[i];
+            if (node.replies && node.replies.length)
+                node = Object.assign({}, node, { replies: page._removeFrom(node.replies, permlinkToRemove) });
+            out.push(node);
         }
-        page.comments = out;
+        return out;
+    }
+
+    function removeComment(permlinkToRemove) {
+        page.comments = page._removeFrom(page.comments, permlinkToRemove);
         page.commentCount = Math.max(0, page.commentCount - 1);
         Toast.success(i18n.tr("Comment deleted"));
+    }
+
+    function startReply(comment) {
+        page.replyTarget = comment;
+        composer.forceActiveFocus();
+    }
+
+    function cancelReply() {
+        page.replyTarget = null;
     }
 
     function submitComment() {
@@ -90,24 +138,108 @@ Page {
             page.pushLogin();
             return;
         }
+        var target = page.replyTarget;
+        var parentAuthor = target ? target.author : page.author;
+        var parentPermlink = target ? target.permlink : page.permlink;
+
         page.posting = true;
         CommentService.create(Config.baseUrl,
-            { parentAuthor: page.author, parentPermlink: page.permlink,
+            { parentAuthor: parentAuthor, parentPermlink: parentPermlink,
               maincategory: page.maincategory(), body: text },
             Session.token,
             function (data) {
                 page.posting = false;
                 composer.text = "";
                 var mine = { author: Session.username, permlink: "", body: text,
-                             date: i18n.tr("just now"), votes: 0, voters: [], depth: 0 };
-                page.comments = [mine].concat(page.comments);
+                             date: i18n.tr("just now"), votes: 0, voters: [], replies: [] };
+                if (target) {
+                    page.comments = page._appendReply(page.comments, target.permlink, mine);
+                } else {
+                    page.comments = [mine].concat(page.comments);
+                }
                 page.commentCount = page.commentCount + 1;
+                page.replyTarget = null;
                 Toast.success(i18n.tr("Comment posted"));
             },
             function (err) {
                 page.posting = false;
                 Toast.error((err && err.message) ? err.message : i18n.tr("Couldn't post comment."));
             });
+    }
+
+    // Recursively insert `reply` under the comment matching `parentPermlink`.
+    function _appendReply(list, parentPermlink, reply) {
+        var out = [];
+        for (var i = 0; i < list.length; i++) {
+            var node = list[i];
+            if (node.permlink === parentPermlink) {
+                node = Object.assign({}, node, { replies: [reply].concat(node.replies || []) });
+            } else if (node.replies && node.replies.length) {
+                node = Object.assign({}, node, { replies: page._appendReply(node.replies, parentPermlink, reply) });
+            }
+            out.push(node);
+        }
+        return out;
+    }
+
+    // --- Body HTML -> {type: "text"|"image", content} blocks -----------------
+    ListModel { id: bodyModel }
+
+    function _parseBody() {
+        bodyModel.clear();
+        if (!page.post)
+            return;
+        var html = page.post.body || "";
+
+        // Custom editor containers carry the real src in data-image-url; fold
+        // those into plain <img> tags so the splitter below catches them too.
+        html = html.replace(/data-image-url="([^"]*)"/g, function (m, url) {
+            return '<img src="' + url + '"/>';
+        });
+
+        var pieces = [];
+        var remaining = html;
+        var imgPattern = /<img[^>]*src=["']([^"']*)["'][^>]*\/?>/;
+        var m;
+        while ((m = imgPattern.exec(remaining)) !== null) {
+            var before = remaining.substring(0, m.index);
+            if (before) pieces.push({ type: "html", content: before });
+            pieces.push({ type: "image", content: m[1] });
+            remaining = remaining.substring(m.index + m[0].length);
+        }
+        if (remaining) pieces.push({ type: "html", content: remaining });
+
+        var featuredSrc = page.post.thumbnail || "";
+        for (var i = 0; i < pieces.length; i++) {
+            var piece = pieces[i];
+            if (piece.type === "image") {
+                if (piece.content === featuredSrc) continue;
+                bodyModel.append({ type: "image", content: piece.content });
+            } else {
+                var text = piece.content;
+                text = text.replace(/<br\s*\/?>/gi, "\n");
+                text = text.replace(/<\/p>/gi, "\n");
+                text = text.replace(/<p[^>]*>/gi, "");
+                text = text.replace(/<div[^>]*>/gi, "");
+                text = text.replace(/<\/div>/gi, "");
+                text = text.replace(/<strong>/gi, "<b>");
+                text = text.replace(/<\/strong>/gi, "</b>");
+                text = text.replace(/<em>/gi, "<i>");
+                text = text.replace(/<\/em>/gi, "</i>");
+                text = text.replace(/<h[1-6][^>]*>/gi, "<b>");
+                text = text.replace(/<\/h[1-6]>/gi, "</b>\n");
+                text = text.replace(/<(?!\/?(?:b|i|br|u|a)\b)[^>]+>/g, "");
+                text = text.replace(/&nbsp;/g, " ");
+                text = text.replace(/&amp;/g, "&");
+                text = text.replace(/&lt;/g, "<");
+                text = text.replace(/&gt;/g, ">");
+                text = text.replace(/&quot;/g, "\"");
+                text = text.replace(/\n{3,}/g, "\n\n");
+                text = text.trim();
+                if (text.length > 0)
+                    bodyModel.append({ type: "text", content: text });
+            }
+        }
     }
 
     Component.onCompleted: load()
@@ -127,6 +259,27 @@ Page {
 
             Item { width: 1; height: Style.spacingS }
 
+            // Category badge
+            Row {
+                visible: page.post && page.post.categories && page.post.categories.length > 0
+                x: Style.spacingM
+                spacing: Style.spacingXs
+
+                Rectangle {
+                    width: units.dp(10); height: units.dp(10)
+                    radius: units.dp(2)
+                    color: Style.accentRed
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                Label {
+                    text: page.maincategory().toUpperCase()
+                    font.pixelSize: Style.fontSmall
+                    font.weight: Font.Bold
+                    color: Style.accentRed
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+            }
+
             Label {
                 width: parent.width - Style.spacingM * 2
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -141,87 +294,183 @@ Page {
             Row {
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: parent.width - Style.spacingM * 2
-                spacing: Style.spacingM
+                spacing: Style.spacingS
+
+                Item {
+                    id: detailAvatar
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: units.gu(4.25); height: width
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: width / 2
+                        color: Style.avatarTint(page.post ? page.post.author : "")
+                        visible: !page.post || (page.post.authorImage || "") === ""
+
+                        Label {
+                            anchors.centerIn: parent
+                            text: page.post && page.post.author ? page.post.author.charAt(0).toUpperCase() : "?"
+                            font.pixelSize: Style.fontMedium
+                            font.bold: true
+                            color: Style.brand
+                        }
+                    }
+
+                    Image {
+                        id: detailAvatarImg
+                        anchors.fill: parent
+                        source: page.post ? (page.post.authorImage || "") : ""
+                        fillMode: Image.PreserveAspectCrop
+                        asynchronous: true
+                        visible: false
+                    }
+                    Rectangle {
+                        id: detailAvatarMask
+                        anchors.fill: parent
+                        radius: width / 2
+                        visible: false
+                    }
+                    OpacityMask {
+                        anchors.fill: parent
+                        source: detailAvatarImg
+                        maskSource: detailAvatarMask
+                        visible: page.post && (page.post.authorImage || "") !== ""
+                    }
+                }
 
                 Label {
-                    text: page.post ? ("@" + page.post.author) : ""
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: {
+                        var name = page.post ? page.post.author : "";
+                        var time = page.post ? Style.formatTimeAgo(page.post.date) : "";
+                        return name + (time ? "  ·  " + time : "");
+                    }
                     textSize: Label.Small
-                    color: Style.brand
-                }
-                Label {
-                    text: page.post ? page.post.date : ""
-                    textSize: Label.Small
-                    color: Style.textSecondary
+                    font.weight: Font.DemiBold
+                    color: Style.textPrimary
                 }
             }
 
-            Rectangle { width: parent.width; height: units.dp(1); color: Style.divider }
+            Rectangle { width: parent.width; height: units.dp(1); color: "black" }
 
-            // Interactive vote / comment bar
-            VoteBar {
+            // Featured / cover image. Rectangle.clip only clips to the
+            // bounding box (not rounded corners), so the Image is masked
+            // against a rounded Rectangle instead, for a true rounded crop.
+            Item {
+                id: coverFrame
                 width: parent.width - Style.spacingM * 2
                 anchors.horizontalCenter: parent.horizontalCenter
-                author: page.author
-                permlink: page.permlink
-                voteType: "post"
-                votes: page.post ? page.post.votes : 0
-                flaggers: page.post ? page.post.flaggers.length : 0
-                comments: page.commentCount
-                payout: page.post ? page.post.payout : ""
-                upvoted: page.post && page.post.voters.indexOf(Session.username) >= 0
-                flagged: page.post && page.post.flaggers.indexOf(Session.username) >= 0
-                onRequireLogin: page.pushLogin()
-                onCommentRequested: composer.forceActiveFocus()
+                height: visible ? width * 0.6 : 0
+                visible: page.post && (page.post.thumbnail || "") !== ""
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: units.dp(25)
+                    color: Style.iconBackground
+                }
+                Image {
+                    id: coverImg
+                    anchors.fill: parent
+                    source: page.post ? (page.post.thumbnail || "") : ""
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                    visible: false
+                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                    opacity: status === Image.Ready ? 1.0 : 0.0
+                }
+                Rectangle {
+                    id: coverMask
+                    anchors.fill: parent
+                    radius: units.dp(25)
+                    visible: false
+                }
+                OpacityMask {
+                    anchors.fill: parent
+                    source: coverImg
+                    maskSource: coverMask
+                    opacity: coverImg.opacity
+                }
             }
 
-            Rectangle { width: parent.width; height: units.dp(1); color: Style.divider }
-
-            // Rich-text body
-            Label {
-                width: parent.width - Style.spacingM * 2
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: page.post ? page.post.body : ""
-                textFormat: Text.RichText
-                font.family: Style.fontFamily
-                wrapMode: Text.WordWrap
-                color: Style.textPrimary
-                onLinkActivated: Qt.openUrlExternally(link)
-            }
-
-            Rectangle { width: parent.width; height: units.dp(1); color: Style.divider }
-
-            // --- Comments ---------------------------------------------------
-            Label {
-                width: parent.width - Style.spacingM * 2
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: i18n.tr("Comments (%1)").arg(page.commentCount)
-                textSize: Label.Large
-                font.weight: Font.DemiBold
-                color: Style.textPrimary
-            }
-
-            // Composer
+            // Body — parsed into text blocks and rounded images. Inset once
+            // here (rather than per-item) so every block shares the same
+            // left/right padding as the title and author row above.
             Column {
                 width: parent.width - Style.spacingM * 2
                 anchors.horizontalCenter: parent.horizontalCenter
                 spacing: Style.spacingS
 
-                TextArea {
-                    id: composer
-                    width: parent.width
-                    autoSize: true
-                    maximumLineCount: 6
-                    placeholderText: Session.isLoggedIn
-                        ? i18n.tr("Write a comment…")
-                        : i18n.tr("Log in to comment…")
-                    font.family: Style.fontFamily
+                Repeater {
+                    model: bodyModel
+
+                    delegate: Loader {
+                        width: parent.width
+                        sourceComponent: model.type === "image" ? bodyImageComp : bodyTextComp
+
+                        Component {
+                            id: bodyImageComp
+                            Item {
+                                width: parent.width
+                                height: bImg.height
+
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: units.dp(25)
+                                    color: Style.iconBackground
+                                }
+                                Image {
+                                    id: bImg
+                                    width: parent.width
+                                    fillMode: Image.PreserveAspectFit
+                                    source: model.content
+                                    asynchronous: true
+                                    visible: false
+                                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                                    opacity: status === Image.Ready ? 1.0 : 0.0
+                                }
+                                Rectangle {
+                                    id: bImgMask
+                                    anchors.fill: parent
+                                    radius: units.dp(25)
+                                    visible: false
+                                }
+                                OpacityMask {
+                                    anchors.fill: parent
+                                    source: bImg
+                                    maskSource: bImgMask
+                                    opacity: bImg.opacity
+                                }
+                            }
+                        }
+
+                        Component {
+                            id: bodyTextComp
+                            Label {
+                                width: parent.width
+                                text: model.content
+                                font.pixelSize: Style.fontMedium
+                                font.family: Style.fontFamily
+                                color: Style.textPrimary
+                                wrapMode: Text.WordWrap
+                                textFormat: Text.StyledText
+                                lineHeight: 1.4
+                                onLinkActivated: Qt.openUrlExternally(link)
+                            }
+                        }
+                    }
                 }
-                Button {
-                    text: page.posting ? i18n.tr("Posting…") : i18n.tr("Post comment")
-                    color: Style.brand
-                    enabled: !page.posting && composer.text.trim().length > 0
-                    onClicked: page.submitComment()
-                }
+            }
+
+            Rectangle { width: parent.width; height: units.dp(1); color: "black" }
+
+            // --- Comments ---------------------------------------------------
+            Label {
+                width: parent.width - Style.spacingM * 2
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: i18n.tr("COMMENTS (%1)").arg(page.commentCount)
+                font.pixelSize: Style.fontSmall
+                font.weight: Font.Bold
+                color: Style.textSecondary
             }
 
             Label {
@@ -239,6 +488,118 @@ Page {
                     width: contentCol.width
                     comment: modelData
                     onDeleted: page.removeComment(permlink)
+                    onReplyRequested: page.startReply(comment)
+                }
+            }
+
+            Rectangle { width: parent.width; height: units.dp(1); color: "black" }
+
+            // Votes / voters / share summary, right above the comment input
+            VoteBar {
+                width: parent.width - Style.spacingM * 2
+                anchors.horizontalCenter: parent.horizontalCenter
+                author: page.author
+                permlink: page.permlink
+                voteType: "post"
+                votes: page.post ? page.post.votes : 0
+                flaggers: page.post ? page.post.flaggers.length : 0
+                showComments: false
+                showVotersLabel: true
+                payout: page.post ? page.post.payout : ""
+                upvoted: page.post && page.post.voters.indexOf(Session.username) >= 0
+                flagged: page.post && page.post.flaggers.indexOf(Session.username) >= 0
+                onRequireLogin: page.pushLogin()
+            }
+
+            // Replying-to banner
+            Row {
+                visible: page.replyTarget !== null
+                width: parent.width - Style.spacingM * 2
+                anchors.horizontalCenter: parent.horizontalCenter
+                spacing: Style.spacingS
+
+                Label {
+                    text: page.replyTarget ? i18n.tr("Replying to @%1").arg(page.replyTarget.author) : ""
+                    font.pixelSize: Style.fontSmall
+                    color: Style.textSecondary
+                }
+                AbstractButton {
+                    width: cancelLabel.implicitWidth
+                    height: cancelLabel.implicitHeight
+                    onClicked: page.cancelReply()
+                    Label {
+                        id: cancelLabel
+                        text: i18n.tr("Cancel")
+                        font.pixelSize: Style.fontSmall
+                        font.weight: Font.DemiBold
+                        color: Style.brand
+                    }
+                }
+            }
+
+            // Comment input pill
+            Row {
+                width: parent.width - Style.spacingM * 2
+                anchors.horizontalCenter: parent.horizontalCenter
+                spacing: Style.spacingS
+
+                Rectangle {
+                    width: parent.width - sendButton.width - Style.spacingS
+                    height: units.gu(5)
+                    radius: height / 2
+                    color: Style.iconBackground
+
+                    Label {
+                        anchors {
+                            left: parent.left
+                            right: parent.right
+                            verticalCenter: parent.verticalCenter
+                            leftMargin: Style.spacingM
+                            rightMargin: Style.spacingM
+                        }
+                        visible: composer.text.length === 0
+                        text: Session.isLoggedIn
+                            ? i18n.tr("Post a comment…")
+                            : i18n.tr("Log in to comment…")
+                        font.family: Style.fontFamily
+                        color: Style.textSecondary
+                        elide: Text.ElideRight
+                    }
+
+                    TextInput {
+                        id: composer
+                        anchors {
+                            left: parent.left
+                            right: parent.right
+                            verticalCenter: parent.verticalCenter
+                            leftMargin: Style.spacingM
+                            rightMargin: Style.spacingM
+                        }
+                        font.family: Style.fontFamily
+                        font.pixelSize: Style.fontRegular
+                        color: Style.textPrimary
+                        clip: true
+                        onAccepted: page.submitComment()
+                    }
+                }
+
+                AbstractButton {
+                    id: sendButton
+                    width: units.gu(5); height: units.gu(5)
+                    enabled: !page.posting && composer.text.trim().length > 0
+                    onClicked: page.submitComment()
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: width / 2
+                        color: sendButton.enabled ? Style.brand : Style.iconBackground
+                    }
+                    Icon {
+                        anchors.centerIn: parent
+                        width: units.gu(2.4); height: width
+                        name: "send"
+                        color: sendButton.enabled ? Style.textOnBrand : Style.textSecondary
+                    }
                 }
             }
 

@@ -27,6 +27,18 @@ function listNew(baseUrl, params, token, onOk, onErr) {
     _list(baseUrl, "/serey-web/list-by-new", params, token, onOk, onErr);
 }
 
+// Gallery: the dedicated /serey-web/list-gallery-post* endpoints reject every
+// parameter combination tried ("Invalid parameter"), so we reuse the working
+// list-by-new feed and keep only posts that actually carry an image.
+function listGallery(baseUrl, params, token, onOk, onErr) {
+    Http.get(baseUrl, "/serey-web/list-by-new", params, token, function (data) {
+        var posts = (data.posts || []).map(M.toGalleryPost).filter(function (p) {
+            return p.images.length > 0;
+        });
+        onOk(posts);
+    }, onErr);
+}
+
 function listByAuthor(baseUrl, author, params, token, onOk, onErr) {
     var p = params || {};
     p.author = author;

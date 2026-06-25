@@ -1,13 +1,16 @@
 import QtQuick 2.7
+import QtQuick.Layouts 1.3
+import QtGraphicalEffects 1.0
 import Lomiri.Components 1.3
 import "../Theme"
 import "../Session"
+import "../services/FollowService.js" as FollowService
 
 /*
- * Feed post card (serey-ubutu FeedCard style): avatar + author + relative time,
- * title, rounded cover image with a red category badge, then a live action row
- * (VoteBar) and a hairline divider. Tapping the title or image opens the detail
- * page; the action row votes/comments inline.
+ * Feed post card (serey-ubutu FeedCard style): avatar + author + relative time
+ * + Follow pill + ••• menu, title, rounded cover image with a red category
+ * badge, then a live action row (VoteBar) and a hairline divider. Tapping the
+ * title or image opens the detail page; the action row votes/comments inline.
  *
  * Consumes the Mappers.toPost view-model. Emits clicked() to open detail, and
  * re-exposes the VoteBar's requireLogin() so the page can route to login.
@@ -20,8 +23,11 @@ Item {
     // cleared/recycled. `p` is always a safe object to read from.
     readonly property var p: post ? post : ({})
 
+    property bool isFollowing: false
+
     signal clicked()
     signal requireLogin()
+    signal moreClicked()
 
     width: parent ? parent.width : units.gu(45)
     implicitHeight: col.height
@@ -40,60 +46,159 @@ Item {
         return false;
     }
 
+    // Refresh follow state whenever the card is bound to a different author.
+    onPChanged: {
+        root.isFollowing = false;
+        if (Session.isLoggedIn && p.author && p.author !== Session.username) {
+            FollowService.status(Config.baseUrl, Session.username, p.author,
+                function (following) { root.isFollowing = following; },
+                function (err) { /* keep default false */ });
+        }
+    }
+
+    function toggleFollow() {
+        if (!Session.isLoggedIn) {
+            Toast.error(i18n.tr("Please log in first."));
+            root.requireLogin();
+            return;
+        }
+        var was = root.isFollowing;
+        root.isFollowing = !was;
+        FollowService.toggle(Config.baseUrl, p.author, was, Session.token,
+            function (nowFollowing) {
+                root.isFollowing = nowFollowing;
+                Toast.show(nowFollowing ? i18n.tr("Following") : i18n.tr("Unfollowed"));
+            },
+            function (err) {
+                root.isFollowing = was;
+                Toast.error((err && err.message) ? err.message : i18n.tr("Action failed."));
+            });
+    }
+
     Column {
         id: col
         width: parent.width
 
-        // Header: avatar + author + time
-        Item {
-            width: parent.width
+        Item { width: 1; height: Style.spacingS }
+
+        // Header: avatar + author/time + Follow + more
+        RowLayout {
             height: units.gu(6)
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.leftMargin: Style.spacingM
+            anchors.rightMargin: Style.spacingM
+            spacing: Style.spacingS
 
-            Row {
-                anchors {
-                    left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter
-                    leftMargin: Style.spacingM; rightMargin: Style.spacingM
-                }
-                spacing: Style.spacingS
+            Item {
+                id: avatar
+                Layout.preferredWidth: units.gu(4.25)
+                Layout.preferredHeight: units.gu(4.25)
+                Layout.fillHeight: false
+                Layout.alignment: Qt.AlignVCenter
 
+                // Letter fallback (shown whenever there's no author image)
                 Rectangle {
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: units.gu(4.25); height: width
+                    anchors.fill: parent
                     radius: width / 2
                     color: Style.avatarTint(p.author || "")
-                    clip: true
+                    visible: (p.authorImage || "") === ""
 
                     Label {
                         anchors.centerIn: parent
-                        visible: (p.authorImage || "") === ""
                         text: (p.author || "?").charAt(0).toUpperCase()
                         font.pixelSize: Style.fontMedium
                         font.bold: true
                         color: Style.brand
                     }
-                    Image {
-                        anchors.fill: parent
-                        source: p.authorImage || ""
-                        fillMode: Image.PreserveAspectCrop
-                        asynchronous: true
-                        visible: (p.authorImage || "") !== ""
-                    }
                 }
 
-                Column {
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: 0
-                    Label {
-                        text: p.author || ""
-                        font.pixelSize: Style.fontSmall
-                        font.weight: Font.DemiBold
-                        color: Style.textPrimary
-                    }
-                    Label {
-                        text: Style.formatTimeAgo(p.date || "")
-                        font.pixelSize: Style.fontXSmall
-                        color: Style.textSecondary
-                    }
+                // Photo, masked to a true circle. Rectangle.clip only clips to
+                // the bounding box (not the rounded corners), so a plain
+                // Image+clip would render square — OpacityMask crops correctly.
+                Image {
+                    id: avatarImg
+                    anchors.fill: parent
+                    source: p.authorImage || ""
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                    visible: false
+                }
+                Rectangle {
+                    id: avatarMask
+                    anchors.fill: parent
+                    radius: width / 2
+                    visible: false
+                }
+                OpacityMask {
+                    anchors.fill: parent
+                    source: avatarImg
+                    maskSource: avatarMask
+                    visible: (p.authorImage || "") !== ""
+                }
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.fillHeight: false
+                Layout.alignment: Qt.AlignVCenter
+                spacing: 0
+                Label {
+                    Layout.fillWidth: true
+                    text: p.author || ""
+                    font.pixelSize: Style.fontSmall
+                    font.weight: Font.DemiBold
+                    color: Style.textPrimary
+                    elide: Text.ElideRight
+                }
+                Label {
+                    text: Style.formatTimeAgo(p.date || "")
+                    font.pixelSize: Style.fontXSmall
+                    color: Style.textSecondary
+                }
+            }
+
+            // Follow pill
+            Rectangle {
+                visible: (p.author || "") !== "" && p.author !== Session.username
+                Layout.preferredWidth: followLabel.width + units.gu(3)
+                Layout.preferredHeight: units.gu(3.75)
+                Layout.fillHeight: false
+                Layout.alignment: Qt.AlignVCenter
+                radius: height / 2
+                color: root.isFollowing ? Style.surface : Style.brand
+                border.width: root.isFollowing ? units.dp(1.5) : 0
+                border.color: Style.brand
+
+                Label {
+                    id: followLabel
+                    anchors.centerIn: parent
+                    text: root.isFollowing ? i18n.tr("Following") : i18n.tr("Follow")
+                    font.pixelSize: Style.fontXSmall
+                    font.weight: Font.DemiBold
+                    color: root.isFollowing ? Style.brand : Style.textOnBrand
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: root.toggleFollow()
+                }
+            }
+
+            // More button
+            AbstractButton {
+                Layout.preferredWidth: units.gu(3.5)
+                Layout.preferredHeight: units.gu(3.5)
+                Layout.fillHeight: false
+                Layout.alignment: Qt.AlignVCenter
+                onClicked: root.moreClicked()
+
+                Label {
+                    anchors.centerIn: parent
+                    text: "•••"
+                    font.pixelSize: Style.fontLarge
+                    font.weight: Font.Bold
+                    color: Style.textSecondary
                 }
             }
         }
@@ -123,19 +228,35 @@ Item {
             x: Style.spacingM
             height: visible ? width * 0.56 : 0
 
+            // Rectangle.clip only clips to the bounding box (not rounded
+            // corners), so the Image is masked against a rounded Rectangle
+            // instead, for a true rounded crop.
             Rectangle {
                 anchors.fill: parent
                 radius: Style.thumbRadius
                 color: Style.iconBackground
-                clip: true
-                Image {
-                    anchors.fill: parent
-                    source: p.thumbnail || ""
-                    fillMode: Image.PreserveAspectCrop
-                    asynchronous: true
-                    Behavior on opacity { NumberAnimation { duration: 200 } }
-                    opacity: status === Image.Ready ? 1.0 : 0.0
-                }
+            }
+            Image {
+                id: coverImg
+                anchors.fill: parent
+                source: p.thumbnail || ""
+                fillMode: Image.PreserveAspectCrop
+                asynchronous: true
+                visible: false
+                Behavior on opacity { NumberAnimation { duration: 200 } }
+                opacity: status === Image.Ready ? 1.0 : 0.0
+            }
+            Rectangle {
+                id: coverMask
+                anchors.fill: parent
+                radius: Style.thumbRadius
+                visible: false
+            }
+            OpacityMask {
+                anchors.fill: parent
+                source: coverImg
+                maskSource: coverMask
+                opacity: coverImg.opacity
             }
 
             Rectangle {

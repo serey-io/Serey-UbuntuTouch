@@ -32,6 +32,7 @@ RowLayout {
     property bool busy: false
     property bool showComments: true
     property bool showShare: true
+    property bool showVotersLabel: false
 
     readonly property bool allowFlag: voteType !== "comment"
     readonly property string shareUrl: (author.length > 0 && permlink.length > 0)
@@ -137,6 +138,17 @@ RowLayout {
                 color: bar.flagged ? Style.accentRed : Style.textPrimary
             }
         }
+    }
+
+    // "Voters" caption (used on the post-detail summary bar, in place of a
+    // redundant comment-count icon that's already covered by the Comments
+    // section above it)
+    Label {
+        visible: bar.showVotersLabel
+        Layout.alignment: Qt.AlignVCenter
+        text: i18n.tr("Voters")
+        font.pixelSize: Style.fontRegular
+        color: Style.textPrimary
     }
 
     // Comments
