@@ -70,6 +70,17 @@ Page {
         page.pageStack.push(Qt.resolvedUrl("LoginPage.qml"));
     }
 
+    function removeComment(permlink) {
+        var out = [];
+        for (var i = 0; i < page.comments.length; i++) {
+            if (page.comments[i].permlink !== permlink)
+                out.push(page.comments[i]);
+        }
+        page.comments = out;
+        page.commentCount = Math.max(0, page.commentCount - 1);
+        Toast.success(i18n.tr("Comment deleted"));
+    }
+
     function submitComment() {
         var text = composer.text.trim();
         if (text.length === 0)
@@ -227,6 +238,7 @@ Page {
                 delegate: CommentItem {
                     width: contentCol.width
                     comment: modelData
+                    onDeleted: page.removeComment(permlink)
                 }
             }
 

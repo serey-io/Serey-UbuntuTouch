@@ -74,3 +74,9 @@ function post(baseUrl, path, bodyObj, token, onOk, onErr) {
 function del(baseUrl, path, token, onOk, onErr) {
     send("DELETE", baseUrl + path, token, null, onOk, onErr);
 }
+
+// DELETE with a JSON body — some endpoints (e.g. delete-post-or-comment) read
+// their params from req.body rather than the path.
+function delBody(baseUrl, path, bodyObj, token, onOk, onErr) {
+    send("DELETE", baseUrl + path, token, bodyObj || {}, onOk, onErr);
+}

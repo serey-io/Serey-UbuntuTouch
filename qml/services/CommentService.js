@@ -22,3 +22,16 @@ function create(baseUrl, params, token, onOk, onErr) {
     Http.post(baseUrl, "/serey-web/create-or-update-comment", body, token,
               function (data) { onOk(data || {}); }, onErr);
 }
+
+/*
+ * Delete a comment (or post). JWT-only; the backend authorises against the
+ * token's username, so a user can only delete their own comment.
+ *
+ *   DELETE /serey-web/delete-post-or-comment
+ *     { username, permlink }   (read from the request body)
+ */
+function remove(baseUrl, permlink, username, token, onOk, onErr) {
+    Http.delBody(baseUrl, "/serey-web/delete-post-or-comment",
+                 { username: username, permlink: permlink }, token,
+                 function (data) { onOk(data || {}); }, onErr);
+}

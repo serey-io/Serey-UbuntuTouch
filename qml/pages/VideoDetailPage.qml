@@ -13,6 +13,28 @@ Page {
 
     property var video: ({})
     property bool playing: false
+    // true → Serey direct file via native MediaPlayer; false → web embed
+    property bool nativeMode: false
+
+    function isDirectFile(u) {
+        return /\.(mp4|webm|m4v|mov)(\?|$)/i.test(u || "");
+    }
+
+    // Decide how to play and start. Serey-hosted files play inline natively;
+    // YouTube/TikTok/Facebook embeds play in the WebView; anything else opens
+    // externally.
+    function startPlay() {
+        var v = page.video;
+        if (v.platform === "SEREY" || isDirectFile(v.videoLink) || isDirectFile(v.embedUrl)) {
+            page.nativeMode = true;
+            page.playing = true;
+        } else if ((v.embedUrl || "").length > 0) {
+            page.nativeMode = false;
+            page.playing = true;
+        } else if ((v.videoLink || "").length > 0) {
+            Qt.openUrlExternally(v.videoLink);
+        }
+    }
 
     header: PageHeader {
         title: page.video.title || i18n.tr("Video")
@@ -56,12 +78,7 @@ Page {
                 AbstractButton {
                     anchors.fill: parent
                     visible: !page.playing
-                    onClicked: {
-                        if ((page.video.embedUrl || "").length > 0)
-                            page.playing = true;
-                        else if ((page.video.videoLink || "").length > 0)
-                            Qt.openUrlExternally(page.video.videoLink);
-                    }
+                    onClicked: page.startPlay()
                     Icon {
                         anchors.centerIn: parent
                         width: units.gu(7)
@@ -75,13 +92,24 @@ Page {
                     id: webLoader
                     anchors.fill: parent
                     active: page.playing
-                    source: page.playing ? Qt.resolvedUrl("../components/VideoWebView.qml") : ""
-                    onItemChanged: if (item) item.embedUrl = page.video.embedUrl || ""
+                    source: page.playing
+                        ? (page.nativeMode ? Qt.resolvedUrl("../components/VideoNativePlayer.qml")
+                                           : Qt.resolvedUrl("../components/VideoWebView.qml"))
+                        : ""
+                    onLoaded: {
+                        if (page.nativeMode) {
+                            item.fallbackUrl = page.video.videoLink || page.video.embedUrl || "";
+                            item.source = page.video.videoLink || page.video.embedUrl || "";
+                        } else {
+                            item.embedUrl = page.video.embedUrl || "";
+                        }
+                    }
                     onStatusChanged: {
                         if (status === Loader.Error) {
                             page.playing = false;
-                            if ((page.video.videoLink || "").length > 0)
-                                Qt.openUrlExternally(page.video.videoLink);
+                            var link = page.video.videoLink || page.video.embedUrl;
+                            if ((link || "").length > 0)
+                                Qt.openUrlExternally(link);
                         }
                     }
                 }
