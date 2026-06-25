@@ -2,7 +2,7 @@
 Name=Serey
 Comment=Serey network client — feed, blog, videos and account
 Exec=qmlscene %u qml/Main.qml
-Icon=assets/logo.svg
+Icon=assets/serey-logo.png
 Terminal=false
 Type=Application
 X-Lomiri-Touch=true

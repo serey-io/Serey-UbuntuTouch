@@ -32,9 +32,15 @@ MainView {
 
     Component.onCompleted: {
         if (Session.isLoggedIn) {
+            // Validate the stored token, but only drop the session if the server
+            // explicitly rejects it (401/403). Transient/network/other errors on
+            // startup must NOT log the user out — keep them signed in optimistically.
             AccountService.verify(Config.baseUrl, Session.token,
                 function (account) { /* token still valid */ },
-                function (err) { Session.clear(); });
+                function (err) {
+                    if (err && (err.status === 401 || err.status === 403))
+                        Session.clear();
+                });
         }
         // Fetch each community's real icon so the source switcher shows the
         // country images instead of a generic globe.

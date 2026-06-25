@@ -9,7 +9,7 @@ set(QT_IMPORTS_DIR "lib/${CMAKE_LIBRARY_ARCHITECTURE}")
 
 set(APP_NAME serey)
 set(DESKTOP_FILE "${APP_NAME}.desktop")
-set(ICON_FILE assets/logo.svg)
+set(ICON_FILE assets/serey-logo.png)
 
 # Fill @CLICK_FRAMEWORK@ / $ENV{...} placeholders in manifest.json.in -> manifest.json
 configure_file(manifest.json.in ${CMAKE_CURRENT_BINARY_DIR}/manifest.json)
