@@ -107,10 +107,20 @@ function createSelfCustodyAccount(baseUrl, username, email, otp, keys, onOk, onE
     }, null, onOk, onErr);
 }
 
-// Step 1 of password reset: validate the username/email pair and send an OTP.
-function requestPasswordReset(baseUrl, username, email, onOk, onErr) {
-    Http.post(baseUrl, "/accounts/request-password-reset",
-              { username: username, email: email }, null, onOk, onErr);
+// Step 0 of password reset: look up the account's masked contact hint so the UI
+// can tell the user which email/phone the code will go to. onOk receives the
+// parsed response; the masked values are at data.data.{email,phone}.
+function getContactHint(baseUrl, username, onOk, onErr) {
+    Http.get(baseUrl, "/accounts/contact-hint", { username: username }, null, onOk, onErr);
+}
+
+// Step 1 of password reset: send an OTP to the chosen contact. `contact` is
+// { email: "…" } or { phone: "…" }; the backend verifies it matches the account.
+function requestPasswordReset(baseUrl, username, contact, onOk, onErr) {
+    var body = { username: username };
+    if (contact.email) body.email = contact.email;
+    if (contact.phone) body.phone = contact.phone;
+    Http.post(baseUrl, "/accounts/request-password-reset", body, null, onOk, onErr);
 }
 
 // Step 2 of password reset: verify the OTP and set the new password.

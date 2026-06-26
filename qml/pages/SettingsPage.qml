@@ -1,5 +1,6 @@
 import QtQuick 2.7
 import Lomiri.Components 1.3
+import Lomiri.Components.Popups 1.3
 import "../Theme"
 import "../Session"
 import "../components"
@@ -42,6 +43,26 @@ Page {
     Connections {
         target: Session
         function onTokenChanged() { page.refreshProfile(); }
+    }
+
+    // Confirm before logging out (logout is otherwise instant and unannounced).
+    Component {
+        id: logoutDialog
+        Dialog {
+            id: dlg
+            title: i18n.tr("Log out?")
+            text: i18n.tr("You'll need to sign in again to vote, comment, or follow.")
+
+            Button {
+                text: i18n.tr("Log out")
+                color: Style.danger
+                onClicked: { PopupUtils.close(dlg); page.doLogout(); }
+            }
+            Button {
+                text: i18n.tr("Cancel")
+                onClicked: PopupUtils.close(dlg)
+            }
+        }
     }
 
     Flickable {
@@ -251,7 +272,7 @@ Page {
                 iconName: "system-log-out"
                 label: i18n.tr("Log out")
                 danger: true
-                onClicked: page.doLogout()
+                onClicked: PopupUtils.open(logoutDialog)
             }
 
             Item { width: 1; height: Style.spacingL }

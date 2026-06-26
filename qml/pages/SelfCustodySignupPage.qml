@@ -199,12 +199,10 @@ Page {
                 wrapMode: Text.WordWrap
                 text: i18n.tr("We sent a verification code to %1.").arg(page.email)
             }
-            FormField {
+            OtpInput {
                 id: otpField
                 visible: page.step === 2
                 width: parent.width
-                placeholder: i18n.tr("Verification code")
-                inputMethodHints: Qt.ImhDigitsOnly
                 onAccepted: page.createAccount()
             }
             Item {

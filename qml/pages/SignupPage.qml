@@ -39,6 +39,7 @@ Page {
     }
 
     function goBack() {
+        if (page.step === 3) { Nav.home(); return; }  // account already created
         if (page.step > 0) { page.errorMsg = ""; page.step -= 1; }
         else page.pageStack.pop();
     }
@@ -52,6 +53,7 @@ Page {
         if (step === 0) usernameField.input.forceActiveFocus();
         else if (step === 1) emailField.input.forceActiveFocus();
         else if (step === 2) otpField.input.forceActiveFocus();
+        else Qt.inputMethod.hide();   // success screen: dismiss keyboard
     }
 
     // step 0 -> 1: validate format, then confirm the username is free.
@@ -116,8 +118,7 @@ Page {
             function (auth) {
                 busy = false;
                 Session.setAuth(auth.token, username);
-                Toast.success(i18n.tr("Welcome to Serey!"));
-                page.pageStack.pop();
+                step = 3;   // celebration screen
             },
             fail);
     }
@@ -143,6 +144,7 @@ Page {
 
             // Logo hero
             Image {
+                visible: page.step < 3
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: units.gu(9); height: width
                 source: Qt.resolvedUrl("../../assets/serey-logo.png")
@@ -152,6 +154,7 @@ Page {
 
             // Step indicator dots (3 steps)
             Row {
+                visible: page.step < 3
                 anchors.horizontalCenter: parent.horizontalCenter
                 spacing: Style.spacingS
                 Repeater {
@@ -165,6 +168,7 @@ Page {
             }
 
             Label {
+                visible: page.step < 3
                 width: parent.width
                 horizontalAlignment: Text.AlignHCenter
                 font.family: Style.fontFamily
@@ -174,6 +178,33 @@ Page {
                 font.pixelSize: Style.fontTitle
                 font.weight: Font.DemiBold
                 color: Style.textTitle
+                wrapMode: Text.WordWrap
+            }
+
+            // --- Step 3: celebration ----------------------------------------
+            SuccessBurst {
+                visible: page.step === 3
+                anchors.horizontalCenter: parent.horizontalCenter
+                playing: page.step === 3
+            }
+            Label {
+                visible: page.step === 3
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
+                text: i18n.tr("Welcome to Serey!")
+                font.pixelSize: Style.fontTitle
+                font.weight: Font.DemiBold
+                font.family: Style.fontFamily
+                color: Style.textTitle
+            }
+            Label {
+                visible: page.step === 3
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
+                text: i18n.tr("Your account is ready.")
+                font.pixelSize: Style.fontRegular
+                font.family: Style.fontFamily
+                color: Style.textSecondary
                 wrapMode: Text.WordWrap
             }
 
@@ -228,12 +259,10 @@ Page {
                 wrapMode: Text.WordWrap
                 text: i18n.tr("We sent a verification code to %1.").arg(page.email)
             }
-            FormField {
+            OtpInput {
                 id: otpField
                 visible: page.step === 2
                 width: parent.width
-                placeholder: i18n.tr("Verification code")
-                inputMethodHints: Qt.ImhDigitsOnly
                 onAccepted: page.createAccount()
             }
             // Resend: a live countdown, then a tappable link.
@@ -281,11 +310,13 @@ Page {
                 text: page.busy ? i18n.tr("Please wait…")
                     : page.step === 0 ? i18n.tr("Continue")
                     : page.step === 1 ? i18n.tr("Send code")
-                    : i18n.tr("Create account")
+                    : page.step === 2 ? i18n.tr("Create account")
+                    : i18n.tr("Start exploring")
                 onClicked: {
                     if (page.step === 0) page.checkUsername();
                     else if (page.step === 1) page.sendOtp();
-                    else page.createAccount();
+                    else if (page.step === 2) page.createAccount();
+                    else Nav.home();
                 }
             }
         }

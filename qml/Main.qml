@@ -44,6 +44,18 @@ MainView {
             function (err) { /* keep globe fallback */ });
     }
 
+    // A page requested a tab switch (e.g. signup success → Homepage). Switch
+    // tabs and unwind the Settings stack the auth flow was pushed onto, so we
+    // don't leave the signup pages behind it.
+    Connections {
+        target: Nav
+        function onGoToTab(tab) {
+            root.currentTab = tab;
+            while (settingsStack.depth > 1)
+                settingsStack.pop();
+        }
+    }
+
     // --- Global header (community pill + logo) ----------------------------
     AppHeader {
         id: appHeader
