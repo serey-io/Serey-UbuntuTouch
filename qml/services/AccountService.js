@@ -107,6 +107,29 @@ function createSelfCustodyAccount(baseUrl, username, email, otp, keys, onOk, onE
     }, null, onOk, onErr);
 }
 
+// Edit profile: persist the user's editable detail fields. Mirrors the web's
+// PersonaInfo form (`POST /accounts/update-user-detail`, Bearer). `fields` carries
+// { firstname, lastname, email, phone, gender_id, dob, bio }; empty optionals are
+// dropped so a blank field never overwrites a value the user didn't touch.
+function updateUserDetail(baseUrl, token, fields, onOk, onErr) {
+    var body = {};
+    var keys = ["firstname", "lastname", "email", "phone", "gender_id", "dob", "bio"];
+    for (var i = 0; i < keys.length; i++) {
+        var k = keys[i];
+        var v = fields[k];
+        if (v !== undefined && v !== null && v !== "")
+            body[k] = v;
+    }
+    Http.post(baseUrl, "/accounts/update-user-detail", body, token, onOk, onErr);
+}
+
+// Set the active profile picture to an already-uploaded image URL (see Uploads.js
+// for the upload step). The backend marks every other picture inactive and this
+// one active (`POST /user-profile-picture/add`, Bearer).
+function setProfilePicture(baseUrl, token, imageUrl, onOk, onErr) {
+    Http.post(baseUrl, "/user-profile-picture/add", { image_url: imageUrl }, token, onOk, onErr);
+}
+
 // Step 0 of password reset: look up the account's masked contact hint so the UI
 // can tell the user which email/phone the code will go to. onOk receives the
 // parsed response; the masked values are at data.data.{email,phone}.

@@ -45,6 +45,16 @@ Page {
         function onTokenChanged() { page.refreshProfile(); }
     }
 
+    // Re-fetch when returning from a pushed sub-page (e.g. Edit profile) so the
+    // header avatar/name reflect any just-saved changes.
+    Connections {
+        target: page.pageStack
+        function onDepthChanged() {
+            if (page.pageStack && page.pageStack.depth === 1)
+                page.refreshProfile();
+        }
+    }
+
     // Confirm before logging out (logout is otherwise instant and unannounced).
     Component {
         id: logoutDialog
@@ -265,8 +275,15 @@ Page {
                 onClicked: Qt.openUrlExternally("https://serey.io")
             }
 
-            // ===== Account (log out) ======================================
+            // ===== Account ================================================
             SettingsSectionHeader { text: i18n.tr("Account"); visible: Session.isLoggedIn }
+            SettingsRow {
+                visible: Session.isLoggedIn
+                iconName: "edit"
+                label: i18n.tr("Edit profile")
+                showChevron: true
+                onClicked: page.pageStack.push(Qt.resolvedUrl("EditProfilePage.qml"), { initial: page.profile })
+            }
             SettingsRow {
                 visible: Session.isLoggedIn
                 iconName: "system-log-out"

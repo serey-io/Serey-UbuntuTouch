@@ -194,13 +194,30 @@ function toCommunity(raw) {
 
 function toUser(username, raw) {
     raw = raw || {};
-    var name = raw.full_name;
-    if (!name && typeof raw.name === "string")
-        name = raw.name;
+    // `full_name` is an object { first_name, last_name } (it's the DB `name`
+    // column); flatten it. Fall back to the blockchain account `name` string.
+    var fn = "", ln = "";
+    if (raw.full_name && typeof raw.full_name === "object") {
+        fn = raw.full_name.first_name || "";
+        ln = raw.full_name.last_name || "";
+    } else if (typeof raw.full_name === "string") {
+        fn = raw.full_name;
+    }
+    var full = (fn + " " + ln).trim();
+    if (!full && typeof raw.name === "string")
+        full = raw.name;
+    // `phone` can be a scalar or an object { primary, secondary }.
+    var phone = raw.phone;
+    if (phone && typeof phone === "object")
+        phone = phone.primary || phone.secondary || "";
     return {
         username: username,
-        fullName: name || username,
+        firstName: fn,
+        lastName: ln,
+        fullName: full || username,
         bio: raw.bio || "",
+        gender: raw.gender_title || "",
+        dob: raw.dob || "",
         reputation: raw.reputation,
         postCount: toInt(raw.post_count),
         commentCount: toInt(raw.comment_count),
@@ -213,6 +230,6 @@ function toUser(username, raw) {
         coverUrl: raw.cover_image_url || "",
         checkmark: raw.checkmark_icon || "",
         email: raw.email || "",
-        phone: raw.phone || ""
+        phone: phone || ""
     };
 }
