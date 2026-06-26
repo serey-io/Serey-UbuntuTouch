@@ -32,6 +32,8 @@ Page {
     property bool loading: false
     property bool posting: false
     property string errorMsg: ""
+    // On-screen-keyboard height; the docked comment composer rides above it.
+    readonly property real kbHeight: Qt.inputMethod.visible ? Qt.inputMethod.keyboardRectangle.height : 0
     // Set while replying to a specific comment (rather than the post itself);
     // cleared after posting or via the composer's "Cancel" affordance.
     property var replyTarget: null
@@ -550,6 +552,10 @@ Page {
     Rectangle {
         id: footer
         anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
+        // Ride above the on-screen keyboard so the composer stays visible while
+        // typing; the scroll above is anchored to footer.top and shrinks to suit.
+        anchors.bottomMargin: page.kbHeight
+        Behavior on anchors.bottomMargin { NumberAnimation { duration: 150; easing.type: Easing.OutQuad } }
         height: footerCol.height
         visible: page.post !== null
         color: Style.surface
@@ -634,7 +640,7 @@ Page {
                         leftMargin: Style.spacingM
                         rightMargin: Style.spacingM
                     }
-                    visible: composer.text.length === 0
+                    visible: composer.text.length === 0 && !composer.inputMethodComposing
                     text: Session.isLoggedIn
                         ? i18n.tr("Post a comment…")
                         : i18n.tr("Log in to comment…")

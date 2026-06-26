@@ -5,35 +5,47 @@ import "../Session"
 import "../components"
 import "../services/AccountService.js" as AccountService
 import "../services/PostService.js" as PostService
+import "../services/VideoService.js" as VideoService
 
 /*
  * Public profile view for any user: a cover banner with an overlapping avatar,
- * name / @username / bio, follower stats, a Follow button, and the user's posts
- * (PostService.listByAuthor, paginated). Reachable by tapping a creator anywhere
- * in the blog, gallery, video and comment surfaces. Tapping a post opens its
- * detail page. The header scrolls with the list (ListView.header) so the whole
- * thing stays smooth and the post list virtualises.
+ * name / @username / bio, follower stats and a Follow button, then the user's
+ * content under three tabs — Posts (blog), Gallery (image posts) and Video —
+ * each lazily loaded and paginated. The header + tab bar scroll with the list
+ * (ListView.header) so it stays smooth and the rows virtualise. The "•••" on a
+ * post/gallery card opens the shared action sheet (Hide / Report / Block).
  */
 Page {
     id: page
 
     property string username: ""
-
     property var profile: null
     property bool profileLoading: false
 
-    // Posts pagination (mirrors the feed pages' reqEpoch/offset pattern).
-    property int offset: 0
-    property bool loading: false
-    property bool endReached: false
-    property string errorMsg: ""
-    property var inflight: null
+    // Active tab + per-tab pagination state. `rev` is bumped on any state change
+    // so the `cur*` bindings (used by the footer) re-evaluate (the `st` object is
+    // mutated in place — see Theme/FollowStore.qml for the same pattern).
+    property int tab: 0          // 0 posts, 1 gallery, 2 video
+    property int rev: 0
+    property var st: ({
+        0: { offset: 0, loading: false, end: false, loaded: false },
+        1: { offset: 0, loading: false, end: false, loaded: false },
+        2: { offset: 0, loading: false, end: false, loaded: false }
+    })
 
     readonly property bool isSelf: Session.isLoggedIn && username === Session.username
+    readonly property var curModel: tab === 0 ? m0 : tab === 1 ? m1 : m2
+    readonly property bool curLoading: rev >= 0 && st[tab].loading
+    readonly property bool curEnd: rev >= 0 && st[tab].end
+    readonly property bool curLoaded: rev >= 0 && st[tab].loaded
 
     header: Item { height: 0 }
 
-    ListModel { id: postsModel; dynamicRoles: true }
+    ListModel { id: m0; dynamicRoles: true }   // posts
+    ListModel { id: m1; dynamicRoles: true }   // gallery
+    ListModel { id: m2; dynamicRoles: true }   // video
+
+    function modelFor(t) { return t === 0 ? m0 : t === 1 ? m1 : m2; }
 
     function loadProfile() {
         profileLoading = true;
@@ -51,7 +63,6 @@ Page {
         if (!Session.isLoggedIn) { page.pageStack.push(Qt.resolvedUrl("LoginPage.qml")); return; }
         var now = FollowStore.toggle(Config.baseUrl, username, Session.token);
         Toast.show(now ? i18n.tr("Following") : i18n.tr("Unfollowed"));
-        // Optimistically reflect the change in this profile's follower count.
         if (page.profile) {
             var pr = page.profile;
             pr.followers = Math.max(0, (pr.followers || 0) + (now ? 1 : -1));
@@ -59,28 +70,66 @@ Page {
         }
     }
 
-    function loadMore() {
-        if (loading || endReached) return;
-        loading = true;
-        errorMsg = "";
-        var params = { limit: Config.pageSize, offset: page.offset };
-        inflight = PostService.listByAuthor(Config.baseUrl, username, params, Session.token,
-            function (result, rawCount) {
-                inflight = null; loading = false;
-                for (var i = 0; i < result.length; i++) postsModel.append(result[i]);
-                page.offset += rawCount;
-                if (rawCount < Config.pageSize) page.endReached = true;
-            },
-            function (err) { inflight = null; loading = false; page.errorMsg = err.message; });
+    function selectTab(t) {
+        if (t === page.tab) return;
+        page.tab = t;
+        var s = st[t];
+        if (!s.loaded && !s.loading) loadTab(t);
     }
 
-    Component.onCompleted: { loadProfile(); loadFollow(); loadMore(); }
+    // Fetch the next page for tab `t` (lazily; safe to call repeatedly).
+    function loadTab(t) {
+        var s = st[t];
+        if (s.loading || s.end) return;
+        s.loading = true; rev++;
+        var mdl = modelFor(t);
+        function ok(items, rawCount) {
+            s.loading = false; s.loaded = true;
+            for (var i = 0; i < items.length; i++) mdl.append(items[i]);
+            s.offset += rawCount;
+            if (rawCount < Config.pageSize) s.end = true;
+            rev++;
+        }
+        function err(e) { s.loading = false; s.loaded = true; rev++; }
+
+        if (t === 0)
+            PostService.listByAuthor(Config.baseUrl, username,
+                { limit: Config.pageSize, offset: s.offset }, Session.token, ok, err);
+        else if (t === 1)
+            PostService.listGalleryByAuthor(Config.baseUrl, username,
+                { limit: Config.pageSize, offset: s.offset }, Session.token, ok, err);
+        else
+            VideoService.listVideos(Config.baseUrl,
+                { author: username, limit: Config.pageSize, offset: s.offset }, Session.token, ok, err);
+    }
+
+    function openPost(p) { page.pageStack.push(Qt.resolvedUrl("PostDetailPage.qml"), { author: p.author, permlink: p.permlink, title: p.title }); }
+    function openGallery(p) { page.pageStack.push(Qt.resolvedUrl("GalleryDetailPage.qml"), { author: p.author, permlink: p.permlink }); }
+    function openVideo(v) { page.pageStack.push(Qt.resolvedUrl("VideoDetailPage.qml"), { video: v }); }
+
+    // Remove a hidden post from whichever tab holds it (the action sheet is shared).
+    function removeRow(permlink) {
+        var models = [m0, m1, m2];
+        for (var k = 0; k < models.length; k++) {
+            var mdl = models[k];
+            for (var i = 0; i < mdl.count; i++) {
+                if (mdl.get(i).permlink === permlink) { mdl.remove(i); break; }
+            }
+        }
+    }
+
+    Connections {
+        target: PostActions
+        function onHideRequested(author, permlink) { page.removeRow(permlink); }
+    }
+
+    Component.onCompleted: { loadProfile(); loadFollow(); loadTab(0); }
 
     ListView {
         id: list
         anchors.fill: parent
         clip: true
-        model: postsModel
+        model: page.curModel
         cacheBuffer: units.gu(12)
 
         header: Item {
@@ -242,34 +291,22 @@ Page {
 
                 Item { width: 1; height: Style.spacingM }
 
-                Rectangle { width: parent.width; height: units.dp(1); color: Style.divider }
-
-                Item { width: 1; height: Style.spacingS }
-
-                // Section label
-                Label {
-                    x: Style.spacingM
-                    text: i18n.tr("Posts")
-                    font.pixelSize: Style.fontMedium
-                    font.weight: Font.DemiBold
-                    font.family: Style.fontFamily
-                    color: Style.textTitle
+                // --- Content tabs ----------------------------------------
+                SectionTabs {
+                    width: parent.width
+                    model: [i18n.tr("Posts"), i18n.tr("Gallery"), i18n.tr("Video")]
+                    currentIndex: page.tab
+                    onSelected: page.selectTab(index)
                 }
-
-                Item { width: 1; height: Style.spacingXs }
             }
         }
 
-        delegate: PostCard {
+        // One delegate that becomes the right card for the active tab.
+        delegate: Loader {
             width: list.width
-            post: postsModel.get(index)
-            showFollow: false        // redundant here — the big button already follows this user
-            onClicked: {
-                var p = postsModel.get(index);
-                page.pageStack.push(Qt.resolvedUrl("PostDetailPage.qml"),
-                    { author: p.author, permlink: p.permlink, title: p.title });
-            }
-            onRequireLogin: page.pageStack.push(Qt.resolvedUrl("LoginPage.qml"))
+            height: item ? item.implicitHeight : 0
+            property var rowData: page.curModel.get(index)
+            sourceComponent: page.tab === 0 ? cPost : page.tab === 1 ? cGallery : cVideo
         }
 
         footer: Item {
@@ -277,21 +314,56 @@ Page {
             height: units.gu(7)
             ActivityIndicator {
                 anchors.centerIn: parent
-                running: page.loading && postsModel.count > 0
+                running: page.curLoading && page.curModel.count > 0
                 visible: running
             }
             Label {
                 anchors.centerIn: parent
-                visible: page.endReached && postsModel.count === 0 && !page.loading
-                text: i18n.tr("No posts yet")
+                visible: page.curLoaded && page.curModel.count === 0 && !page.curLoading
+                text: page.tab === 0 ? i18n.tr("No posts yet")
+                    : page.tab === 1 ? i18n.tr("No gallery posts yet")
+                    : i18n.tr("No videos yet")
                 font.family: Style.fontFamily
                 color: Style.textSecondary
             }
         }
 
         onAtYEndChanged: {
-            if (atYEnd && !page.loading && !page.endReached && postsModel.count > 0)
-                page.loadMore();
+            if (atYEnd && !page.curLoading && !page.curEnd && page.curModel.count > 0)
+                page.loadTab(page.tab);
+        }
+    }
+
+    // --- Card components, picked per tab by the delegate Loader --------------
+    Component {
+        id: cPost
+        PostCard {
+            width: parent ? parent.width : list.width
+            post: rowData
+            showFollow: false       // the big Follow button already covers this user
+            onClicked: page.openPost(rowData)
+            onMoreClicked: PostActions.open(rowData)
+            onRequireLogin: page.pageStack.push(Qt.resolvedUrl("LoginPage.qml"))
+        }
+    }
+    Component {
+        id: cGallery
+        GalleryCard {
+            width: parent ? parent.width : list.width
+            post: rowData
+            showFollow: false       // redundant on this user's own profile
+            onClicked: page.openGallery(rowData)
+            onMoreClicked: PostActions.open(rowData)
+            onRequireLogin: page.pageStack.push(Qt.resolvedUrl("LoginPage.qml"))
+        }
+    }
+    Component {
+        id: cVideo
+        VideoCard {
+            width: parent ? parent.width : list.width
+            video: rowData
+            onClicked: page.openVideo(rowData)
+            onMoreClicked: PostActions.open(rowData)
         }
     }
 
