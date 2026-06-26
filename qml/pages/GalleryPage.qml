@@ -150,7 +150,7 @@ Page {
             rightMargin: Style.spacingM
             bottomMargin: Style.spacingM
         }
-        width: Style.fabSize; height: width
+        width: units.gu(5.5); height: width
         z: 10
         onClicked: {
             page.pageStack.push(Qt.resolvedUrl("CreateGalleryPostPage.qml"))
@@ -158,12 +158,12 @@ Page {
 
         Rectangle {
             anchors.fill: parent
-            radius: Style.fabRadius
+            radius: units.dp(14)
             color: Style.brand
         }
         Icon {
             anchors.centerIn: parent
-            width: units.gu(3); height: width
+            width: units.gu(2.5); height: width
             name: "edit"
             color: Style.textOnBrand
         }

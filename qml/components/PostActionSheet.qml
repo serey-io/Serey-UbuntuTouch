@@ -17,8 +17,13 @@ Item {
         else { backdropFade.start(); sheetSlide.start(); }
     }
 
+    function closeSheet() {
+        backdropFadeOut.start();
+        sheetSlideOut.start();
+    }
+
     function submitReport(reason) {
-        PostActions.close();
+        sheet.closeSheet();
         Toast.show(i18n.tr("Report submitted. Thank you."));
     }
 
@@ -28,9 +33,10 @@ Item {
         anchors.fill: parent
         color: Qt.rgba(0, 0, 0, 0.4)
         opacity: 0
-        MouseArea { anchors.fill: parent; onClicked: PostActions.close() }
+        MouseArea { anchors.fill: parent; onClicked: sheet.closeSheet() }
     }
     NumberAnimation { id: backdropFade; target: backdrop; property: "opacity"; from: 0; to: 1; duration: 200 }
+    NumberAnimation { id: backdropFadeOut; target: backdrop; property: "opacity"; to: 0; duration: 200 }
 
     // Sheet
     Rectangle {
@@ -42,6 +48,7 @@ Item {
 
         transform: Translate { id: sheetTranslate; y: 0 }
         NumberAnimation { id: sheetSlide; target: sheetTranslate; property: "y"; from: sheetRect.height + units.gu(4); to: 0; duration: 300; easing.type: Easing.OutCubic }
+        NumberAnimation { id: sheetSlideOut; target: sheetTranslate; property: "y"; to: sheetRect.height + units.gu(4); duration: 250; easing.type: Easing.InCubic; onStopped: PostActions.close() }
 
         Behavior on height { NumberAnimation { duration: 200; easing.type: Easing.OutQuad } }
 
@@ -77,7 +84,7 @@ Item {
                 width: parent.width; height: units.gu(8)
                 onClicked: {
                     var p = PostActions.post;
-                    PostActions.close();
+                    sheet.closeSheet();
                     if (p) PostActions.hideRequested(p.author || "", p.permlink || "");
                 }
                 Row {
@@ -121,7 +128,7 @@ Item {
             // Block
             AbstractButton {
                 width: parent.width; height: units.gu(8)
-                onClicked: { PostActions.close(); Toast.show(i18n.tr("User blocked.")); }
+                onClicked: { sheet.closeSheet(); Toast.show(i18n.tr("User blocked.")); }
                 Row {
                     anchors { fill: parent; leftMargin: Style.spacingM; rightMargin: Style.spacingM }
                     spacing: Style.spacingM
@@ -171,7 +178,7 @@ Item {
                 AbstractButton {
                     anchors { right: parent.right; rightMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
                     width: units.gu(3.5); height: units.gu(3.5)
-                    onClicked: PostActions.close()
+                    onClicked: sheet.closeSheet()
                     Icon { anchors.centerIn: parent; width: units.gu(2.2); height: width; name: "close"; color: Style.textPrimary }
                 }
             }

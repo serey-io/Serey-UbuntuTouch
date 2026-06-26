@@ -93,136 +93,134 @@ Page {
             id: col
             width: parent.width
 
-            // ===== Cover banner (signed in) ==============================
+            // ===== Cover banner + overlapping avatar (iOS style) ==========
             Item {
                 width: parent.width
-                height: visible ? units.gu(16) : 0
-                visible: Session.isLoggedIn
-                clip: true
+                height: Session.isLoggedIn ? units.gu(22) : units.gu(13)
 
-                Rectangle {                 // brand fallback when no cover
-                    anchors.fill: parent
-                    gradient: Gradient {
-                        GradientStop { position: 0.0; color: Style.brand }
-                        GradientStop { position: 1.0; color: Style.brandDark }
+                // Cover image
+                Rectangle {
+                    id: coverBanner
+                    anchors { top: parent.top; left: parent.left; right: parent.right }
+                    height: units.gu(16)
+                    visible: Session.isLoggedIn
+                    clip: true
+
+                    Rectangle {
+                        anchors.fill: parent
+                        gradient: Gradient {
+                            GradientStop { position: 0.0; color: Style.brand }
+                            GradientStop { position: 1.0; color: Style.brandDark }
+                        }
+                    }
+                    Image {
+                        anchors.fill: parent
+                        source: page.profile && page.profile.coverUrl ? page.profile.coverUrl : ""
+                        fillMode: Image.PreserveAspectCrop
+                        asynchronous: true
+                        autoTransform: true
+                        sourceSize.width: parent.width
+                        visible: status === Image.Ready
                     }
                 }
-                Image {
-                    anchors.fill: parent
-                    source: page.profile && page.profile.coverUrl ? page.profile.coverUrl : ""
-                    fillMode: Image.PreserveAspectCrop
-                    asynchronous: true
-                    autoTransform: true
-                    sourceSize.width: parent.width
-                    visible: status === Image.Ready
-                }
+
+                // Avatar overlapping cover bottom-left
                 AbstractButton {
-                    anchors.fill: parent
-                    onClicked: page.pageStack.push(Qt.resolvedUrl("EditProfilePage.qml"), { initial: page.profile })
-                }
-            }
-
-            // ===== Welcome / identity header ==============================
-            Item {
-                width: parent.width
-                height: units.gu(13)
-
-                Row {
+                    id: avatarBtn
                     anchors {
-                        left: parent.left; right: parent.right;
+                        left: parent.left
+                        leftMargin: Style.spacingM
+                        bottom: coverBanner.bottom
+                        bottomMargin: units.gu(-3)
+                    }
+                    width: units.gu(9); height: width
+                    visible: Session.isLoggedIn
+                    onClicked: page.pageStack.push(Qt.resolvedUrl("EditProfilePage.qml"), { initial: page.profile })
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: width / 2
+                        color: Style.surface
+                        border.width: units.dp(3)
+                        border.color: Style.surface
+                    }
+
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: units.dp(3)
+                        radius: width / 2
+                        color: Style.avatarTint("")
+                        visible: !(page.profile && page.profile.profileUrl)
+
+                        Label {
+                            anchors.centerIn: parent
+                            text: (page.profile && page.profile.username
+                                   ? page.profile.username : "?").charAt(0).toUpperCase()
+                            font.pixelSize: Style.fontTitle
+                            font.bold: true
+                            color: Style.brand
+                        }
+                    }
+                    Item {
+                        anchors.fill: parent
+                        anchors.margins: units.dp(3)
+                        visible: !!(page.profile && page.profile.profileUrl)
+                        CircleImage {
+                            anchors.fill: parent
+                            source: page.profile && page.profile.profileUrl ? page.profile.profileUrl : ""
+                            decode: units.gu(18)
+                        }
+                    }
+
+                    // Camera cue badge
+                    Rectangle {
+                        anchors { right: parent.right; bottom: parent.bottom; bottomMargin: units.dp(2); rightMargin: units.dp(2) }
+                        width: units.gu(2.6); height: width
+                        radius: width / 2
+                        color: Style.brand
+                        border.width: units.dp(1.5); border.color: Style.surface
+                        Icon {
+                            anchors.centerIn: parent
+                            width: units.gu(1.5); height: width
+                            name: "camera-symbolic"
+                            color: Style.textOnBrand
+                        }
+                    }
+                }
+
+                // Signed-out: simple welcome row
+                Row {
+                    visible: !Session.isLoggedIn
+                    anchors {
+                        left: parent.left; right: parent.right
                         verticalCenter: parent.verticalCenter
                         leftMargin: Style.spacingM; rightMargin: Style.spacingM
                     }
                     spacing: Style.spacingM
 
-                    // Avatar: rounded-square brand badge when signed out, the
-                    // profile photo (or letter) when signed in. Tapping it while
-                    // signed in opens Edit profile (with a camera badge cue) — a
-                    // raw tap here previously did nothing because there was no
-                    // handler at all.
-                    AbstractButton {
+                    Rectangle {
                         anchors.verticalCenter: parent.verticalCenter
                         width: units.gu(7); height: width
-                        enabled: Session.isLoggedIn
-                        onClicked: page.pageStack.push(Qt.resolvedUrl("EditProfilePage.qml"), { initial: page.profile })
-
-                        Rectangle {
-                            anchors.fill: parent
-                            radius: Session.isLoggedIn ? width / 2 : Style.cardRadius
-                            color: (page.profile && page.profile.profileUrl)
-                                   ? Style.iconBackground
-                                   : (Session.isLoggedIn ? Style.avatarTint("") : Style.brand)
-                            Icon {
-                                anchors.centerIn: parent
-                                width: units.gu(3.5); height: width
-                                name: "account"
-                                color: Style.textOnBrand
-                                visible: !Session.isLoggedIn
-                            }
-                            Label {
-                                anchors.centerIn: parent
-                                visible: Session.isLoggedIn && !(page.profile && page.profile.profileUrl)
-                                text: (page.profile && page.profile.username
-                                       ? page.profile.username : "?").charAt(0).toUpperCase()
-                                font.pixelSize: Style.fontTitle
-                                font.bold: true
-                                color: Style.brand
-                            }
-                        }
-                        CircleImage {
-                            anchors.fill: parent
-                            source: page.profile && page.profile.profileUrl ? page.profile.profileUrl : ""
-                            decode: units.gu(14)
-                            visible: !!(page.profile && page.profile.profileUrl)
-                        }
-
-                        // Camera cue so it's discoverable as tappable.
-                        Rectangle {
-                            anchors { right: parent.right; bottom: parent.bottom }
-                            width: units.gu(2.6); height: width
-                            radius: width / 2
-                            color: Style.brand
-                            border.width: units.dp(1.5); border.color: Style.surface
-                            visible: Session.isLoggedIn
-                            Icon {
-                                anchors.centerIn: parent
-                                width: units.gu(1.5); height: width
-                                name: "camera-symbolic"
-                                color: Style.textOnBrand
-                            }
+                        radius: Style.cardRadius
+                        color: Style.brand
+                        Icon {
+                            anchors.centerIn: parent
+                            width: units.gu(3.5); height: width
+                            name: "account"
+                            color: Style.textOnBrand
                         }
                     }
-
                     Column {
                         anchors.verticalCenter: parent.verticalCenter
-                        width: parent.width - units.gu(7) - Style.spacingM
                         spacing: units.dp(3)
-
                         Label {
-                            width: parent.width
-                            text: Session.isLoggedIn
-                                  ? ((page.profile && page.profile.fullName) ? page.profile.fullName
-                                     : (page.profile ? page.profile.username : Session.username))
-                                  : i18n.tr("Welcome to Serey")
+                            text: i18n.tr("Welcome to Serey")
                             font.pixelSize: Style.fontLarge
                             font.weight: Font.DemiBold
                             font.family: Style.fontFamily
                             color: Style.textTitle
-                            elide: Text.ElideRight
-                        }
-
-                        // Signed in: @username. Signed out: Log in · Sign up.
-                        Label {
-                            visible: Session.isLoggedIn
-                            width: parent.width
-                            text: page.profile ? ("@" + page.profile.username) : ("@" + Session.username)
-                            font.pixelSize: Style.fontSmall
-                            font.family: Style.fontFamily
-                            color: Style.brand
-                            elide: Text.ElideRight
                         }
                         Row {
-                            visible: !Session.isLoggedIn
                             spacing: Style.spacingS
                             AbstractButton {
                                 width: loginLbl.width; height: loginLbl.height
@@ -232,14 +230,12 @@ Page {
                                     text: i18n.tr("Log in")
                                     font.pixelSize: Style.fontRegular
                                     font.weight: Font.DemiBold
-                                    font.family: Style.fontFamily
                                     color: Style.brand
                                 }
                             }
                             Label {
                                 anchors.verticalCenter: parent.verticalCenter
                                 text: "·"
-                                font.pixelSize: Style.fontRegular
                                 color: Style.textSecondary
                             }
                             AbstractButton {
@@ -250,7 +246,6 @@ Page {
                                     text: i18n.tr("Sign up")
                                     font.pixelSize: Style.fontRegular
                                     font.weight: Font.DemiBold
-                                    font.family: Style.fontFamily
                                     color: Style.brand
                                 }
                             }
@@ -259,11 +254,40 @@ Page {
                 }
             }
 
-            // Signed-in stats strip
+            // Name + @username (below avatar, signed-in only)
+            Column {
+                visible: Session.isLoggedIn
+                width: parent.width - Style.spacingM * 2
+                x: Style.spacingM
+                spacing: units.dp(2)
+
+                Label {
+                    width: parent.width
+                    text: (page.profile && page.profile.fullName) ? page.profile.fullName
+                          : (page.profile ? page.profile.username : Session.username)
+                    font.pixelSize: Style.fontLarge
+                    font.weight: Font.DemiBold
+                    font.family: Style.fontFamily
+                    color: Style.textTitle
+                    elide: Text.ElideRight
+                }
+                Label {
+                    width: parent.width
+                    text: page.profile ? ("@" + page.profile.username) : ("@" + Session.username)
+                    font.pixelSize: Style.fontSmall
+                    font.family: Style.fontFamily
+                    color: Style.textSecondary
+                    elide: Text.ElideRight
+                }
+            }
+
+            Item { width: 1; height: Style.spacingS; visible: Session.isLoggedIn }
+
+            // Stats strip: Posts · Followers · Following
             Rectangle { width: parent.width; height: units.dp(1); color: Style.divider; visible: Session.isLoggedIn && page.profile !== null }
             Row {
                 width: parent.width
-                height: units.gu(8)
+                height: units.gu(7)
                 visible: Session.isLoggedIn && page.profile !== null
                 Repeater {
                     model: page.profile ? [

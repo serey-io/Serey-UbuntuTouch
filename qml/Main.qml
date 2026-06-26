@@ -21,6 +21,8 @@ MainView {
     height: units.gu(80)
 
     property int currentTab: 0
+    onCurrentTabChanged: { body.opacity = 0; tabFadeIn.start(); }
+    NumberAnimation { id: tabFadeIn; target: body; property: "opacity"; from: 0; to: 1; duration: 200; easing.type: Easing.OutQuad }
 
     // Depth of the active tab's stack. The global header only shows at a tab's
     // root (depth 1); pushed sub-pages (detail/login) bring their own back-bar.
@@ -29,7 +31,8 @@ MainView {
                             : currentTab === 2 ? galleryStack.depth
                             : currentTab === 3 ? videoStack.depth
                             : settingsStack.depth
-    readonly property bool showHeader: activeDepth <= 1
+    readonly property bool showHeader: activeDepth <= 1 && currentTab !== 4
+    readonly property bool showNavBar: activeDepth <= 1
 
     Component.onCompleted: {
         // NOTE: we deliberately do NOT validate the token via /auth/authenticated
@@ -81,7 +84,7 @@ MainView {
             left: parent.left
             right: parent.right
             top: appHeader.bottom
-            bottom: root.showHeader ? navBar.top : parent.bottom
+            bottom: root.showNavBar ? navBar.top : parent.bottom
         }
 
         PageStack {
@@ -120,8 +123,8 @@ MainView {
     Rectangle {
         id: navBar
         anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-        height: root.showHeader ? units.gu(7) : 0
-        visible: root.showHeader
+        height: root.showNavBar ? units.gu(7) : 0
+        visible: root.showNavBar
         color: Style.surface
 
         Rectangle {

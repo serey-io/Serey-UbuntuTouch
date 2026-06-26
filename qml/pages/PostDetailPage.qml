@@ -41,26 +41,9 @@ Page {
         height: units.gu(6)
         color: Style.surface
 
-        AbstractButton {
-            anchors {
-                left: parent.left
-                leftMargin: Style.spacingS
-                verticalCenter: parent.verticalCenter
-            }
-            width: units.gu(4); height: width
+        BackButton {
+            anchors { left: parent.left; leftMargin: Style.spacingS; verticalCenter: parent.verticalCenter }
             onClicked: page.pageStack.pop()
-
-            Rectangle {
-                anchors.fill: parent
-                radius: width / 2
-                color: Style.surface
-            }
-            Icon {
-                anchors.centerIn: parent
-                width: units.gu(2.2); height: width
-                name: "back"
-                color: Style.textPrimary
-            }
         }
 
         Rectangle {

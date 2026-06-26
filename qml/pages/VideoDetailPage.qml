@@ -66,26 +66,9 @@ Page {
         height: units.gu(6)
         color: Style.surface
 
-        AbstractButton {
-            anchors {
-                left: parent.left
-                leftMargin: Style.spacingS
-                verticalCenter: parent.verticalCenter
-            }
-            width: units.gu(4); height: width
+        BackButton {
+            anchors { left: parent.left; leftMargin: Style.spacingS; verticalCenter: parent.verticalCenter }
             onClicked: page.pageStack.pop()
-
-            Rectangle {
-                anchors.fill: parent
-                radius: width / 2
-                color: Style.surface
-            }
-            Icon {
-                anchors.centerIn: parent
-                width: units.gu(2.2); height: width
-                name: "back"
-                color: Style.textPrimary
-            }
         }
 
         Rectangle {
@@ -154,6 +137,11 @@ Page {
             out.push(node);
         }
         return out;
+    }
+
+    function openProfile() {
+        if (page.video.author)
+            page.pageStack.push(Qt.resolvedUrl("ProfileViewPage.qml"), { username: page.video.author });
     }
 
     function startReply(comment) { page.replyTarget = comment; composer.forceActiveFocus(); }
@@ -313,6 +301,11 @@ Page {
             Item {
                 width: parent.width
                 height: units.gu(5)
+
+                MouseArea {
+                    anchors { left: parent.left; top: parent.top; bottom: parent.bottom; right: moreBtn.left }
+                    onClicked: page.openProfile()
+                }
 
                 Row {
                     anchors {
@@ -540,15 +533,17 @@ Page {
         visible: page.commentSheetOpen
         z: 1500
         onVisibleChanged: if (visible) { cmtBdFade.start(); cmtSlideAnim.start(); }
+        function closeAnimated() { cmtBdFadeOut.start(); cmtSlideOut.start(); }
 
         Rectangle {
             id: cmtBd
             anchors.fill: parent
             color: Qt.rgba(0, 0, 0, 0.4)
             opacity: 0
-            MouseArea { anchors.fill: parent; onClicked: page.commentSheetOpen = false }
+            MouseArea { anchors.fill: parent; onClicked: cmtSheet.closeAnimated() }
         }
         NumberAnimation { id: cmtBdFade; target: cmtBd; property: "opacity"; from: 0; to: 1; duration: 200 }
+        NumberAnimation { id: cmtBdFadeOut; target: cmtBd; property: "opacity"; to: 0; duration: 200 }
 
         Rectangle {
             id: cmtSheetRect
@@ -559,6 +554,7 @@ Page {
             clip: true
             transform: Translate { id: cmtSlideT; y: 0 }
             NumberAnimation { id: cmtSlideAnim; target: cmtSlideT; property: "y"; from: cmtSheetRect.height; to: 0; duration: 300; easing.type: Easing.OutCubic }
+            NumberAnimation { id: cmtSlideOut; target: cmtSlideT; property: "y"; to: cmtSheetRect.height; duration: 250; easing.type: Easing.InCubic; onStopped: page.commentSheetOpen = false }
 
             // Grabber
             Rectangle {
@@ -586,7 +582,7 @@ Page {
                 AbstractButton {
                     anchors { right: parent.right; rightMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
                     width: units.gu(3.5); height: units.gu(3.5)
-                    onClicked: page.commentSheetOpen = false
+                    onClicked: cmtSheet.closeAnimated()
                     Icon { anchors.centerIn: parent; width: units.gu(2.2); height: width; name: "close"; color: Style.textPrimary }
                 }
             }
@@ -741,15 +737,17 @@ Page {
         visible: page.descSheetOpen
         z: 1500
         onVisibleChanged: if (visible) { descBdFade.start(); descSlideAnim.start(); }
+        function closeAnimated() { descBdFadeOut.start(); descSlideOut.start(); }
 
         Rectangle {
             id: descBd
             anchors.fill: parent
             color: Qt.rgba(0, 0, 0, 0.4)
             opacity: 0
-            MouseArea { anchors.fill: parent; onClicked: page.descSheetOpen = false }
+            MouseArea { anchors.fill: parent; onClicked: descSheet.closeAnimated() }
         }
         NumberAnimation { id: descBdFade; target: descBd; property: "opacity"; from: 0; to: 1; duration: 200 }
+        NumberAnimation { id: descBdFadeOut; target: descBd; property: "opacity"; to: 0; duration: 200 }
 
         Rectangle {
             id: descSheetRect
@@ -760,6 +758,7 @@ Page {
             clip: true
             transform: Translate { id: descSlideT; y: 0 }
             NumberAnimation { id: descSlideAnim; target: descSlideT; property: "y"; from: descSheetRect.height; to: 0; duration: 300; easing.type: Easing.OutCubic }
+            NumberAnimation { id: descSlideOut; target: descSlideT; property: "y"; to: descSheetRect.height; duration: 250; easing.type: Easing.InCubic; onStopped: page.descSheetOpen = false }
 
             // Grabber
             Rectangle {
@@ -785,7 +784,7 @@ Page {
                 AbstractButton {
                     anchors { right: parent.right; rightMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
                     width: units.gu(3.5); height: units.gu(3.5)
-                    onClicked: page.descSheetOpen = false
+                    onClicked: descSheet.closeAnimated()
                     Icon {
                         anchors.centerIn: parent
                         width: units.gu(2.5); height: width

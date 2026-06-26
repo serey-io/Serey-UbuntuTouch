@@ -31,12 +31,7 @@ Page {
 
     readonly property bool isSelf: Session.isLoggedIn && username === Session.username
 
-    header: PageHeader {
-        title: "@" + page.username
-        leadingActionBar.actions: [
-            Action { iconName: "back"; text: i18n.tr("Back"); onTriggered: page.pageStack.pop() }
-        ]
-    }
+    header: Item { height: 0 }
 
     ListModel { id: postsModel; dynamicRoles: true }
 
@@ -117,6 +112,11 @@ Page {
                         autoTransform: true
                         sourceSize.width: list.width
                         visible: status === Image.Ready
+                    }
+
+                    BackButton {
+                        anchors { left: parent.left; top: parent.top; leftMargin: Style.spacingS; topMargin: Style.spacingS }
+                        onClicked: page.pageStack.pop()
                     }
                 }
 

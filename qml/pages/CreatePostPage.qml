@@ -1,8 +1,11 @@
 import QtQuick 2.7
 import Lomiri.Components 1.3
+import Lomiri.Components.Popups 1.3 as Popups
 import "../Theme"
 import "../Session"
+import "../components"
 import "../services/PostService.js" as PostService
+import "../services/Uploads.js" as Uploads
 
 Page {
     id: page
@@ -11,6 +14,8 @@ Page {
     property string selectedCategory: ""
     property bool catSheetOpen: false
     readonly property int titleMaxLength: 250
+    property string coverImageUrl: ""
+    property bool uploading: false
 
     readonly property var categories: [
         "general", "breaking & news", "entertainment", "creativity",
@@ -76,15 +81,44 @@ Page {
         }
     }
 
+    function pickCoverImage() {
+        Popups.PopupUtils.open(pickerComp);
+    }
+
+    Component {
+        id: pickerComp
+        PhotoPicker {
+            onPicked: {
+                page.uploading = true;
+                Uploads.uploadImage(Config.uploadUrl, Config.uploadSecret, fileUrl,
+                    function (url) {
+                        page.uploading = false;
+                        page.coverImageUrl = url;
+                        Toast.success(i18n.tr("Cover image uploaded"));
+                    },
+                    function (err) {
+                        page.uploading = false;
+                        Toast.error((err && err.message) ? err.message : i18n.tr("Upload failed."));
+                    });
+            }
+            onCancelled: { /* nothing to do */ }
+        }
+    }
+
     function publish() {
         if (!Session.isLoggedIn) {
             Toast.error(i18n.tr("Please log in first."));
             return;
         }
+        // Prepend cover image to body if one was uploaded
+        var body = bodyArea.text.trim();
+        if (page.coverImageUrl.length > 0) {
+            body = '<img src="' + page.coverImageUrl + '" style="max-width:100%;height:auto;" />\n' + body;
+        }
         page.submitting = true;
         PostService.createPost(Config.baseUrl, {
             title: titleField.text.trim(),
-            body: bodyArea.text.trim(),
+            body: body,
             communityId: Config.communityId,
             category: page.selectedCategory
         }, Session.token,
@@ -130,10 +164,10 @@ Page {
 
             Item { width: 1; height: Style.spacingS }
 
-            // Title field — outlined rounded box
+            // Title field — outlined rounded box with inline character counter
             Rectangle {
                 width: parent.width
-                height: titleField.height + Style.spacingM * 2
+                height: titleField.height + Style.spacingM * 2 + counterLabel.height + Style.spacingXs
                 radius: units.dp(8)
                 color: "transparent"
                 border.width: units.dp(1.5)
@@ -142,8 +176,8 @@ Page {
                 TextInput {
                     id: titleField
                     anchors {
+                        top: parent.top; topMargin: Style.spacingM
                         left: parent.left; right: parent.right
-                        verticalCenter: parent.verticalCenter
                         leftMargin: Style.spacingM; rightMargin: Style.spacingM
                     }
                     font.pixelSize: Style.fontMedium
@@ -155,8 +189,8 @@ Page {
 
                 Label {
                     anchors {
-                        left: parent.left; verticalCenter: parent.verticalCenter
-                        leftMargin: Style.spacingM
+                        left: parent.left; top: parent.top
+                        leftMargin: Style.spacingM; topMargin: Style.spacingM
                     }
                     visible: titleField.text.length === 0 && !titleField.activeFocus
                     text: i18n.tr("Enter title")
@@ -164,15 +198,17 @@ Page {
                     font.pixelSize: Style.fontMedium
                     font.family: Style.fontFamily
                 }
-            }
 
-            // Character counter
-            Label {
-                width: parent.width
-                text: titleField.text.length + "/" + page.titleMaxLength
-                font.pixelSize: Style.fontXSmall
-                color: titleField.text.length >= page.titleMaxLength ? Style.danger : Style.textSecondary
-                horizontalAlignment: Text.AlignRight
+                Label {
+                    id: counterLabel
+                    anchors {
+                        right: parent.right; bottom: parent.bottom
+                        rightMargin: Style.spacingM; bottomMargin: Style.spacingS
+                    }
+                    text: titleField.text.length + "/" + page.titleMaxLength
+                    font.pixelSize: Style.fontXSmall
+                    color: titleField.text.length >= page.titleMaxLength ? Style.danger : Style.textSecondary
+                }
             }
 
             // Body text area — outlined rounded box, tall
@@ -252,10 +288,58 @@ Page {
                 height: units.gu(20)
                 radius: units.dp(12)
                 color: Style.iconBackground
+                clip: true
 
+                // Show uploaded image preview
+                Image {
+                    anchors.fill: parent
+                    source: page.coverImageUrl
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                    visible: page.coverImageUrl.length > 0
+                }
+
+                // Remove button (top-right, shown when image is set)
+                AbstractButton {
+                    visible: page.coverImageUrl.length > 0
+                    anchors {
+                        top: parent.top; right: parent.right
+                        topMargin: Style.spacingS; rightMargin: Style.spacingS
+                    }
+                    width: units.gu(4); height: width
+                    z: 2
+                    onClicked: page.coverImageUrl = ""
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: width / 2
+                        color: Qt.rgba(0, 0, 0, 0.5)
+                    }
+                    Icon {
+                        anchors.centerIn: parent
+                        width: units.gu(2); height: width
+                        name: "close"
+                        color: Style.textOnBrand
+                    }
+                }
+
+                // Upload spinner overlay
+                Rectangle {
+                    anchors.fill: parent
+                    color: Qt.rgba(1, 1, 1, 0.7)
+                    visible: page.uploading
+
+                    ActivityIndicator {
+                        anchors.centerIn: parent
+                        running: page.uploading
+                    }
+                }
+
+                // Empty state: + button + label (shown when no image set and not uploading)
                 Column {
                     anchors.centerIn: parent
                     spacing: Style.spacingS
+                    visible: page.coverImageUrl.length === 0 && !page.uploading
 
                     Rectangle {
                         anchors.horizontalCenter: parent.horizontalCenter
@@ -281,7 +365,8 @@ Page {
 
                 MouseArea {
                     anchors.fill: parent
-                    onClicked: Toast.show(i18n.tr("Image upload coming soon"))
+                    enabled: !page.uploading && page.coverImageUrl.length === 0
+                    onClicked: page.pickCoverImage()
                 }
             }
 
@@ -357,7 +442,7 @@ Page {
 
             AbstractButton {
                 width: units.gu(5); height: units.gu(4.5)
-                onClicked: Toast.show(i18n.tr("Image upload coming soon"))
+                onClicked: page.pickCoverImage()
                 Rectangle {
                     anchors.fill: parent; anchors.margins: units.dp(4)
                     radius: units.dp(6); color: "transparent"
@@ -384,19 +469,22 @@ Page {
 
     // --- Category picker bottom sheet ----------------------------------------
     Item {
+        id: catSheet
         anchors.fill: parent
         visible: page.catSheetOpen
         z: 200
         onVisibleChanged: if (visible) { catBdFade.start(); catSlideAnim.start(); }
+        function closeAnimated() { catBdFadeOut.start(); catSlideOut.start(); }
 
         Rectangle {
             id: catBd
             anchors.fill: parent
             color: Qt.rgba(0, 0, 0, 0.4)
             opacity: 0
-            MouseArea { anchors.fill: parent; onClicked: page.catSheetOpen = false }
+            MouseArea { anchors.fill: parent; onClicked: catSheet.closeAnimated() }
         }
         NumberAnimation { id: catBdFade; target: catBd; property: "opacity"; from: 0; to: 1; duration: 200 }
+        NumberAnimation { id: catBdFadeOut; target: catBd; property: "opacity"; to: 0; duration: 200 }
 
         Rectangle {
             id: catSheetRect
@@ -406,6 +494,7 @@ Page {
             color: Style.surface
             transform: Translate { id: catSlideT; y: 0 }
             NumberAnimation { id: catSlideAnim; target: catSlideT; property: "y"; from: catSheetRect.height; to: 0; duration: 300; easing.type: Easing.OutCubic }
+            NumberAnimation { id: catSlideOut; target: catSlideT; property: "y"; to: catSheetRect.height; duration: 250; easing.type: Easing.InCubic; onStopped: page.catSheetOpen = false }
 
             Rectangle {
                 anchors { top: parent.top; topMargin: Style.spacingS; horizontalCenter: parent.horizontalCenter }
@@ -430,7 +519,7 @@ Page {
                     AbstractButton {
                         anchors { right: parent.right; rightMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
                         width: units.gu(3.5); height: units.gu(3.5)
-                        onClicked: page.catSheetOpen = false
+                        onClicked: catSheet.closeAnimated()
                         Icon { anchors.centerIn: parent; width: units.gu(2.2); height: width; name: "close"; color: Style.textPrimary }
                     }
                 }
@@ -445,7 +534,7 @@ Page {
                         height: units.gu(6)
                         onClicked: {
                             page.selectedCategory = modelData;
-                            page.catSheetOpen = false;
+                            catSheet.closeAnimated();
                         }
 
                         Row {

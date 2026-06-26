@@ -17,6 +17,7 @@ Item {
 
     function open() { picker.visible = true; cpBackdropFade.start(); cpSlide.start(); }
     function close() { picker.visible = false; }
+    function closeAnimated() { cpBackdropFadeOut.start(); cpSlideOut.start(); }
 
     // Backdrop
     Rectangle {
@@ -24,9 +25,10 @@ Item {
         anchors.fill: parent
         color: Qt.rgba(0, 0, 0, 0.4)
         opacity: 0
-        MouseArea { anchors.fill: parent; onClicked: picker.close() }
+        MouseArea { anchors.fill: parent; onClicked: picker.closeAnimated() }
     }
     NumberAnimation { id: cpBackdropFade; target: cpBackdrop; property: "opacity"; from: 0; to: 1; duration: 200 }
+    NumberAnimation { id: cpBackdropFadeOut; target: cpBackdrop; property: "opacity"; to: 0; duration: 200 }
 
     // Sheet
     Rectangle {
@@ -38,6 +40,7 @@ Item {
 
         transform: Translate { id: cpTranslate; y: 0 }
         NumberAnimation { id: cpSlide; target: cpTranslate; property: "y"; from: sheet.height + units.gu(4); to: 0; duration: 300; easing.type: Easing.OutCubic }
+        NumberAnimation { id: cpSlideOut; target: cpTranslate; property: "y"; to: sheet.height + units.gu(4); duration: 250; easing.type: Easing.InCubic; onStopped: picker.close() }
 
         // Grabber
         Rectangle {
@@ -65,7 +68,7 @@ Item {
                 }
                 AbstractButton {
                     width: units.gu(3.5); height: units.gu(3.5)
-                    onClicked: picker.close()
+                    onClicked: picker.closeAnimated()
                     Icon {
                         anchors.centerIn: parent
                         width: units.gu(2.5); height: width
@@ -86,7 +89,7 @@ Item {
             delegate: AbstractButton {
                 width: list.width
                 height: units.gu(6.5)
-                onClicked: { Config.sourceIndex = index; picker.close(); }
+                onClicked: { Config.sourceIndex = index; picker.closeAnimated(); }
 
                 Row {
                     anchors { fill: parent; leftMargin: Style.spacingM; rightMargin: Style.spacingM }
