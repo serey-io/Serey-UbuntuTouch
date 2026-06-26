@@ -108,6 +108,8 @@ Page {
                 page.pageStack.push(Qt.resolvedUrl("PostDetailPage.qml"),
                     { author: p.author, permlink: p.permlink, title: p.title });
             }
+            onAuthorClicked: page.pageStack.push(Qt.resolvedUrl("ProfileViewPage.qml"),
+                { username: feedModel.get(index).author })
             onRequireLogin: page.pageStack.push(Qt.resolvedUrl("LoginPage.qml"))
         }
 

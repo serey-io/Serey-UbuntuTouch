@@ -130,6 +130,13 @@ function setProfilePicture(baseUrl, token, imageUrl, onOk, onErr) {
     Http.post(baseUrl, "/user-profile-picture/add", { image_url: imageUrl }, token, onOk, onErr);
 }
 
+// Set the active cover photo to an already-uploaded image URL (same upload step
+// as the avatar). The backend marks every other cover inactive and this one
+// active (`POST /user-cover-photo/add`, Bearer).
+function setCoverPhoto(baseUrl, token, imageUrl, onOk, onErr) {
+    Http.post(baseUrl, "/user-cover-photo/add", { image_url: imageUrl }, token, onOk, onErr);
+}
+
 // Step 0 of password reset: look up the account's masked contact hint so the UI
 // can tell the user which email/phone the code will go to. onOk receives the
 // parsed response; the masked values are at data.data.{email,phone}.

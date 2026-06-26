@@ -137,6 +137,12 @@ Page {
                     text: "@" + (page.video.author || "")
                     textSize: Label.Small
                     color: Style.brand
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: if (page.video.author)
+                            page.pageStack.push(Qt.resolvedUrl("ProfileViewPage.qml"),
+                                { username: page.video.author })
+                    }
                 }
                 Label {
                     text: page.video.date || ""

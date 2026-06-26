@@ -24,6 +24,7 @@ Item {
     signal clicked()
     signal requireLogin()
     signal moreClicked()
+    signal authorClicked()
 
     onPChanged: {
         root.isFollowing = false;
@@ -127,6 +128,8 @@ Item {
                         decode: units.gu(9)
                         visible: (p.authorImage || "") !== ""
                     }
+
+                    MouseArea { anchors.fill: parent; onClicked: root.authorClicked() }
                 }
 
                 ColumnLayout {
@@ -141,6 +144,7 @@ Item {
                         font.weight: Font.DemiBold
                         color: Style.textPrimary
                         elide: Text.ElideRight
+                        MouseArea { anchors.fill: parent; onClicked: root.authorClicked() }
                     }
                     Label {
                         text: Style.formatTimeAgo(p.date || "")

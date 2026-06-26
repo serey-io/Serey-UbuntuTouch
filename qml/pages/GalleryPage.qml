@@ -89,6 +89,8 @@ Page {
                 page.pageStack.push(Qt.resolvedUrl("PostDetailPage.qml"),
                     { author: p.author, permlink: p.permlink, title: p.caption });
             }
+            onAuthorClicked: page.pageStack.push(Qt.resolvedUrl("ProfileViewPage.qml"),
+                { username: galleryModel.get(index).author })
             onRequireLogin: page.pageStack.push(Qt.resolvedUrl("LoginPage.qml"))
         }
 

@@ -29,6 +29,7 @@ Item {
 
     signal deleted(string permlink)
     signal replyRequested(var comment)
+    signal authorClicked(string author)
 
     function doDelete() {
         if (deleting)
@@ -89,6 +90,8 @@ Item {
                     decode: units.gu(8)
                     visible: (c.authorImage || "") !== ""
                 }
+
+                MouseArea { anchors.fill: parent; onClicked: item.authorClicked(c.author || "") }
             }
 
             Row {
@@ -105,6 +108,7 @@ Item {
                     font.pixelSize: Style.fontSmall
                     font.weight: Font.DemiBold
                     color: Style.textPrimary
+                    MouseArea { anchors.fill: parent; onClicked: item.authorClicked(c.author || "") }
                 }
                 Label {
                     text: "· " + Style.formatTimeAgo(c.date || "")
@@ -248,6 +252,7 @@ Item {
                             target: replyLoader.item
                             onDeleted: item.deleted(permlink)
                             onReplyRequested: item.replyRequested(comment)
+                            onAuthorClicked: item.authorClicked(author)
                         }
                     }
                 }

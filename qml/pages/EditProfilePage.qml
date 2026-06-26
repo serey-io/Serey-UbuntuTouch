@@ -1,4 +1,5 @@
 import QtQuick 2.7
+import QtGraphicalEffects 1.0
 import Lomiri.Components 1.3
 import Lomiri.Components.Popups 1.3
 import "../Theme"
@@ -21,9 +22,12 @@ Page {
 
     property bool busy: false          // saving text fields
     property bool uploading: false     // avatar upload in flight
+    property bool coverUploading: false
     property string errorMsg: ""
     property string avatarUrl: initial ? (initial.profileUrl || "") : ""
+    property string coverUrl: initial ? (initial.coverUrl || "") : ""
     property int genderId: 0           // 0 none, 1 male, 2 female
+    property string pickTarget: "avatar"   // which image the picker is changing
 
     header: PageHeader {
         title: i18n.tr("Edit profile")
@@ -43,10 +47,16 @@ Page {
         }
     }
 
-    function fail(err) { busy = false; uploading = false; page.errorMsg = err.message; }
+    function fail(err) { busy = false; uploading = false; coverUploading = false; page.errorMsg = err.message; }
+
+    // The picker is shared between the avatar and the cover; route by pickTarget.
+    function onPhotoPicked(fileUrl) {
+        if (page.pickTarget === "cover") uploadCover(fileUrl);
+        else uploadAvatar(fileUrl);
+    }
 
     // --- Avatar: upload to the media server, then set it active --------------
-    function onPhotoPicked(fileUrl) {
+    function uploadAvatar(fileUrl) {
         errorMsg = "";
         uploading = true;
         Uploads.uploadImage(Config.uploadUrl, Config.uploadSecret, fileUrl,
@@ -56,6 +66,21 @@ Page {
                         uploading = false;
                         page.avatarUrl = url;
                         Toast.success(i18n.tr("Photo updated."));
+                    }, fail);
+            }, fail);
+    }
+
+    // --- Cover: same upload, then set the active cover photo -----------------
+    function uploadCover(fileUrl) {
+        errorMsg = "";
+        coverUploading = true;
+        Uploads.uploadImage(Config.uploadUrl, Config.uploadSecret, fileUrl,
+            function (url) {
+                AccountService.setCoverPhoto(Config.baseUrl, Session.token, url,
+                    function () {
+                        coverUploading = false;
+                        page.coverUrl = url;
+                        Toast.success(i18n.tr("Cover updated."));
                     }, fail);
             }, fail);
     }
@@ -96,6 +121,65 @@ Page {
             y: Style.spacingL
             spacing: Style.spacingM
 
+            // --- Cover banner -------------------------------------------------
+            AbstractButton {
+                width: parent.width
+                height: units.gu(15)
+                enabled: !page.coverUploading
+                onClicked: { page.pickTarget = "cover"; PopupUtils.open(photoPickerComponent); }
+
+                Rectangle {                 // brand fallback when no cover
+                    anchors.fill: parent
+                    radius: Style.cardRadius
+                    gradient: Gradient {
+                        GradientStop { position: 0.0; color: Style.brand }
+                        GradientStop { position: 1.0; color: Style.brandDark }
+                    }
+                }
+                Image {
+                    anchors.fill: parent
+                    source: page.coverUrl
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                    autoTransform: true
+                    sourceSize.width: width
+                    visible: page.coverUrl.length > 0
+                    layer.enabled: true
+                    layer.effect: OpacityMask { maskSource: coverMask }
+                }
+                Rectangle { id: coverMask; anchors.fill: parent; radius: Style.cardRadius; visible: false }
+
+                // "Edit cover" chip
+                Rectangle {
+                    anchors { right: parent.right; bottom: parent.bottom; margins: Style.spacingS }
+                    height: units.gu(3.4); width: coverHint.width + Style.spacingM; radius: height / 2
+                    color: Qt.rgba(0, 0, 0, 0.45)
+                    Row {
+                        id: coverHint
+                        anchors.centerIn: parent
+                        spacing: units.gu(0.5)
+                        Icon {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: units.gu(1.8); height: width
+                            name: "camera-symbolic"; color: Style.textOnBrand
+                        }
+                        Label {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: i18n.tr("Edit cover")
+                            font.pixelSize: Style.fontXSmall; font.family: Style.fontFamily
+                            color: Style.textOnBrand
+                        }
+                    }
+                }
+                Rectangle {                 // uploading overlay
+                    anchors.fill: parent
+                    radius: Style.cardRadius
+                    color: Qt.rgba(0, 0, 0, 0.35)
+                    visible: page.coverUploading
+                    ActivityIndicator { anchors.centerIn: parent; running: page.coverUploading }
+                }
+            }
+
             // --- Avatar -------------------------------------------------------
             // AbstractButton (not a raw MouseArea) so the tap is reliable inside
             // the Flickable — matches how the rest of the app handles taps.
@@ -103,7 +187,7 @@ Page {
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: units.gu(12); height: width
                 enabled: !page.uploading
-                onClicked: PopupUtils.open(photoPickerComponent)
+                onClicked: { page.pickTarget = "avatar"; PopupUtils.open(photoPickerComponent); }
 
                 Rectangle {
                     anchors.fill: parent

@@ -17,6 +17,8 @@ AbstractButton {
     // Guard: the delegate may rebind `video` to undefined during model churn.
     readonly property var v: video ? video : ({})
 
+    signal authorClicked()
+
     width: parent ? parent.width : units.gu(40)
     implicitHeight: column.height + Style.spacingM * 2
     height: implicitHeight
@@ -116,6 +118,8 @@ AbstractButton {
                     color: Style.textSecondary
                     visible: (v.authorImage || "") === ""
                 }
+
+                MouseArea { anchors.fill: parent; onClicked: root.authorClicked() }
             }
 
             Column {

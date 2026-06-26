@@ -85,6 +85,35 @@ Page {
             id: col
             width: parent.width
 
+            // ===== Cover banner (signed in) ==============================
+            Item {
+                width: parent.width
+                height: visible ? units.gu(16) : 0
+                visible: Session.isLoggedIn
+                clip: true
+
+                Rectangle {                 // brand fallback when no cover
+                    anchors.fill: parent
+                    gradient: Gradient {
+                        GradientStop { position: 0.0; color: Style.brand }
+                        GradientStop { position: 1.0; color: Style.brandDark }
+                    }
+                }
+                Image {
+                    anchors.fill: parent
+                    source: page.profile && page.profile.coverUrl ? page.profile.coverUrl : ""
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                    autoTransform: true
+                    sourceSize.width: parent.width
+                    visible: status === Image.Ready
+                }
+                AbstractButton {
+                    anchors.fill: parent
+                    onClicked: page.pageStack.push(Qt.resolvedUrl("EditProfilePage.qml"), { initial: page.profile })
+                }
+            }
+
             // ===== Welcome / identity header ==============================
             Item {
                 width: parent.width

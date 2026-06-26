@@ -87,6 +87,8 @@ Page {
             video: feedModel.get(index)
             onClicked: page.pageStack.push(Qt.resolvedUrl("VideoDetailPage.qml"),
                 { video: feedModel.get(index) })
+            onAuthorClicked: page.pageStack.push(Qt.resolvedUrl("ProfileViewPage.qml"),
+                { username: feedModel.get(index).author })
         }
 
         // Constant-height footer: a conditional height feeds back into

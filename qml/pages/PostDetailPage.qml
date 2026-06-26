@@ -244,6 +244,13 @@ Page {
 
     Component.onCompleted: load()
 
+    // Open a creator's profile (post author or a comment author).
+    function openProfile(username) {
+        if (username)
+            page.pageStack.push(Qt.resolvedUrl("ProfileViewPage.qml"), { username: username });
+    }
+    function openAuthor() { if (page.post) page.openProfile(page.post.author); }
+
     KeyboardAwareFlickable {
         id: scroll
         anchors { top: page.header.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
@@ -336,6 +343,8 @@ Page {
                         maskSource: detailAvatarMask
                         visible: page.post && (page.post.authorImage || "") !== ""
                     }
+
+                    MouseArea { anchors.fill: parent; onClicked: page.openAuthor() }
                 }
 
                 Label {
@@ -348,6 +357,7 @@ Page {
                     textSize: Label.Small
                     font.weight: Font.DemiBold
                     color: Style.textPrimary
+                    MouseArea { anchors.fill: parent; onClicked: page.openAuthor() }
                 }
             }
 
@@ -489,6 +499,7 @@ Page {
                     comment: modelData
                     onDeleted: page.removeComment(permlink)
                     onReplyRequested: page.startReply(comment)
+                    onAuthorClicked: page.openProfile(author)
                 }
             }
 
