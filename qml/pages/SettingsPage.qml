@@ -41,9 +41,6 @@ Page {
 
     Component.onCompleted: refreshProfile()
 
-    Loader { active: true; visible: false; source: Qt.resolvedUrl("ProfileViewPage.qml")
-        onStatusChanged: if (status === Loader.Error) console.log("TEMP_PROFILEVIEW_LOAD_ERROR") }
-
     Connections {
         target: Session
         function onTokenChanged() { page.refreshProfile(); }
