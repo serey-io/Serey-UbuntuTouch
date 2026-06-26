@@ -102,7 +102,9 @@ function toPost(raw) {
         payout: raw.serey_value || "",
         categories: parseList(raw.categories),
         voters: voterNames(raw.voters),
+        voterStr: "," + voterNames(raw.voters).join(",") + ",",
         flaggers: voterNames(raw.flaggers),
+        flaggerStr: "," + voterNames(raw.flaggers).join(",") + ",",
         community: raw.community_title || "",
         checkmark: raw.checkmark_icon || ""
     };
@@ -133,6 +135,7 @@ function toGalleryPost(raw) {
         comments: toInt(raw.answer_count),
         payout: raw.serey_value || "",
         voters: voterNames(raw.voters),
+        voterStr: "," + voterNames(raw.voters).join(",") + ",",
         checkmark: raw.checkmark_icon || ""
     };
 }
@@ -147,10 +150,15 @@ function toComment(raw) {
     return {
         author: raw.author || "",
         permlink: raw.permlink || "",
+        // Needed to resubmit create-or-update-comment when editing (it always
+        // requires the parent it's attached to, not just its own permlink).
+        parentAuthor: raw.parent_author || "",
+        parentPermlink: raw.parent_permlink || "",
         body: stripHtml(raw.description || raw.body || ""),
         date: raw.publish_date || "",
         votes: toInt(raw.voter_count),
         voters: voterNames(raw.voters),
+        voterStr: "," + voterNames(raw.voters).join(",") + ",",
         authorImage: raw.author_image_url || "",
         replies: kids
     };

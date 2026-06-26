@@ -17,6 +17,10 @@ QtObject {
 
     property string token: ""
     property string username: ""
+    // Not persisted to disk (only token/username are) — refetched each launch
+    // via AccountService.profile() so optimistic local comments can show a
+    // real avatar instead of the letter-fallback.
+    property string avatarUrl: ""
 
     readonly property bool isLoggedIn: token.length > 0
 
@@ -67,6 +71,7 @@ QtObject {
     function clear() {
         token = "";
         username = "";
+        avatarUrl = "";
         _save();
     }
 

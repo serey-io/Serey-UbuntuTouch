@@ -33,8 +33,19 @@ Page {
     // just reloads when Config.sourceIndex changes.
     Connections {
         target: Config
-        function onSourceIndexChanged() {
-            page.reload();
+        function onSourceIndexChanged() { page.reload(); }
+    }
+
+    Connections {
+        target: PostActions
+        function onHideRequested(author, permlink) {
+            for (var i = 0; i < feedModel.count; i++) {
+                if (feedModel.get(i).permlink === permlink) {
+                    feedModel.remove(i);
+                    Toast.show(i18n.tr("Post hidden"));
+                    return;
+                }
+            }
         }
     }
 
@@ -111,6 +122,7 @@ Page {
             onAuthorClicked: page.pageStack.push(Qt.resolvedUrl("ProfileViewPage.qml"),
                 { username: feedModel.get(index).author })
             onRequireLogin: page.pageStack.push(Qt.resolvedUrl("LoginPage.qml"))
+            onMoreClicked: PostActions.open(feedModel.get(index))
         }
 
         // Constant-height footer: a conditional height feeds back into
@@ -147,5 +159,33 @@ Page {
         visible: !page.loading && page.errorMsg === "" && feedModel.count === 0
         iconName: "stock_note"
         message: i18n.tr("No posts in %1").arg(Config.communityName)
+    }
+
+    // Floating compose button
+    AbstractButton {
+        visible: Session.isLoggedIn
+        anchors {
+            right: parent.right
+            bottom: parent.bottom
+            rightMargin: Style.spacingM
+            bottomMargin: Style.spacingM
+        }
+        width: Style.fabSize; height: width
+        z: 10
+        onClicked: {
+            page.pageStack.push(Qt.resolvedUrl("CreatePostPage.qml"))
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            radius: Style.fabRadius
+            color: Style.brand
+        }
+        Icon {
+            anchors.centerIn: parent
+            width: units.gu(3); height: width
+            name: "edit"
+            color: Style.textOnBrand
+        }
     }
 }

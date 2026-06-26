@@ -4,6 +4,7 @@ import QtGraphicalEffects 1.0
 import Lomiri.Components 1.3
 import "../Theme"
 import "../Session"
+import "../services/VoteService.js" as VoteService
 
 /*
  * Feed post card (serey-ubutu FeedCard style): avatar + author + relative time
@@ -44,14 +45,49 @@ Item {
         return 0;
     }
     function _inList(v, name) {
-        if (v && typeof v.indexOf === "function") return v.indexOf(name) >= 0;
+        if (!v || !name) return false;
+        if (typeof v.indexOf === "function") return v.indexOf(name) >= 0;
+        // ListModel-wrapped arrays (dynamicRoles) have .count/.get() but no
+        // .indexOf(). Each wrapped string element is stored as an object; the
+        // actual value lives in .modelData, .value, or the first own property.
+        if (typeof v.count === "number") {
+            for (var i = 0; i < v.count; i++) {
+                var item = v.get(i);
+                if (!item) continue;
+                if (item === name) return true;
+                if (item.modelData === name) return true;
+                if (item.value === name) return true;
+                var keys = Object.keys(item);
+                for (var k = 0; k < keys.length; k++) {
+                    if (item[keys[k]] === name) return true;
+                }
+            }
+        }
         return false;
     }
 
     // Ensure the shared store knows this author's state (queries once).
+    // Also refresh vote state from session cache or model voters.
     onPChanged: {
         if (Session.isLoggedIn && p.author && p.author !== Session.username)
             FollowStore.load(Config.baseUrl, Session.username, p.author);
+
+        // Vote state: check session cache first (survives navigation), then
+        // fall back to the model's voters array. Set imperatively (no binding)
+        // so VoteBar's own state changes aren't overridden later.
+        if (cardVoteBar) {
+            var cached = VoteService.getCached(p.author || "", p.permlink || "");
+            if (cached) {
+                cardVoteBar.upvoted = cached.upvoted;
+                cardVoteBar.flagged = cached.flagged;
+                cardVoteBar.votes = cached.votes;
+                if (cached.payout) cardVoteBar.payout = cached.payout;
+            } else {
+                var me = Session.username || "";
+                cardVoteBar.upvoted = me.length > 0 && (p.voterStr || "").indexOf("," + me + ",") >= 0;
+                cardVoteBar.flagged = me.length > 0 && (p.flaggerStr || "").indexOf("," + me + ",") >= 0;
+            }
+        }
     }
 
     function toggleFollow() {
@@ -275,6 +311,7 @@ Item {
 
         // Action row (live voting)
         VoteBar {
+            id: cardVoteBar
             width: parent.width - Style.spacingM * 2
             x: Style.spacingM
             author: p.author || ""
@@ -284,8 +321,6 @@ Item {
             flaggers: root._len(p.flaggers)
             comments: p.comments || 0
             payout: p.payout || ""
-            upvoted: root._inList(p.voters, Session.username)
-            flagged: root._inList(p.flaggers, Session.username)
             onRequireLogin: root.requireLogin()
             onCommentRequested: root.clicked()
         }

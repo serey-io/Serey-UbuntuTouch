@@ -31,8 +31,19 @@ Page {
     // just reloads when Config.sourceIndex changes.
     Connections {
         target: Config
-        function onSourceIndexChanged() {
-            page.reload();
+        function onSourceIndexChanged() { page.reload(); }
+    }
+
+    Connections {
+        target: PostActions
+        function onHideRequested(author, permlink) {
+            for (var i = 0; i < feedModel.count; i++) {
+                if (feedModel.get(i).permlink === permlink) {
+                    feedModel.remove(i);
+                    Toast.show(i18n.tr("Post hidden"));
+                    return;
+                }
+            }
         }
     }
 
@@ -82,6 +93,20 @@ Page {
         model: feedModel
         cacheBuffer: units.gu(16)
 
+        header: Item {
+            width: list.width
+            height: headerLabel.height + Style.spacingM + Style.spacingS
+            Label {
+                id: headerLabel
+                x: Style.spacingM
+                y: Style.spacingM
+                text: i18n.tr("Latest Videos")
+                font.pixelSize: Style.fontMedium
+                font.weight: Font.DemiBold
+                color: Style.textPrimary
+            }
+        }
+
         delegate: VideoCard {
             width: list.width
             video: feedModel.get(index)
@@ -89,6 +114,7 @@ Page {
                 { video: feedModel.get(index) })
             onAuthorClicked: page.pageStack.push(Qt.resolvedUrl("ProfileViewPage.qml"),
                 { username: feedModel.get(index).author })
+            onMoreClicked: PostActions.open(feedModel.get(index))
         }
 
         // Constant-height footer: a conditional height feeds back into

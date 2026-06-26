@@ -6,6 +6,7 @@ import "../Session"
 import "../components"
 import "../services/PostService.js" as PostService
 import "../services/CommentService.js" as CommentService
+import "../services/VoteService.js" as VoteService
 
 /*
  * Full post view. Receives author/permlink (and an optional title for the
@@ -53,8 +54,6 @@ Page {
                 anchors.fill: parent
                 radius: width / 2
                 color: Style.surface
-                border.width: units.dp(1)
-                border.color: Style.divider
             }
             Icon {
                 anchors.centerIn: parent
@@ -85,10 +84,27 @@ Page {
                 loading = false;
                 page.post = result.post;
                 page.commentCount = result.post.comments;
-                // result.replies is already a proper tree (Mappers.toComment
-                // recurses into nested `replies`), so no flattening needed.
                 page.comments = result.replies || [];
                 page._parseBody();
+
+                // Sync vote bar: cache wins over API data (the feed may have
+                // recorded a vote the detail endpoint hasn't caught up with).
+                if (detailVoteBar) {
+                    var cached = VoteService.getCached(page.author, page.permlink);
+                    if (cached) {
+                        detailVoteBar.votes = cached.votes;
+                        detailVoteBar.upvoted = cached.upvoted;
+                        detailVoteBar.flagged = cached.flagged;
+                        if (cached.payout) detailVoteBar.payout = cached.payout;
+                    } else {
+                        var p = result.post;
+                        detailVoteBar.votes = p.votes || 0;
+                        detailVoteBar.flaggers = p.flaggers ? p.flaggers.length : 0;
+                        detailVoteBar.payout = p.payout || "";
+                        detailVoteBar.upvoted = p.voters && p.voters.indexOf(Session.username) >= 0;
+                        detailVoteBar.flagged = p.flaggers && p.flaggers.indexOf(Session.username) >= 0;
+                    }
+                }
             },
             function (err) {
                 loading = false;
@@ -118,6 +134,24 @@ Page {
         page.comments = page._removeFrom(page.comments, permlinkToRemove);
         page.commentCount = Math.max(0, page.commentCount - 1);
         Toast.success(i18n.tr("Comment deleted"));
+    }
+
+    function _editIn(list, permlinkToEdit, newBody) {
+        var out = [];
+        for (var i = 0; i < list.length; i++) {
+            var node = list[i];
+            if (node.permlink === permlinkToEdit)
+                node = Object.assign({}, node, { body: newBody });
+            else if (node.replies && node.replies.length)
+                node = Object.assign({}, node, { replies: page._editIn(node.replies, permlinkToEdit, newBody) });
+            out.push(node);
+        }
+        return out;
+    }
+
+    function editComment(permlinkToEdit, newBody) {
+        page.comments = page._editIn(page.comments, permlinkToEdit, newBody);
+        Toast.success(i18n.tr("Comment updated"));
     }
 
     function startReply(comment) {
@@ -151,7 +185,9 @@ Page {
                 page.posting = false;
                 composer.text = "";
                 var mine = { author: Session.username, permlink: "", body: text,
-                             date: i18n.tr("just now"), votes: 0, voters: [], replies: [] };
+                             parentAuthor: parentAuthor, parentPermlink: parentPermlink,
+                             date: i18n.tr("just now"), votes: 0, voters: [], replies: [],
+                             authorImage: Session.avatarUrl };
                 if (target) {
                     page.comments = page._appendReply(page.comments, target.permlink, mine);
                 } else {
@@ -160,6 +196,10 @@ Page {
                 page.commentCount = page.commentCount + 1;
                 page.replyTarget = null;
                 Toast.success(i18n.tr("Comment posted"));
+                // Reload so the optimistic comment gets its real server
+                // permlink — otherwise replying to it would fail with
+                // "parent_permlink is a required field".
+                page.load();
             },
             function (err) {
                 page.posting = false;
@@ -191,11 +231,9 @@ Page {
             return;
         var html = page.post.body || "";
 
-        // Custom editor containers carry the real src in data-image-url; fold
-        // those into plain <img> tags so the splitter below catches them too.
-        html = html.replace(/data-image-url="([^"]*)"/g, function (m, url) {
-            return '<img src="' + url + '"/>';
-        });
+        // Custom editor containers carry the real src in data-image-url; replace
+        // the entire parent tag with a plain <img> so the splitter catches them.
+        html = html.replace(/<[^>]*data-image-url="([^"]*)"[^>]*>/g, '<img src="$1"/>');
 
         var pieces = [];
         var remaining = html;
@@ -210,10 +248,13 @@ Page {
         if (remaining) pieces.push({ type: "html", content: remaining });
 
         var featuredSrc = page.post.thumbnail || "";
+        var seenImages = {};
         for (var i = 0; i < pieces.length; i++) {
             var piece = pieces[i];
             if (piece.type === "image") {
                 if (piece.content === featuredSrc) continue;
+                if (seenImages[piece.content]) continue;
+                seenImages[piece.content] = true;
                 bodyModel.append({ type: "image", content: piece.content });
             } else {
                 var text = piece.content;
@@ -253,11 +294,13 @@ Page {
 
     KeyboardAwareFlickable {
         id: scroll
-        anchors { top: page.header.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
+        anchors { top: page.header.bottom; left: parent.left; right: parent.right; bottom: footer.visible ? footer.top : parent.bottom }
         contentWidth: width
         contentHeight: contentCol.height
         clip: true
         visible: page.post !== null
+        opacity: 0
+        NumberAnimation on opacity { from: 0; to: 1; duration: 250; easing.type: Easing.OutQuad }
 
         Column {
             id: contentCol
@@ -498,134 +541,163 @@ Page {
                     width: contentCol.width
                     comment: modelData
                     onDeleted: page.removeComment(permlink)
+                    onEdited: page.editComment(permlink, newBody)
                     onReplyRequested: page.startReply(comment)
                     onAuthorClicked: page.openProfile(author)
                 }
             }
 
-            Rectangle { width: parent.width; height: units.dp(1); color: "black" }
-
-            // Votes / voters / share summary, right above the comment input
-            VoteBar {
-                width: parent.width - Style.spacingM * 2
-                anchors.horizontalCenter: parent.horizontalCenter
-                author: page.author
-                permlink: page.permlink
-                voteType: "post"
-                votes: page.post ? page.post.votes : 0
-                flaggers: page.post ? page.post.flaggers.length : 0
-                showComments: false
-                showVotersLabel: true
-                payout: page.post ? page.post.payout : ""
-                upvoted: page.post && page.post.voters.indexOf(Session.username) >= 0
-                flagged: page.post && page.post.flaggers.indexOf(Session.username) >= 0
-                onRequireLogin: page.pushLogin()
-            }
-
-            // Replying-to banner
-            Row {
-                visible: page.replyTarget !== null
-                width: parent.width - Style.spacingM * 2
-                anchors.horizontalCenter: parent.horizontalCenter
-                spacing: Style.spacingS
-
-                Label {
-                    text: page.replyTarget ? i18n.tr("Replying to @%1").arg(page.replyTarget.author) : ""
-                    font.pixelSize: Style.fontSmall
-                    color: Style.textSecondary
-                }
-                AbstractButton {
-                    width: cancelLabel.implicitWidth
-                    height: cancelLabel.implicitHeight
-                    onClicked: page.cancelReply()
-                    Label {
-                        id: cancelLabel
-                        text: i18n.tr("Cancel")
-                        font.pixelSize: Style.fontSmall
-                        font.weight: Font.DemiBold
-                        color: Style.brand
-                    }
-                }
-            }
-
-            // Comment input pill
-            Row {
-                width: parent.width - Style.spacingM * 2
-                anchors.horizontalCenter: parent.horizontalCenter
-                spacing: Style.spacingS
-
-                Rectangle {
-                    width: parent.width - sendButton.width - Style.spacingS
-                    height: units.gu(5)
-                    radius: height / 2
-                    color: Style.iconBackground
-
-                    Label {
-                        anchors {
-                            left: parent.left
-                            right: parent.right
-                            verticalCenter: parent.verticalCenter
-                            leftMargin: Style.spacingM
-                            rightMargin: Style.spacingM
-                        }
-                        visible: composer.text.length === 0
-                        text: Session.isLoggedIn
-                            ? i18n.tr("Post a comment…")
-                            : i18n.tr("Log in to comment…")
-                        font.family: Style.fontFamily
-                        color: Style.textSecondary
-                        elide: Text.ElideRight
-                    }
-
-                    TextInput {
-                        id: composer
-                        anchors {
-                            left: parent.left
-                            right: parent.right
-                            verticalCenter: parent.verticalCenter
-                            leftMargin: Style.spacingM
-                            rightMargin: Style.spacingM
-                        }
-                        font.family: Style.fontFamily
-                        font.pixelSize: Style.fontRegular
-                        color: Style.textPrimary
-                        clip: true
-                        onAccepted: page.submitComment()
-                    }
-                }
-
-                AbstractButton {
-                    id: sendButton
-                    width: units.gu(5); height: units.gu(5)
-                    enabled: !page.posting && composer.text.trim().length > 0
-                    onClicked: page.submitComment()
-
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: width / 2
-                        color: sendButton.enabled ? Style.brand : Style.iconBackground
-                    }
-                    Icon {
-                        anchors.centerIn: parent
-                        width: units.gu(2.4); height: width
-                        name: "send"
-                        color: sendButton.enabled ? Style.textOnBrand : Style.textSecondary
-                    }
-                }
-            }
-
-            Item { width: 1; height: Style.spacingL }
+            Item { width: 1; height: Style.spacingM }
         }
     }
 
     LoadingState {
         anchors.fill: parent
         visible: page.loading && page.post === null
+        count: 1
     }
     ErrorState {
         anchors.fill: parent
         visible: page.errorMsg !== "" && page.post === null
         message: page.errorMsg
         onRetry: page.load()
+    }
+
+    // --- Fixed footer: votes/voters/share + comment composer ---------------
+    Rectangle {
+        id: footer
+        anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
+        height: footerCol.height
+        visible: page.post !== null
+        color: Style.surface
+
+    Column {
+        id: footerCol
+        width: parent.width
+        spacing: units.dp(4)
+
+        Rectangle { width: parent.width; height: units.dp(1); color: Style.divider }
+
+        VoteBar {
+            id: detailVoteBar
+            width: parent.width - Style.spacingM * 2
+            anchors.horizontalCenter: parent.horizontalCenter
+            author: page.author
+            permlink: page.permlink
+            voteType: "post"
+            showComments: false
+            showVotersLabel: false
+            onRequireLogin: page.pushLogin()
+
+            // Apply cached vote state on every visibility change (footer
+            // appears when page.post loads) and on init, so the count
+            // always matches what the feed card shows.
+            function applyCache() {
+                var cached = VoteService.getCached(page.author, page.permlink);
+                if (cached) {
+                    detailVoteBar.votes = cached.votes;
+                    detailVoteBar.upvoted = cached.upvoted;
+                    detailVoteBar.flagged = cached.flagged;
+                    if (cached.payout) detailVoteBar.payout = cached.payout;
+                }
+            }
+            Component.onCompleted: applyCache()
+            onVisibleChanged: if (visible) applyCache()
+        }
+
+        // Replying-to banner
+        Row {
+            visible: page.replyTarget !== null
+            width: parent.width - Style.spacingM * 2
+            anchors.horizontalCenter: parent.horizontalCenter
+            spacing: Style.spacingS
+
+            Label {
+                text: page.replyTarget ? i18n.tr("Replying to @%1").arg(page.replyTarget.author) : ""
+                font.pixelSize: Style.fontSmall
+                color: Style.textSecondary
+            }
+            AbstractButton {
+                width: cancelLabel.implicitWidth
+                height: cancelLabel.implicitHeight
+                onClicked: page.cancelReply()
+                Label {
+                    id: cancelLabel
+                    text: i18n.tr("Cancel")
+                    font.pixelSize: Style.fontSmall
+                    font.weight: Font.DemiBold
+                    color: Style.brand
+                }
+            }
+        }
+
+        // Comment input pill
+        Row {
+            width: parent.width - Style.spacingM * 2
+            anchors.horizontalCenter: parent.horizontalCenter
+            spacing: Style.spacingS
+
+            Rectangle {
+                width: parent.width - sendButton.width - Style.spacingS
+                height: units.gu(5)
+                radius: height / 2
+                color: Style.iconBackground
+
+                Label {
+                    anchors {
+                        left: parent.left
+                        right: parent.right
+                        verticalCenter: parent.verticalCenter
+                        leftMargin: Style.spacingM
+                        rightMargin: Style.spacingM
+                    }
+                    visible: composer.text.length === 0
+                    text: Session.isLoggedIn
+                        ? i18n.tr("Post a comment…")
+                        : i18n.tr("Log in to comment…")
+                    font.family: Style.fontFamily
+                    color: Style.textSecondary
+                    elide: Text.ElideRight
+                }
+
+                TextInput {
+                    id: composer
+                    anchors {
+                        left: parent.left
+                        right: parent.right
+                        verticalCenter: parent.verticalCenter
+                        leftMargin: Style.spacingM
+                        rightMargin: Style.spacingM
+                    }
+                    font.family: Style.fontFamily
+                    font.pixelSize: Style.fontRegular
+                    color: Style.textPrimary
+                    clip: true
+                    onAccepted: page.submitComment()
+                }
+            }
+
+            AbstractButton {
+                id: sendButton
+                width: units.gu(5); height: units.gu(5)
+                enabled: !page.posting && composer.text.trim().length > 0
+                onClicked: page.submitComment()
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: width / 2
+                    color: sendButton.enabled ? Style.brand : Style.iconBackground
+                }
+                Icon {
+                    anchors.centerIn: parent
+                    width: units.gu(2.4); height: width
+                    name: "send"
+                    color: sendButton.enabled ? Style.textOnBrand : Style.textSecondary
+                }
+            }
+        }
+
+        Item { width: 1; height: Style.spacingS }
+    }
     }
 }
