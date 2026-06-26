@@ -33,7 +33,9 @@ function status(baseUrl, viewerUsername, author, onOk, onErr) {
 
     Http.get(baseUrl, "/follow/status", { username: viewerUsername, author: author }, null,
         function (data) {
-            var f = !!(data && (data.is_following || data.following));
+            // The backend returns `following_status` (boolean). The older field
+            // names are kept as fallbacks in case the endpoint shape changes.
+            var f = !!(data && (data.following_status || data.is_following || data.following));
             _cache[author] = f;
             var waiters = _pending[author] || []; delete _pending[author];
             for (var i = 0; i < waiters.length; i++) waiters[i].onOk(f);
