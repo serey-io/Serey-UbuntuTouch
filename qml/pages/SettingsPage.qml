@@ -41,9 +41,6 @@ Page {
 
     Component.onCompleted: refreshProfile()
 
-    Loader { active: true; visible: false; source: Qt.resolvedUrl("ProfileViewPage.qml")
-        onStatusChanged: if (status === Loader.Error) console.log("TEMP_PV_LOAD_ERROR") }
-
     // Re-fetch every time the Settings tab becomes active. The profile (incl. the
     // following/followers counts) is held in memory, and following someone happens
     // on another tab — so without this the count stays stale until something else

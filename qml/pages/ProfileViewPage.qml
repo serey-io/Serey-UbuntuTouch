@@ -351,6 +351,7 @@ Page {
         GalleryCard {
             width: parent ? parent.width : list.width
             post: rowData
+            showFollow: false       // redundant on this user's own profile
             onClicked: page.openGallery(rowData)
             onMoreClicked: PostActions.open(rowData)
             onRequireLogin: page.pageStack.push(Qt.resolvedUrl("LoginPage.qml"))
@@ -362,6 +363,7 @@ Page {
             width: parent ? parent.width : list.width
             video: rowData
             onClicked: page.openVideo(rowData)
+            onMoreClicked: PostActions.open(rowData)
         }
     }
 

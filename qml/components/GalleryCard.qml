@@ -27,6 +27,8 @@ Item {
     signal moreClicked()
     signal authorClicked()
 
+    property bool showFollow: true
+
     onPChanged: {
         if (Session.isLoggedIn && p.author && p.author !== Session.username)
             FollowStore.load(Config.baseUrl, Session.username, p.author);
@@ -169,7 +171,7 @@ Item {
 
                 // Follow pill
                 Rectangle {
-                    visible: (p.author || "") !== "" && p.author !== Session.username
+                    visible: root.showFollow && (p.author || "") !== "" && p.author !== Session.username
                     Layout.preferredWidth: galFollowLabel.width + units.gu(3)
                     Layout.preferredHeight: units.gu(3.75)
                     Layout.fillHeight: false

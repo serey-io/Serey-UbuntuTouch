@@ -209,10 +209,12 @@ Page {
         // Load comments
         page.loadComments();
         // Load more videos
+        var myPermlink = page.video ? page.video.permlink : "";
         VideoService.listVideos(Config.baseUrl, { limit: 6, offset: 0 }, Session.token,
             function (result) {
+                if (!page) return;   // page torn down before the response arrived
                 var filtered = result.filter(function (v) {
-                    return v.permlink !== page.video.permlink;
+                    return v.permlink !== myPermlink;
                 });
                 page.moreVideos = filtered.slice(0, 5);
             },
