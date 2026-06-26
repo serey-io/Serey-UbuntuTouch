@@ -1,5 +1,6 @@
 import QtQuick 2.7
 import Lomiri.Components 1.3
+import Lomiri.Components.Popups 1.3
 import "../Theme"
 import "../Session"
 import "../components"
@@ -96,9 +97,13 @@ Page {
             spacing: Style.spacingM
 
             // --- Avatar -------------------------------------------------------
-            Item {
+            // AbstractButton (not a raw MouseArea) so the tap is reliable inside
+            // the Flickable — matches how the rest of the app handles taps.
+            AbstractButton {
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: units.gu(12); height: width
+                enabled: !page.uploading
+                onClicked: PopupUtils.open(photoPickerComponent)
 
                 Rectangle {
                     anchors.fill: parent
@@ -142,12 +147,6 @@ Page {
                     color: Qt.rgba(0, 0, 0, 0.35)
                     visible: page.uploading
                     ActivityIndicator { anchors.centerIn: parent; running: page.uploading }
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    enabled: !page.uploading
-                    onClicked: photoPicker.pick()
                 }
             }
             Label {
@@ -276,8 +275,12 @@ Page {
         }
     }
 
-    PhotoPicker {
-        id: photoPicker
-        onPicked: page.onPhotoPicked(fileUrl)
+    // Opened on demand (PopupUtils.open) so the Content Hub picker is a proper
+    // root-parented popup with a correct size — see PhotoPicker.qml.
+    Component {
+        id: photoPickerComponent
+        PhotoPicker {
+            onPicked: page.onPhotoPicked(fileUrl)
+        }
     }
 }

@@ -99,10 +99,15 @@ Page {
                     spacing: Style.spacingM
 
                     // Avatar: rounded-square brand badge when signed out, the
-                    // profile photo (or letter) when signed in.
-                    Item {
+                    // profile photo (or letter) when signed in. Tapping it while
+                    // signed in opens Edit profile (with a camera badge cue) — a
+                    // raw tap here previously did nothing because there was no
+                    // handler at all.
+                    AbstractButton {
                         anchors.verticalCenter: parent.verticalCenter
                         width: units.gu(7); height: width
+                        enabled: Session.isLoggedIn
+                        onClicked: page.pageStack.push(Qt.resolvedUrl("EditProfilePage.qml"), { initial: page.profile })
 
                         Rectangle {
                             anchors.fill: parent
@@ -132,6 +137,22 @@ Page {
                             source: page.profile && page.profile.profileUrl ? page.profile.profileUrl : ""
                             decode: units.gu(14)
                             visible: !!(page.profile && page.profile.profileUrl)
+                        }
+
+                        // Camera cue so it's discoverable as tappable.
+                        Rectangle {
+                            anchors { right: parent.right; bottom: parent.bottom }
+                            width: units.gu(2.6); height: width
+                            radius: width / 2
+                            color: Style.brand
+                            border.width: units.dp(1.5); border.color: Style.surface
+                            visible: Session.isLoggedIn
+                            Icon {
+                                anchors.centerIn: parent
+                                width: units.gu(1.5); height: width
+                                name: "camera-symbolic"
+                                color: Style.textOnBrand
+                            }
                         }
                     }
 
