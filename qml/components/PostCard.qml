@@ -4,7 +4,6 @@ import QtGraphicalEffects 1.0
 import Lomiri.Components 1.3
 import "../Theme"
 import "../Session"
-import "../services/FollowService.js" as FollowService
 
 /*
  * Feed post card (serey-ubutu FeedCard style): avatar + author + relative time
@@ -23,7 +22,9 @@ Item {
     // cleared/recycled. `p` is always a safe object to read from.
     readonly property var p: post ? post : ({})
 
-    property bool isFollowing: false
+    // Shared, reactive follow state — every button for this author stays in sync.
+    readonly property bool isFollowing: FollowStore.isFollowing(p.author)
+    property bool showFollow: true
 
     signal clicked()
     signal requireLogin()
@@ -47,16 +48,10 @@ Item {
         return false;
     }
 
-    // Refresh follow state whenever the card is bound to a different author.
+    // Ensure the shared store knows this author's state (queries once).
     onPChanged: {
-        root.isFollowing = false;
-        if (Session.isLoggedIn && p.author && p.author !== Session.username) {
-            FollowService.status(Config.baseUrl, Session.username, p.author,
-                // `root` may be null if the delegate was recycled before the
-                // async response arrived — guard against the destroyed card.
-                function (following) { if (root) root.isFollowing = following; },
-                function (err) { /* keep default false */ });
-        }
+        if (Session.isLoggedIn && p.author && p.author !== Session.username)
+            FollowStore.load(Config.baseUrl, Session.username, p.author);
     }
 
     function toggleFollow() {
@@ -65,17 +60,8 @@ Item {
             root.requireLogin();
             return;
         }
-        var was = root.isFollowing;
-        root.isFollowing = !was;
-        FollowService.toggle(Config.baseUrl, p.author, was, Session.token,
-            function (nowFollowing) {
-                root.isFollowing = nowFollowing;
-                Toast.show(nowFollowing ? i18n.tr("Following") : i18n.tr("Unfollowed"));
-            },
-            function (err) {
-                root.isFollowing = was;
-                Toast.error((err && err.message) ? err.message : i18n.tr("Action failed."));
-            });
+        var now = FollowStore.toggle(Config.baseUrl, p.author, Session.token);
+        Toast.show(now ? i18n.tr("Following") : i18n.tr("Unfollowed"));
     }
 
     Column {
@@ -150,7 +136,7 @@ Item {
 
             // Follow pill
             Rectangle {
-                visible: (p.author || "") !== "" && p.author !== Session.username
+                visible: root.showFollow && (p.author || "") !== "" && p.author !== Session.username
                 Layout.preferredWidth: followLabel.width + units.gu(3)
                 Layout.preferredHeight: units.gu(3.75)
                 Layout.fillHeight: false

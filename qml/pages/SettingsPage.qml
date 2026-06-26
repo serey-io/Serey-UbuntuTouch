@@ -35,10 +35,14 @@ Page {
         if (Session.token.length > 0)
             AccountService.logout(Config.baseUrl, Session.token, function () {}, function () {});
         Session.clear();
+        FollowStore.reset();
         page.profile = null;
     }
 
     Component.onCompleted: refreshProfile()
+
+    Loader { active: true; visible: false; source: Qt.resolvedUrl("ProfileViewPage.qml")
+        onStatusChanged: if (status === Loader.Error) console.log("TEMP_PROFILEVIEW_LOAD_ERROR") }
 
     Connections {
         target: Session

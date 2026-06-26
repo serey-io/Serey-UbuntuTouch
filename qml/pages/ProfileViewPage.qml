@@ -5,7 +5,6 @@ import "../Session"
 import "../components"
 import "../services/AccountService.js" as AccountService
 import "../services/PostService.js" as PostService
-import "../services/FollowService.js" as FollowService
 
 /*
  * Public profile view for any user: a cover banner with an overlapping avatar,
@@ -22,7 +21,6 @@ Page {
 
     property var profile: null
     property bool profileLoading: false
-    property bool isFollowing: false
 
     // Posts pagination (mirrors the feed pages' reqEpoch/offset pattern).
     property int offset: 0
@@ -51,17 +49,19 @@ Page {
 
     function loadFollow() {
         if (!Session.isLoggedIn || isSelf) return;
-        FollowService.status(Config.baseUrl, Session.username, username,
-            function (f) { page.isFollowing = f; }, function () {});
+        FollowStore.load(Config.baseUrl, Session.username, username);
     }
 
     function toggleFollow() {
         if (!Session.isLoggedIn) { page.pageStack.push(Qt.resolvedUrl("LoginPage.qml")); return; }
-        var was = page.isFollowing;
-        page.isFollowing = !was;
-        FollowService.toggle(Config.baseUrl, username, was, Session.token,
-            function (now) { page.isFollowing = now; Toast.show(now ? i18n.tr("Following") : i18n.tr("Unfollowed")); },
-            function (err) { page.isFollowing = was; Toast.error((err && err.message) ? err.message : i18n.tr("Action failed.")); });
+        var now = FollowStore.toggle(Config.baseUrl, username, Session.token);
+        Toast.show(now ? i18n.tr("Following") : i18n.tr("Unfollowed"));
+        // Optimistically reflect the change in this profile's follower count.
+        if (page.profile) {
+            var pr = page.profile;
+            pr.followers = Math.max(0, (pr.followers || 0) + (now ? 1 : -1));
+            page.profile = pr;   // reassign so the bound stats update
+        }
     }
 
     function loadMore() {
@@ -236,7 +236,7 @@ Page {
                     visible: !page.isSelf
                     width: Math.min(parent.width - Style.spacingL * 2, units.gu(50))
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: page.isFollowing ? i18n.tr("Following") : i18n.tr("Follow")
+                    text: FollowStore.isFollowing(page.username) ? i18n.tr("Following") : i18n.tr("Follow")
                     onClicked: page.toggleFollow()
                 }
 
@@ -263,6 +263,7 @@ Page {
         delegate: PostCard {
             width: list.width
             post: postsModel.get(index)
+            showFollow: false        // redundant here — the big button already follows this user
             onClicked: {
                 var p = postsModel.get(index);
                 page.pageStack.push(Qt.resolvedUrl("PostDetailPage.qml"),

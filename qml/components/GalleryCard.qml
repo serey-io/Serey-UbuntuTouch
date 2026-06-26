@@ -3,7 +3,6 @@ import QtQuick.Layouts 1.3
 import Lomiri.Components 1.3
 import "../Theme"
 import "../Session"
-import "../services/FollowService.js" as FollowService
 
 /*
  * Gallery feed card (serey-ubutu GalleryCard style): avatar + author + time,
@@ -19,7 +18,8 @@ Item {
     // Computed once per bind — _images() splits a string / walks the model and
     // was previously re-run 3–4× per card inside bindings.
     readonly property var imgs: _images()
-    property bool isFollowing: false
+    // Shared, reactive follow state (see Theme/FollowStore.qml).
+    readonly property bool isFollowing: FollowStore.isFollowing(p.author)
 
     signal clicked()
     signal requireLogin()
@@ -27,14 +27,8 @@ Item {
     signal authorClicked()
 
     onPChanged: {
-        root.isFollowing = false;
-        if (Session.isLoggedIn && p.author && p.author !== Session.username) {
-            FollowService.status(Config.baseUrl, Session.username, p.author,
-                // `root` may be null if the delegate was recycled before the
-                // async response arrived — guard against the destroyed card.
-                function (following) { if (root) root.isFollowing = following; },
-                function (err) { /* keep default false */ });
-        }
+        if (Session.isLoggedIn && p.author && p.author !== Session.username)
+            FollowStore.load(Config.baseUrl, Session.username, p.author);
     }
 
     function toggleFollow() {
@@ -43,17 +37,8 @@ Item {
             root.requireLogin();
             return;
         }
-        var was = root.isFollowing;
-        root.isFollowing = !was;
-        FollowService.toggle(Config.baseUrl, p.author, was, Session.token,
-            function (nowFollowing) {
-                root.isFollowing = nowFollowing;
-                Toast.show(nowFollowing ? i18n.tr("Following") : i18n.tr("Unfollowed"));
-            },
-            function (err) {
-                root.isFollowing = was;
-                Toast.error((err && err.message) ? err.message : i18n.tr("Action failed."));
-            });
+        var now = FollowStore.toggle(Config.baseUrl, p.author, Session.token);
+        Toast.show(now ? i18n.tr("Following") : i18n.tr("Unfollowed"));
     }
 
     function _len(v) {
