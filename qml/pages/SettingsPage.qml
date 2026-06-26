@@ -6,10 +6,11 @@ import "../components"
 import "../services/AccountService.js" as AccountService
 
 /*
- * Settings: when signed in, shows the account profile (avatar, name, stats) and
- * a logout action; otherwise prompts to log in. Always shows app preferences
- * (dev server) and an About section. Styled with the app theme (no deprecated
- * Lomiri ListItems).
+ * Settings: when signed in, shows the account identity (avatar, name, stats) and
+ * a logout action; otherwise invites the user to log in. Always shows app
+ * preferences and an About section. Loose rows are grouped into rounded cards
+ * (cardRadius + hairline divider border) to match the feed's design language;
+ * the signed-out state reuses the auth pages' PrimaryButton for consistency.
  */
 Page {
     id: page
@@ -53,23 +54,6 @@ Page {
         function onTokenChanged() { page.refreshProfile(); }
     }
 
-    // Reusable section header
-    Component {
-        id: sectionHeader
-        Item {
-            width: parent ? parent.width : 0
-            height: units.gu(5)
-            property string text: ""
-            Label {
-                anchors { left: parent.left; leftMargin: Style.spacingM; bottom: parent.bottom; bottomMargin: Style.spacingS }
-                text: parent.text
-                font.pixelSize: Style.fontSmall
-                font.weight: Font.DemiBold
-                color: Style.textSecondary
-            }
-        }
-    }
-
     Flickable {
         anchors.fill: parent
         contentWidth: width
@@ -79,218 +63,392 @@ Page {
         Column {
             id: col
             width: parent.width
+            spacing: Style.spacingS
 
-            // ---- Account ------------------------------------------------
-            Loader { width: parent.width; height: units.gu(5); sourceComponent: sectionHeader; onLoaded: item.text = i18n.tr("Account") }
+            Item { width: 1; height: Style.spacingM }
 
-            // Signed-out prompt
-            Column {
-                width: parent.width - Style.spacingM * 2
+            // ---- Account -------------------------------------------------
+            Label {
                 x: Style.spacingM
-                visible: !Session.isLoggedIn
-                spacing: Style.spacingM
-
-                Item { width: 1; height: Style.spacingS }
-                Label {
-                    width: parent.width
-                    text: i18n.tr("Log in to your Serey account to view your profile and personalised feed.")
-                    wrapMode: Text.WordWrap
-                    font.family: Style.fontFamily
-                    color: Style.textSecondary
-                }
-                Button {
-                    text: i18n.tr("Log in")
-                    color: Style.brand
-                    onClicked: page.pageStack.push(Qt.resolvedUrl("LoginPage.qml"))
-                }
-                Item { width: 1; height: Style.spacingS }
+                text: i18n.tr("Account")
+                font.pixelSize: Style.fontSmall
+                font.weight: Font.DemiBold
+                font.family: Style.fontFamily
+                color: Style.textSecondary
             }
 
-            // Signed-in profile
-            Column {
-                width: parent.width
-                visible: Session.isLoggedIn
+            // Card: signed-out invite
+            Rectangle {
+                x: Style.spacingM
+                width: parent.width - Style.spacingM * 2
+                visible: !Session.isLoggedIn
+                height: inviteCol.height + Style.spacingL * 2
+                radius: Style.cardRadius
+                color: Style.surface
+                border.width: units.dp(1)
+                border.color: Style.divider
 
-                // Avatar + name
-                Row {
-                    x: Style.spacingM
-                    width: parent.width - Style.spacingM * 2
-                    height: units.gu(11)
+                Column {
+                    id: inviteCol
+                    anchors {
+                        left: parent.left; right: parent.right;
+                        verticalCenter: parent.verticalCenter
+                        leftMargin: Style.spacingM; rightMargin: Style.spacingM
+                    }
                     spacing: Style.spacingM
-                    visible: page.profile !== null
 
-                    Rectangle {
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: units.gu(8); height: width
-                        radius: width / 2
-                        color: Style.iconBackground
-                        clip: true
-                        Image {
-                            anchors.fill: parent
-                            source: page.profile ? page.profile.profileUrl : ""
-                            fillMode: Image.PreserveAspectCrop
-                            asynchronous: true
-                            visible: !!(page.profile && page.profile.profileUrl)
+                    Label {
+                        width: parent.width
+                        text: i18n.tr("You're browsing as a guest")
+                        font.pixelSize: Style.fontLarge
+                        font.weight: Font.DemiBold
+                        font.family: Style.fontFamily
+                        color: Style.textTitle
+                        wrapMode: Text.WordWrap
+                    }
+                    Label {
+                        width: parent.width
+                        text: i18n.tr("Log in to vote, comment, follow creators, and get a feed tailored to you.")
+                        font.pixelSize: Style.fontRegular
+                        font.family: Style.fontFamily
+                        color: Style.textSecondary
+                        wrapMode: Text.WordWrap
+                    }
+                    PrimaryButton {
+                        width: parent.width
+                        text: i18n.tr("Log in")
+                        onClicked: page.pageStack.push(Qt.resolvedUrl("LoginPage.qml"))
+                    }
+                    Label {
+                        width: parent.width
+                        horizontalAlignment: Text.AlignHCenter
+                        font.pixelSize: Style.fontSmall
+                        font.family: Style.fontFamily
+                        color: Style.textSecondary
+                        linkColor: Style.brand
+                        text: i18n.tr("New to Serey? <a href='signup'>Create an account</a>")
+                        onLinkActivated: page.pageStack.push(Qt.resolvedUrl("SignupPage.qml"))
+                    }
+                }
+            }
+
+            // Card: signed-in identity
+            Rectangle {
+                x: Style.spacingM
+                width: parent.width - Style.spacingM * 2
+                visible: Session.isLoggedIn && page.profile !== null
+                height: identityCol.height
+                radius: Style.cardRadius
+                color: Style.surface
+                border.width: units.dp(1)
+                border.color: Style.divider
+                clip: true
+
+                Column {
+                    id: identityCol
+                    width: parent.width
+
+                    // Avatar + name
+                    Row {
+                        x: Style.spacingM
+                        width: parent.width - Style.spacingM * 2
+                        height: units.gu(11)
+                        spacing: Style.spacingM
+
+                        // Brand-tinted avatar with letter fallback (same language
+                        // as the feed cards), or the profile photo when present.
+                        Item {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: units.gu(8); height: width
+
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: width / 2
+                                color: Style.avatarTint(page.profile ? page.profile.username : "")
+                                visible: !(page.profile && page.profile.profileUrl)
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: (page.profile && page.profile.username
+                                           ? page.profile.username : "?").charAt(0).toUpperCase()
+                                    font.pixelSize: Style.fontTitle
+                                    font.bold: true
+                                    color: Style.brand
+                                }
+                            }
+                            CircleImage {
+                                anchors.fill: parent
+                                source: page.profile && page.profile.profileUrl ? page.profile.profileUrl : ""
+                                decode: units.gu(16)
+                                visible: !!(page.profile && page.profile.profileUrl)
+                            }
                         }
-                        Icon {
-                            anchors.centerIn: parent
-                            width: units.gu(4); height: width
-                            name: "account"
-                            color: Style.textSecondary
-                            visible: !(page.profile && page.profile.profileUrl)
+
+                        Column {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: parent.width - units.gu(8) - Style.spacingM
+                            spacing: units.dp(2)
+                            Label {
+                                width: parent.width
+                                text: (page.profile && page.profile.fullName) ? page.profile.fullName
+                                      : (page.profile ? page.profile.username : "")
+                                font.pixelSize: Style.fontLarge
+                                font.weight: Font.DemiBold
+                                font.family: Style.fontFamily
+                                color: Style.textPrimary
+                                elide: Text.ElideRight
+                            }
+                            Label {
+                                width: parent.width
+                                text: page.profile ? ("@" + page.profile.username) : ""
+                                font.pixelSize: Style.fontSmall
+                                font.family: Style.fontFamily
+                                color: Style.brand
+                                elide: Text.ElideRight
+                            }
+                            Label {
+                                width: parent.width
+                                text: page.profile ? page.profile.balance : ""
+                                font.pixelSize: Style.fontSmall
+                                font.family: Style.fontFamily
+                                color: Style.textSecondary
+                                visible: text.length > 0
+                                elide: Text.ElideRight
+                            }
                         }
                     }
 
-                    Column {
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: units.gu(0.5)
+                    Rectangle {
+                        x: Style.spacingM
+                        width: parent.width - Style.spacingM * 2
+                        height: units.dp(1)
+                        color: Style.divider
+                    }
+
+                    // Stats row
+                    Row {
+                        width: parent.width
+                        height: units.gu(8)
+                        Repeater {
+                            model: page.profile ? [
+                                { label: i18n.tr("Posts"),     value: "" + page.profile.postCount },
+                                { label: i18n.tr("Followers"), value: "" + page.profile.followers },
+                                { label: i18n.tr("Following"), value: "" + page.profile.following }
+                            ] : []
+                            delegate: Column {
+                                width: parent.width / 3
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: units.dp(2)
+                                Label {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    text: modelData.value
+                                    font.pixelSize: Style.fontLarge
+                                    font.weight: Font.DemiBold
+                                    font.family: Style.fontFamily
+                                    color: Style.textPrimary
+                                }
+                                Label {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    text: modelData.label
+                                    font.pixelSize: Style.fontXSmall
+                                    font.family: Style.fontFamily
+                                    color: Style.textSecondary
+                                }
+                            }
+                        }
+                    }
+
+                    // Serey Power footer line
+                    Rectangle {
+                        x: Style.spacingM
+                        width: parent.width - Style.spacingM * 2
+                        height: units.dp(1)
+                        color: Style.divider
+                        visible: page.profile !== null && (page.profile.sereyPower || "").length > 0
+                    }
+                    Item {
+                        width: parent.width
+                        height: units.gu(5)
+                        visible: page.profile !== null && (page.profile.sereyPower || "").length > 0
                         Label {
-                            text: (page.profile && page.profile.fullName) ? page.profile.fullName : ""
-                            font.pixelSize: Style.fontLarge
+                            anchors { left: parent.left; leftMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
+                            text: i18n.tr("Serey Power")
+                            font.pixelSize: Style.fontSmall
+                            font.family: Style.fontFamily
+                            color: Style.textSecondary
+                        }
+                        Label {
+                            anchors { right: parent.right; rightMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
+                            text: page.profile ? page.profile.sereyPower : ""
+                            font.pixelSize: Style.fontSmall
                             font.weight: Font.DemiBold
                             font.family: Style.fontFamily
                             color: Style.textPrimary
                         }
-                        Label {
-                            text: page.profile ? ("@" + page.profile.username) : ""
-                            font.pixelSize: Style.fontSmall
-                            color: Style.brand
-                        }
-                        Label {
-                            text: page.profile ? page.profile.balance : ""
-                            font.pixelSize: Style.fontSmall
-                            color: Style.textSecondary
-                            visible: text.length > 0
-                        }
                     }
-                }
-
-                // Stats row
-                Row {
-                    x: Style.spacingM
-                    width: parent.width - Style.spacingM * 2
-                    visible: page.profile !== null
-                    Repeater {
-                        model: page.profile ? [
-                            { label: i18n.tr("Posts"),     value: page.profile.postCount },
-                            { label: i18n.tr("Followers"), value: page.profile.followers },
-                            { label: i18n.tr("Following"), value: page.profile.following }
-                        ] : []
-                        delegate: Column {
-                            width: (parent.width) / 3
-                            spacing: units.dp(2)
-                            Label {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                text: modelData.value
-                                font.pixelSize: Style.fontLarge
-                                font.weight: Font.DemiBold
-                                color: Style.textPrimary
-                            }
-                            Label {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                text: modelData.label
-                                font.pixelSize: Style.fontXSmall
-                                color: Style.textSecondary
-                            }
-                        }
-                    }
-                }
-
-                Item { width: 1; height: Style.spacingM }
-
-                // Serey Power line
-                Label {
-                    x: Style.spacingM
-                    text: i18n.tr("Serey Power: %1").arg(page.profile ? page.profile.sereyPower : "")
-                    font.pixelSize: Style.fontSmall
-                    color: Style.textSecondary
-                    visible: page.profile !== null && (page.profile.sereyPower || "").length > 0
-                }
-
-                Item { width: 1; height: Style.spacingM }
-
-                // Log out
-                AbstractButton {
-                    width: parent.width
-                    height: units.gu(6)
-                    onClicked: page.doLogout()
-                    Rectangle { anchors.fill: parent; color: parent.pressed ? Style.pressed : "transparent" }
-                    Label {
-                        anchors { left: parent.left; leftMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
-                        text: i18n.tr("Log out")
-                        font.pixelSize: Style.fontRegular
-                        color: Style.danger
-                    }
-                    Rectangle { anchors { left: parent.left; right: parent.right; bottom: parent.bottom } height: units.dp(1); color: Style.divider }
                 }
             }
 
-            // ---- Preferences --------------------------------------------
-            Loader { width: parent.width; height: units.gu(5); sourceComponent: sectionHeader; onLoaded: item.text = i18n.tr("Preferences") }
-
-            Item {
-                width: parent.width
-                height: units.gu(6)
-                Label {
-                    anchors { left: parent.left; leftMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
-                    text: i18n.tr("Use local dev server")
-                    font.pixelSize: Style.fontRegular
-                    color: Style.textPrimary
-                }
-                Switch {
-                    anchors { right: parent.right; rightMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
-                    checked: Config.useLocalDev
-                    onCheckedChanged: Config.useLocalDev = checked
-                }
-                Rectangle { anchors { left: parent.left; right: parent.right; bottom: parent.bottom } height: units.dp(1); color: Style.divider }
-            }
-            Label {
+            // Card: log out (signed-in only)
+            Rectangle {
                 x: Style.spacingM
                 width: parent.width - Style.spacingM * 2
-                text: Config.baseUrl
-                font.pixelSize: Style.fontXSmall
+                visible: Session.isLoggedIn
+                height: units.gu(6.5)
+                radius: Style.cardRadius
+                color: Style.surface
+                border.width: units.dp(1)
+                border.color: Style.divider
+                clip: true
+
+                AbstractButton {
+                    anchors.fill: parent
+                    onClicked: page.doLogout()
+                    Rectangle { anchors.fill: parent; radius: Style.cardRadius; color: parent.pressed ? Style.pressed : "transparent" }
+                    Label {
+                        anchors.centerIn: parent
+                        text: i18n.tr("Log out")
+                        font.pixelSize: Style.fontRegular
+                        font.weight: Font.DemiBold
+                        font.family: Style.fontFamily
+                        color: Style.danger
+                    }
+                }
+            }
+
+            Item { width: 1; height: Style.spacingXs }
+
+            // ---- Preferences ---------------------------------------------
+            Label {
+                x: Style.spacingM
+                text: i18n.tr("Preferences")
+                font.pixelSize: Style.fontSmall
+                font.weight: Font.DemiBold
+                font.family: Style.fontFamily
                 color: Style.textSecondary
-                elide: Text.ElideRight
             }
 
-            // ---- About --------------------------------------------------
-            Loader { width: parent.width; height: units.gu(5); sourceComponent: sectionHeader; onLoaded: item.text = i18n.tr("About") }
+            Rectangle {
+                x: Style.spacingM
+                width: parent.width - Style.spacingM * 2
+                height: prefsCol.height
+                radius: Style.cardRadius
+                color: Style.surface
+                border.width: units.dp(1)
+                border.color: Style.divider
+                clip: true
 
-            Item {
-                width: parent.width
-                height: units.gu(6)
-                Label {
-                    anchors { left: parent.left; leftMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
-                    text: i18n.tr("Version")
-                    font.pixelSize: Style.fontRegular
-                    color: Style.textPrimary
+                Column {
+                    id: prefsCol
+                    width: parent.width
+
+                    Item {
+                        width: parent.width
+                        height: units.gu(6.5)
+                        Label {
+                            anchors { left: parent.left; leftMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
+                            text: i18n.tr("Use local dev server")
+                            font.pixelSize: Style.fontRegular
+                            font.family: Style.fontFamily
+                            color: Style.textPrimary
+                        }
+                        Switch {
+                            anchors { right: parent.right; rightMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
+                            checked: Config.useLocalDev
+                            onCheckedChanged: Config.useLocalDev = checked
+                        }
+                    }
+                    Rectangle {
+                        x: Style.spacingM
+                        width: parent.width - Style.spacingM * 2
+                        height: units.dp(1)
+                        color: Style.divider
+                    }
+                    Item {
+                        width: parent.width
+                        height: units.gu(5)
+                        Label {
+                            anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter
+                                      leftMargin: Style.spacingM; rightMargin: Style.spacingM }
+                            text: Config.baseUrl
+                            font.pixelSize: Style.fontXSmall
+                            font.family: Style.fontFamily
+                            color: Style.textSecondary
+                            elide: Text.ElideRight
+                        }
+                    }
                 }
-                Label {
-                    anchors { right: parent.right; rightMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
-                    text: "0.1.0"
-                    font.pixelSize: Style.fontRegular
-                    color: Style.textSecondary
-                }
-                Rectangle { anchors { left: parent.left; right: parent.right; bottom: parent.bottom } height: units.dp(1); color: Style.divider }
             }
-            AbstractButton {
-                width: parent.width
-                height: units.gu(6)
-                onClicked: Qt.openUrlExternally("https://serey.io")
-                Rectangle { anchors.fill: parent; color: parent.pressed ? Style.pressed : "transparent" }
-                Label {
-                    anchors { left: parent.left; leftMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
-                    text: i18n.tr("Serey website")
-                    font.pixelSize: Style.fontRegular
-                    color: Style.textPrimary
+
+            Item { width: 1; height: Style.spacingXs }
+
+            // ---- About ---------------------------------------------------
+            Label {
+                x: Style.spacingM
+                text: i18n.tr("About")
+                font.pixelSize: Style.fontSmall
+                font.weight: Font.DemiBold
+                font.family: Style.fontFamily
+                color: Style.textSecondary
+            }
+
+            Rectangle {
+                x: Style.spacingM
+                width: parent.width - Style.spacingM * 2
+                height: aboutCol.height
+                radius: Style.cardRadius
+                color: Style.surface
+                border.width: units.dp(1)
+                border.color: Style.divider
+                clip: true
+
+                Column {
+                    id: aboutCol
+                    width: parent.width
+
+                    Item {
+                        width: parent.width
+                        height: units.gu(6.5)
+                        Label {
+                            anchors { left: parent.left; leftMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
+                            text: i18n.tr("Version")
+                            font.pixelSize: Style.fontRegular
+                            font.family: Style.fontFamily
+                            color: Style.textPrimary
+                        }
+                        Label {
+                            anchors { right: parent.right; rightMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
+                            text: "0.1.0"
+                            font.pixelSize: Style.fontRegular
+                            font.family: Style.fontFamily
+                            color: Style.textSecondary
+                        }
+                    }
+                    Rectangle {
+                        x: Style.spacingM
+                        width: parent.width - Style.spacingM * 2
+                        height: units.dp(1)
+                        color: Style.divider
+                    }
+                    AbstractButton {
+                        width: parent.width
+                        height: units.gu(6.5)
+                        onClicked: Qt.openUrlExternally("https://serey.io")
+                        Rectangle { anchors.fill: parent; color: parent.pressed ? Style.pressed : "transparent" }
+                        Label {
+                            anchors { left: parent.left; leftMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
+                            text: i18n.tr("Serey website")
+                            font.pixelSize: Style.fontRegular
+                            font.family: Style.fontFamily
+                            color: Style.textPrimary
+                        }
+                        Icon {
+                            anchors { right: parent.right; rightMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
+                            width: units.gu(2); height: width
+                            name: "next"
+                            color: Style.textSecondary
+                        }
+                    }
                 }
-                Icon {
-                    anchors { right: parent.right; rightMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
-                    width: units.gu(2); height: width
-                    name: "next"
-                    color: Style.textSecondary
-                }
-                Rectangle { anchors { left: parent.left; right: parent.right; bottom: parent.bottom } height: units.dp(1); color: Style.divider }
             }
 
             Item { width: 1; height: Style.spacingL }
