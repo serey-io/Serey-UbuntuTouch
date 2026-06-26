@@ -16,14 +16,27 @@ import Lomiri.Components 1.3
 Flickable {
     id: flick
 
-    readonly property real keyboardHeight: Qt.inputMethod.visible
+    // True only when the focused input lives INSIDE this flickable. A docked
+    // composer (e.g. the comment bar on the detail pages) is focused but lives
+    // outside the scroll — it's handled by lifting the bar itself, so this
+    // flickable must ignore it (otherwise it reserves room / scrolls for nothing).
+    property var activeFocusTarget: Window.activeFocusItem
+    readonly property bool focusInside: !!activeFocusTarget && _contains(activeFocusTarget)
+
+    readonly property real keyboardHeight: (Qt.inputMethod.visible && focusInside)
         ? Qt.inputMethod.keyboardRectangle.height : 0
 
     // Extra scrollable room so even the bottom field can rise above the keyboard.
     bottomMargin: keyboardHeight
 
+    function _contains(it) {
+        var p = it;
+        while (p) { if (p === flick.contentItem) return true; p = p.parent; }
+        return false;
+    }
+
     function _ensureFocusedVisible() {
-        if (!Qt.inputMethod.visible || !flick.contentItem)
+        if (!Qt.inputMethod.visible || !flick.contentItem || !flick.focusInside)
             return;
         // Never fight an active manual scroll — that's what caused the flicker.
         if (flick.dragging || flick.flicking)
@@ -53,7 +66,6 @@ Flickable {
     // also fires while the user manually scrolls (the focused field moves on
     // screen), which yanked the content back and caused flicker. Window's
     // activeFocusItem changes only on a real focus change, not on scroll/typing.
-    property var activeFocusTarget: Window.activeFocusItem
     onActiveFocusTargetChanged: Qt.callLater(flick._ensureFocusedVisible)
 
     Connections {

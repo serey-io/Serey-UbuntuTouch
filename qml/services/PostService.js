@@ -54,6 +54,19 @@ function listByAuthor(baseUrl, author, params, token, onOk, onErr) {
     _list(baseUrl, "/serey-web/list-by-author", p, token, onOk, onErr);
 }
 
+// A specific author's gallery (image) posts, mapped via toGalleryPost so the
+// profile's Gallery tab shows the image carousel. Mirrors listGallery's
+// image-less filtering + raw-count pagination.
+function listGalleryByAuthor(baseUrl, author, params, token, onOk, onErr) {
+    var p = params || {};
+    p.author = author;
+    return Http.get(baseUrl, "/serey-web/list-gallery-post-by-author", p, token, function (data) {
+        var raw = data.posts || data.data || [];
+        var posts = raw.map(M.toGalleryPost).filter(function (g) { return g.images.length > 0; });
+        onOk(posts, raw.length);
+    }, onErr);
+}
+
 function detail(baseUrl, author, permlink, token, onOk, onErr) {
     Http.get(baseUrl, "/serey-web/details-by-permlink-and-author",
              { author: author, permlink: permlink }, token, function (data) {

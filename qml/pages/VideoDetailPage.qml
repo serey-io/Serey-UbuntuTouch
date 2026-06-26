@@ -22,6 +22,8 @@ Page {
     property int commentCount: video ? (video.comments || 0) : 0
     property bool posting: false
     property var replyTarget: null
+    // On-screen-keyboard height; the comment composer rides above it.
+    readonly property real kbHeight: Qt.inputMethod.visible ? Qt.inputMethod.keyboardRectangle.height : 0
 
     // "More Videos" feed
     property var moreVideos: []
@@ -638,6 +640,10 @@ Page {
             Column {
                 id: cmtFooter
                 anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
+                // Ride above the on-screen keyboard; the comment list above is
+                // anchored to cmtFooter.top and shrinks to keep both visible.
+                anchors.bottomMargin: page.kbHeight
+                Behavior on anchors.bottomMargin { NumberAnimation { duration: 150; easing.type: Easing.OutQuad } }
 
                 Rectangle { width: parent.width; height: units.dp(1); color: Style.divider }
 
@@ -687,7 +693,7 @@ Page {
                                 verticalCenter: parent.verticalCenter
                                 leftMargin: Style.spacingM; rightMargin: Style.spacingM
                             }
-                            visible: composer.text.length === 0
+                            visible: composer.text.length === 0 && !composer.inputMethodComposing
                             text: Session.isLoggedIn ? i18n.tr("Post a comment…") : i18n.tr("Log in to comment…")
                             font.family: Style.fontFamily
                             color: Style.textSecondary
