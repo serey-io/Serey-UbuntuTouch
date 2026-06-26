@@ -244,7 +244,7 @@ Page {
 
     Component.onCompleted: load()
 
-    Flickable {
+    KeyboardAwareFlickable {
         id: scroll
         anchors { top: page.header.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
         contentWidth: width

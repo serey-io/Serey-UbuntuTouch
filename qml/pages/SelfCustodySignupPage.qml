@@ -118,7 +118,7 @@ Page {
         onTriggered: page.resendSeconds = Math.max(0, page.resendSeconds - 1)
     }
 
-    Flickable {
+    KeyboardAwareFlickable {
         anchors { top: page.header.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
         contentWidth: width
         contentHeight: form.height + Style.spacingL * 2
