@@ -97,37 +97,15 @@ Page {
                     }
                     spacing: Style.spacingM
 
-                    Label {
-                        width: parent.width
-                        text: i18n.tr("You're browsing as a guest")
-                        font.pixelSize: Style.fontLarge
-                        font.weight: Font.DemiBold
-                        font.family: Style.fontFamily
-                        color: Style.textTitle
-                        wrapMode: Text.WordWrap
-                    }
-                    Label {
-                        width: parent.width
-                        text: i18n.tr("Log in to vote, comment, follow creators, and get a feed tailored to you.")
-                        font.pixelSize: Style.fontRegular
-                        font.family: Style.fontFamily
-                        color: Style.textSecondary
-                        wrapMode: Text.WordWrap
-                    }
                     PrimaryButton {
                         width: parent.width
                         text: i18n.tr("Log in")
                         onClicked: page.pageStack.push(Qt.resolvedUrl("LoginPage.qml"))
                     }
-                    Label {
+                    LinkButton {
                         width: parent.width
-                        horizontalAlignment: Text.AlignHCenter
-                        font.pixelSize: Style.fontSmall
-                        font.family: Style.fontFamily
-                        color: Style.textSecondary
-                        linkColor: Style.brand
-                        text: i18n.tr("New to Serey? <a href='signup'>Create an account</a>")
-                        onLinkActivated: page.pageStack.push(Qt.resolvedUrl("SignupPage.qml"))
+                        label: i18n.tr("Sign up")
+                        onClicked: page.pageStack.push(Qt.resolvedUrl("SignupPage.qml"))
                     }
                 }
             }

@@ -122,27 +122,16 @@ Page {
 
             Item { width: 1; height: Style.spacingXs }
 
-            Label {
+            LinkButton {
                 width: parent.width
-                horizontalAlignment: Text.AlignHCenter
-                font.family: Style.fontFamily
-                font.pixelSize: Style.fontSmall
-                color: Style.textSecondary
-                linkColor: Style.brand
-                text: i18n.tr("<a href='forgot'>Forgot password?</a>")
-                onLinkActivated: page.pageStack.push(Qt.resolvedUrl("ForgotPasswordPage.qml"))
+                label: i18n.tr("Forgot password?")
+                onClicked: page.pageStack.push(Qt.resolvedUrl("ForgotPasswordPage.qml"))
             }
 
-            Label {
+            LinkButton {
                 width: parent.width
-                horizontalAlignment: Text.AlignHCenter
-                font.family: Style.fontFamily
-                font.pixelSize: Style.fontSmall
-                color: Style.textSecondary
-                wrapMode: Text.WordWrap
-                linkColor: Style.brand
-                text: i18n.tr("Don't have an account? <a href='signup'>Sign up</a>")
-                onLinkActivated: page.pageStack.push(Qt.resolvedUrl("SignupPage.qml"))
+                label: i18n.tr("Sign up")
+                onClicked: page.pageStack.push(Qt.resolvedUrl("SignupPage.qml"))
             }
         }
     }
