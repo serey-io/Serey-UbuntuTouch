@@ -62,3 +62,23 @@ function detail(baseUrl, author, permlink, token, onOk, onErr) {
         onOk({ post: M.toPost(content), replies: replies });
     }, onErr);
 }
+
+// Same endpoint as detail(), mapped via toGalleryPost so the carousel keeps
+// every image (not just the cover) for GalleryDetailPage's Instagram-style view.
+function detailGallery(baseUrl, author, permlink, token, onOk, onErr) {
+    Http.get(baseUrl, "/serey-web/details-by-permlink-and-author",
+             { author: author, permlink: permlink }, token, function (data) {
+        var content = data.content || {};
+        var replies = (data.replies || []).map(M.toComment);
+        onOk({ post: M.toGalleryPost(content), replies: replies });
+    }, onErr);
+}
+
+// POST /serey-web/create-or-update-post — create a new blog post.
+function createPost(baseUrl, params, token, onOk, onErr) {
+    Http.post(baseUrl, "/serey-web/create-or-update-post", {
+        title: params.title,
+        body: params.body,
+        community_id: params.communityId || ""
+    }, token, function (data) { onOk(data || {}); }, onErr);
+}

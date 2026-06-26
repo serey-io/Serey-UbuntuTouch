@@ -28,8 +28,19 @@ Page {
 
     Connections {
         target: Config
-        function onSourceIndexChanged() {
-            page.reload();
+        function onSourceIndexChanged() { page.reload(); }
+    }
+
+    Connections {
+        target: PostActions
+        function onHideRequested(author, permlink) {
+            for (var i = 0; i < galleryModel.count; i++) {
+                if (galleryModel.get(i).permlink === permlink) {
+                    galleryModel.remove(i);
+                    Toast.show(i18n.tr("Post hidden"));
+                    return;
+                }
+            }
         }
     }
 
@@ -86,10 +97,11 @@ Page {
             post: galleryModel.get(index)
             onClicked: {
                 var p = galleryModel.get(index);
-                page.pageStack.push(Qt.resolvedUrl("PostDetailPage.qml"),
-                    { author: p.author, permlink: p.permlink, title: p.caption });
+                page.pageStack.push(Qt.resolvedUrl("GalleryDetailPage.qml"),
+                    { author: p.author, permlink: p.permlink });
             }
             onRequireLogin: page.pageStack.push(Qt.resolvedUrl("LoginPage.qml"))
+            onMoreClicked: PostActions.open(galleryModel.get(index))
         }
 
         // Constant-height footer: a conditional height feeds back into
@@ -125,5 +137,33 @@ Page {
         visible: !page.loading && page.errorMsg === "" && galleryModel.count === 0
         iconName: "image-x-generic-symbolic"
         message: i18n.tr("No gallery posts in %1").arg(Config.communityName)
+    }
+
+    // Floating compose button
+    AbstractButton {
+        visible: Session.isLoggedIn
+        anchors {
+            right: parent.right
+            bottom: parent.bottom
+            rightMargin: Style.spacingM
+            bottomMargin: Style.spacingM
+        }
+        width: Style.fabSize; height: width
+        z: 10
+        onClicked: {
+            page.pageStack.push(Qt.resolvedUrl("CreateGalleryPostPage.qml"))
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            radius: Style.fabRadius
+            color: Style.brand
+        }
+        Icon {
+            anchors.centerIn: parent
+            width: units.gu(3); height: width
+            name: "edit"
+            color: Style.textOnBrand
+        }
     }
 }

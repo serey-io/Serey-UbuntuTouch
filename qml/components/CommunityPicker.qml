@@ -15,15 +15,18 @@ Item {
     visible: false
     z: 1500
 
-    function open() { picker.visible = true; }
+    function open() { picker.visible = true; cpBackdropFade.start(); cpSlide.start(); }
     function close() { picker.visible = false; }
 
     // Backdrop
     Rectangle {
+        id: cpBackdrop
         anchors.fill: parent
         color: Qt.rgba(0, 0, 0, 0.4)
+        opacity: 0
         MouseArea { anchors.fill: parent; onClicked: picker.close() }
     }
+    NumberAnimation { id: cpBackdropFade; target: cpBackdrop; property: "opacity"; from: 0; to: 1; duration: 200 }
 
     // Sheet
     Rectangle {
@@ -32,6 +35,9 @@ Item {
         height: header.height + list.contentHeight + units.gu(4)
         radius: units.dp(16)
         color: Style.surface
+
+        transform: Translate { id: cpTranslate; y: 0 }
+        NumberAnimation { id: cpSlide; target: cpTranslate; property: "y"; from: sheet.height + units.gu(4); to: 0; duration: 300; easing.type: Easing.OutCubic }
 
         // Grabber
         Rectangle {

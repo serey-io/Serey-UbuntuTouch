@@ -30,6 +30,9 @@ Page {
             function (auth) {
                 busy = false;
                 Session.setAuth(auth.token, usernameField.text);
+                AccountService.profile(Config.baseUrl, usernameField.text, auth.token,
+                    function (user) { Session.avatarUrl = user.profileUrl; },
+                    function (err) { /* keep letter-fallback avatar */ });
                 page.pageStack.pop();
             },
             function (err) {

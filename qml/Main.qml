@@ -4,6 +4,7 @@ import "Theme"
 import "Session"
 import "components"
 import "services/CommunityService.js" as CommunityService
+import "services/AccountService.js" as AccountService
 
 /*
  * Application shell: a persistent bottom tab bar with one PageStack per tab so
@@ -42,6 +43,14 @@ MainView {
         CommunityService.listAll(Config.baseUrl,
             function (list) { Config.iconByDns = CommunityService.iconMap(list); },
             function (err) { /* keep globe fallback */ });
+
+        // A persisted session only carries token + username (see Session.qml);
+        // refetch the avatar so optimistic local comments can show it.
+        if (Session.isLoggedIn) {
+            AccountService.profile(Config.baseUrl, Session.username, Session.token,
+                function (user) { Session.avatarUrl = user.profileUrl; },
+                function (err) { /* keep letter-fallback avatar */ });
+        }
     }
 
     // --- Global header (community pill + logo) ----------------------------
@@ -60,7 +69,7 @@ MainView {
             left: parent.left
             right: parent.right
             top: appHeader.bottom
-            bottom: navBar.top
+            bottom: root.showHeader ? navBar.top : parent.bottom
         }
 
         PageStack {
@@ -99,7 +108,8 @@ MainView {
     Rectangle {
         id: navBar
         anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-        height: units.gu(7)
+        height: root.showHeader ? units.gu(7) : 0
+        visible: root.showHeader
         color: Style.surface
 
         Rectangle {
@@ -124,22 +134,12 @@ MainView {
                     height: navBar.height
                     property bool active: root.currentTab === index
 
-                    Column {
+                    Icon {
                         anchors.centerIn: parent
-                        spacing: units.gu(0.5)
-                        Icon {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            width: units.gu(2.8)
-                            height: width
-                            name: modelData.icon
-                            color: active ? Style.brand : Style.textSecondary
-                        }
-                        Label {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            text: modelData.label
-                            textSize: Label.XSmall
-                            color: active ? Style.brand : Style.textSecondary
-                        }
+                        width: units.gu(3)
+                        height: width
+                        name: modelData.icon
+                        color: active ? Style.brand : Style.textSecondary
                     }
                     onClicked: root.currentTab = index
                 }
@@ -149,6 +149,9 @@ MainView {
 
     // --- Community / source selector (bottom sheet) overlay ---------------
     CommunityPicker { id: communityPicker }
+
+    // --- Post actions (Report / Hide / Block) bottom sheet ----------------
+    PostActionSheet { }
 
     // --- Transient notifications (snackbar) overlay -----------------------
     Toaster { }
