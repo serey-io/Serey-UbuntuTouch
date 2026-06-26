@@ -186,6 +186,7 @@ Page {
                 visible: page.step === 3
                 anchors.horizontalCenter: parent.horizontalCenter
                 playing: page.step === 3
+                accent: Style.success
             }
             Label {
                 visible: page.step === 3

@@ -132,6 +132,7 @@ Page {
             spacing: Style.spacingM
 
             Image {
+                visible: page.step < 3
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: units.gu(9); height: width
                 source: Qt.resolvedUrl("../../assets/serey-logo.png")
@@ -141,6 +142,7 @@ Page {
 
             // Step dots (4 steps)
             Row {
+                visible: page.step < 3
                 anchors.horizontalCenter: parent.horizontalCenter
                 spacing: Style.spacingS
                 Repeater {
@@ -154,6 +156,7 @@ Page {
             }
 
             Label {
+                visible: page.step < 3
                 width: parent.width
                 horizontalAlignment: Text.AlignHCenter
                 font.family: Style.fontFamily
@@ -233,18 +236,34 @@ Page {
                 }
             }
 
-            // --- Step 3: show the key --------------------------------------
+            // --- Step 3: celebration + save the key ------------------------
+            SuccessBurst {
+                visible: page.step === 3
+                anchors.horizontalCenter: parent.horizontalCenter
+                playing: page.step === 3
+                accent: Style.success
+            }
+            Label {
+                visible: page.step === 3
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
+                text: i18n.tr("Account created!")
+                font.pixelSize: Style.fontTitle
+                font.weight: Font.DemiBold
+                font.family: Style.fontFamily
+                color: Style.textTitle
+            }
             Rectangle {
                 visible: page.step === 3
                 width: parent.width
                 height: warn.height + Style.spacingM * 2
                 radius: Style.cardRadius
-                color: Qt.rgba(0.83, 0.09, 0.17, 0.08)   // danger tint
+                color: Style.dangerTint
                 Label {
                     id: warn
                     anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter
                               leftMargin: Style.spacingM; rightMargin: Style.spacingM }
-                    text: i18n.tr("This key is the only way into your account. Save it now — it can't be recovered if lost.")
+                    text: i18n.tr("This key is the only way into your account. Save it somewhere safe. It can't be recovered if you lose it.")
                     font.pixelSize: Style.fontSmall
                     font.family: Style.fontFamily
                     color: Style.danger
@@ -291,7 +310,7 @@ Page {
                     : page.step === 0 ? i18n.tr("Continue")
                     : page.step === 1 ? i18n.tr("Send code")
                     : page.step === 2 ? i18n.tr("Create account")
-                    : i18n.tr("I've saved it — continue")
+                    : i18n.tr("I've saved my key")
                 onClicked: {
                     if (page.step === 0) page.checkUsername();
                     else if (page.step === 1) page.sendOtp();

@@ -56,4 +56,25 @@ Rectangle {
             opacity: 0.7
         }
     }
+
+    // A raw TextInput has no native long-press copy/paste popover on touch, so
+    // we add it ourselves: tap focuses and positions the cursor; press-and-hold
+    // pastes into an editable field (or copies a read-only one, e.g. the saved
+    // private key) — this is what lets users paste a copied key to log in.
+    MouseArea {
+        anchors.fill: parent
+        onClicked: {
+            input.forceActiveFocus();
+            input.cursorPosition = input.positionAt(mouse.x - input.x, input.height / 2);
+        }
+        onPressAndHold: {
+            input.forceActiveFocus();
+            if (input.readOnly) {
+                input.selectAll();
+                input.copy();
+            } else {
+                input.paste();
+            }
+        }
+    }
 }

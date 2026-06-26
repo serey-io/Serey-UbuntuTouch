@@ -11,6 +11,7 @@ Item {
     id: root
 
     property bool playing: false
+    property color accent: Style.brand   // badge + ring colour
 
     width: units.gu(18)
     height: units.gu(18)
@@ -23,7 +24,7 @@ Item {
         radius: width / 2
         color: "transparent"
         border.width: units.dp(2)
-        border.color: Style.brand
+        border.color: root.accent
         opacity: 0
     }
 
@@ -62,7 +63,7 @@ Item {
         anchors.centerIn: parent
         width: units.gu(9); height: width
         radius: width / 2
-        color: Style.brand
+        color: root.accent
         scale: 0
         Icon {
             anchors.centerIn: parent

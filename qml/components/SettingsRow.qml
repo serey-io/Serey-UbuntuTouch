@@ -54,14 +54,16 @@ AbstractButton {
         color: root.danger ? Style.danger : Style.textPrimary
     }
 
-    Item {
+    // A Row sizes to its single visible child intrinsically (invisible children
+    // are excluded), so there's no childrenRect/right-anchor feedback loop.
+    Row {
         id: trailing
-        anchors { right: parent.right; rightMargin: Style.spacingM; top: parent.top; bottom: parent.bottom }
-        width: childrenRect.width > 0 ? childrenRect.width : units.dp(1)
+        anchors { right: parent.right; rightMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
+        height: root.height
 
         Label {
             visible: root.valueText.length > 0
-            anchors { verticalCenter: parent.verticalCenter; right: parent.right }
+            anchors.verticalCenter: parent.verticalCenter
             text: root.valueText
             font.pixelSize: Style.fontRegular
             font.family: Style.fontFamily
@@ -69,14 +71,14 @@ AbstractButton {
         }
         Icon {
             visible: root.showChevron
-            anchors { verticalCenter: parent.verticalCenter; right: parent.right }
+            anchors.verticalCenter: parent.verticalCenter
             width: units.gu(2); height: width
             name: "next"
             color: Style.textSecondary
         }
         Switch {
             visible: root.showSwitch
-            anchors { verticalCenter: parent.verticalCenter; right: parent.right }
+            anchors.verticalCenter: parent.verticalCenter
             checked: root.switchChecked
             onCheckedChanged: if (checked !== root.switchChecked) root.switchToggled(checked)
         }
