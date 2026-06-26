@@ -297,8 +297,13 @@ Page {
                     else if (page.step === 1) page.sendOtp();
                     else if (page.step === 2) page.createAccount();
                     else {
+                        // Drop the self-custody page + the chooser beneath it,
+                        // then land on the login page (sign in with the saved key).
+                        var stack = page.pageStack;
                         Toast.success(i18n.tr("Account created. Log in with your key."));
-                        page.pageStack.pop(); // back to chooser/login
+                        stack.pop();   // this self-custody page
+                        stack.pop();   // the Create Account chooser
+                        stack.push(Qt.resolvedUrl("LoginPage.qml"));
                     }
                 }
             }
