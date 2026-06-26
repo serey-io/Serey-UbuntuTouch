@@ -10,8 +10,9 @@ import "../services/AccountService.js" as AccountService
  *   step 0 — choose a username (checked for availability)
  *   step 1 — enter email + password (sends an OTP)
  *   step 2 — enter the OTP to create the account
- * On success the account is created and auto-logged-in, then we pop back.
- * Styled with the shared design tokens (logo hero, FormField, PrimaryButton).
+ * The header back steps within the wizard before leaving; the OTP step has a
+ * resend countdown. On success the account is created, auto-logged-in, and we
+ * pop back. Styled with the shared design tokens.
  */
 Page {
     id: page
@@ -19,6 +20,7 @@ Page {
     property int step: 0
     property bool busy: false
     property string errorMsg: ""
+    property int resendSeconds: 0
 
     // Carried across steps.
     property string username: ""
@@ -27,12 +29,32 @@ Page {
 
     header: PageHeader {
         title: i18n.tr("Create account")
+        leadingActionBar.actions: [
+            Action {
+                iconName: "back"
+                text: i18n.tr("Back")
+                onTriggered: page.goBack()
+            }
+        ]
     }
+
+    function goBack() {
+        if (page.step > 0) { page.errorMsg = ""; page.step -= 1; }
+        else page.pageStack.pop();
+    }
+
+    Component.onCompleted: usernameField.input.forceActiveFocus()
 
     function fail(err) { busy = false; page.errorMsg = err.message; }
 
-    // step 0 -> 1: validate the format locally, then confirm with the backend
-    // that the username isn't already taken before collecting contact details.
+    // Focus the active step's first field as it appears.
+    onStepChanged: {
+        if (step === 0) usernameField.input.forceActiveFocus();
+        else if (step === 1) emailField.input.forceActiveFocus();
+        else if (step === 2) otpField.input.forceActiveFocus();
+    }
+
+    // step 0 -> 1: validate format, then confirm the username is free.
     function checkUsername() {
         if (busy) return;
         errorMsg = "";
@@ -66,7 +88,17 @@ Page {
         password = passwordField.text;
         busy = true;
         AccountService.sendSignupOtp(Config.baseUrl, username, email,
-            function () { busy = false; step = 2; },
+            function () { busy = false; resendSeconds = 90; step = 2; },
+            fail);
+    }
+
+    // Re-send the OTP (only once the countdown reaches zero).
+    function resend() {
+        if (busy || resendSeconds > 0) return;
+        errorMsg = "";
+        busy = true;
+        AccountService.sendSignupOtp(Config.baseUrl, username, email,
+            function () { busy = false; resendSeconds = 90; Toast.show(i18n.tr("New code sent.")); },
             fail);
     }
 
@@ -88,6 +120,12 @@ Page {
                 page.pageStack.pop();
             },
             fail);
+    }
+
+    Timer {
+        interval: 1000; repeat: true
+        running: page.step === 2 && page.resendSeconds > 0
+        onTriggered: page.resendSeconds = Math.max(0, page.resendSeconds - 1)
     }
 
     Flickable {
@@ -197,6 +235,34 @@ Page {
                 placeholder: i18n.tr("Verification code")
                 inputMethodHints: Qt.ImhDigitsOnly
                 onAccepted: page.createAccount()
+            }
+            // Resend: a live countdown, then a tappable link.
+            Item {
+                visible: page.step === 2
+                width: parent.width
+                height: units.gu(3)
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: page.resendSeconds > 0
+                    text: i18n.tr("Resend code in %1s").arg(page.resendSeconds)
+                    font.pixelSize: Style.fontSmall
+                    font.family: Style.fontFamily
+                    color: Style.textSecondary
+                }
+                AbstractButton {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: page.resendSeconds === 0
+                    width: resendLbl.width; height: resendLbl.height
+                    onClicked: page.resend()
+                    Label {
+                        id: resendLbl
+                        text: i18n.tr("Resend code")
+                        font.pixelSize: Style.fontSmall
+                        font.weight: Font.DemiBold
+                        font.family: Style.fontFamily
+                        color: Style.brand
+                    }
+                }
             }
 
             Label {

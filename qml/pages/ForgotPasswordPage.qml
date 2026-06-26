@@ -20,12 +20,28 @@ Page {
 
     property string username: ""
     property string email: ""
+    property int resendSeconds: 0
 
     header: PageHeader {
         title: i18n.tr("Reset password")
+        leadingActionBar.actions: [
+            Action { iconName: "back"; text: i18n.tr("Back"); onTriggered: page.goBack() }
+        ]
+    }
+
+    function goBack() {
+        if (page.step > 0) { page.errorMsg = ""; page.step -= 1; }
+        else page.pageStack.pop();
     }
 
     function fail(err) { busy = false; page.errorMsg = err.message; }
+
+    Component.onCompleted: usernameField.input.forceActiveFocus()
+
+    onStepChanged: {
+        if (step === 0) usernameField.input.forceActiveFocus();
+        else if (step === 1) otpField.input.forceActiveFocus();
+    }
 
     // step 0 -> 1: request the OTP.
     function requestOtp() {
@@ -39,7 +55,17 @@ Page {
         email = emailField.text;
         busy = true;
         AccountService.requestPasswordReset(Config.baseUrl, username, email,
-            function () { busy = false; step = 1; },
+            function () { busy = false; resendSeconds = 90; step = 1; },
+            fail);
+    }
+
+    // Re-send the OTP once the countdown reaches zero.
+    function resend() {
+        if (busy || resendSeconds > 0) return;
+        errorMsg = "";
+        busy = true;
+        AccountService.requestPasswordReset(Config.baseUrl, username, email,
+            function () { busy = false; resendSeconds = 90; Toast.show(i18n.tr("New code sent.")); },
             fail);
     }
 
@@ -67,6 +93,12 @@ Page {
                 page.pageStack.pop();
             },
             fail);
+    }
+
+    Timer {
+        interval: 1000; repeat: true
+        running: page.step === 1 && page.resendSeconds > 0
+        onTriggered: page.resendSeconds = Math.max(0, page.resendSeconds - 1)
     }
 
     Flickable {
@@ -152,6 +184,33 @@ Page {
                 width: parent.width
                 placeholder: i18n.tr("Verification code")
                 inputMethodHints: Qt.ImhDigitsOnly
+            }
+            Item {
+                visible: page.step === 1
+                width: parent.width
+                height: units.gu(3)
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: page.resendSeconds > 0
+                    text: i18n.tr("Resend code in %1s").arg(page.resendSeconds)
+                    font.pixelSize: Style.fontSmall
+                    font.family: Style.fontFamily
+                    color: Style.textSecondary
+                }
+                AbstractButton {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: page.resendSeconds === 0
+                    width: fpResendLbl.width; height: fpResendLbl.height
+                    onClicked: page.resend()
+                    Label {
+                        id: fpResendLbl
+                        text: i18n.tr("Resend code")
+                        font.pixelSize: Style.fontSmall
+                        font.weight: Font.DemiBold
+                        font.family: Style.fontFamily
+                        color: Style.brand
+                    }
+                }
             }
             FormField {
                 id: passwordField

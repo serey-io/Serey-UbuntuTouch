@@ -20,13 +20,16 @@
       var steem = window.steem;
       if (!steem || !steem.auth) return { ok: false, error: "Crypto library not loaded." };
 
-      // Strong random master password (brain key). The 'P' prefix mirrors the
-      // web's format; the user saves this and logs in with it.
+      // Master password = "P" + a random WIF, matching the web's format. This is
+      // REQUIRED: the backend login (checkPasswordChecksum) only accepts a key of
+      // the form P<WIF> (/^5[HJK].../ + isWif), so a plain hex string would let the
+      // account be created but never logged into. We have no `ecc` on the UMD
+      // global, so derive a random WIF via toWif() of 32 random bytes.
       var bytes = new Uint8Array(32);
       (window.crypto || window.msCrypto).getRandomValues(bytes);
-      var hex = "";
-      for (var i = 0; i < bytes.length; i++) hex += ("0" + bytes[i].toString(16)).slice(-2);
-      var masterPassword = "P" + hex;
+      var seedHex = "";
+      for (var i = 0; i < bytes.length; i++) seedHex += ("0" + bytes[i].toString(16)).slice(-2);
+      var masterPassword = "P" + steem.auth.toWif("", seedHex, "");
 
       var roles = ["owner", "active", "posting", "memo"];
       var pub = steem.auth.generateKeys(username, masterPassword, roles);

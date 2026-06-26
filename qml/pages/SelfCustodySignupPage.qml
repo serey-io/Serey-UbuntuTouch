@@ -22,12 +22,41 @@ Page {
     property string email: ""
     property string masterKey: ""
     property bool keySaved: false
+    property int resendSeconds: 0
 
     header: PageHeader {
         title: i18n.tr("Self-custody")
+        leadingActionBar.actions: [
+            Action { iconName: "back"; text: i18n.tr("Back"); onTriggered: page.goBack() }
+        ]
+    }
+
+    // Steps 1–2 go back within the wizard; step 0 and the post-creation key
+    // screen (3) leave the page (back must not re-trigger account creation).
+    function goBack() {
+        if (page.step === 1 || page.step === 2) { page.errorMsg = ""; page.step -= 1; }
+        else page.pageStack.pop();
     }
 
     function fail(err) { busy = false; page.errorMsg = err.message; }
+
+    Component.onCompleted: usernameField.input.forceActiveFocus()
+
+    onStepChanged: {
+        if (step === 0) usernameField.input.forceActiveFocus();
+        else if (step === 1) emailField.input.forceActiveFocus();
+        else if (step === 2) otpField.input.forceActiveFocus();
+    }
+
+    // Re-send the OTP once the countdown reaches zero.
+    function resend() {
+        if (busy || resendSeconds > 0) return;
+        errorMsg = "";
+        busy = true;
+        AccountService.sendSignupOtp(Config.baseUrl, username, email,
+            function () { busy = false; resendSeconds = 90; Toast.show(i18n.tr("New code sent.")); },
+            fail);
+    }
 
     // step 0 -> 1
     function checkUsername() {
@@ -54,7 +83,7 @@ Page {
         email = emailField.text;
         busy = true;
         AccountService.sendSignupOtp(Config.baseUrl, username, email,
-            function () { busy = false; step = 2; },
+            function () { busy = false; resendSeconds = 90; step = 2; },
             fail);
     }
 
@@ -82,6 +111,12 @@ Page {
     }
 
     KeygenBridge { id: keygen }
+
+    Timer {
+        interval: 1000; repeat: true
+        running: page.step === 2 && page.resendSeconds > 0
+        onTriggered: page.resendSeconds = Math.max(0, page.resendSeconds - 1)
+    }
 
     Flickable {
         anchors { top: page.header.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
@@ -171,6 +206,33 @@ Page {
                 placeholder: i18n.tr("Verification code")
                 inputMethodHints: Qt.ImhDigitsOnly
                 onAccepted: page.createAccount()
+            }
+            Item {
+                visible: page.step === 2
+                width: parent.width
+                height: units.gu(3)
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: page.resendSeconds > 0
+                    text: i18n.tr("Resend code in %1s").arg(page.resendSeconds)
+                    font.pixelSize: Style.fontSmall
+                    font.family: Style.fontFamily
+                    color: Style.textSecondary
+                }
+                AbstractButton {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: page.resendSeconds === 0
+                    width: scResendLbl.width; height: scResendLbl.height
+                    onClicked: page.resend()
+                    Label {
+                        id: scResendLbl
+                        text: i18n.tr("Resend code")
+                        font.pixelSize: Style.fontSmall
+                        font.weight: Font.DemiBold
+                        font.family: Style.fontFamily
+                        color: Style.brand
+                    }
+                }
             }
 
             // --- Step 3: show the key --------------------------------------
