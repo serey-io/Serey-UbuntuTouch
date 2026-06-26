@@ -83,6 +83,30 @@ function createStandardAccount(baseUrl, username, email, otp, password, onOk, on
     }, onErr);
 }
 
+// Self-custody signup: the keypair is generated on-device (KeygenBridge runs the
+// vendored sereyjs), so the server only RECEIVES the public keys + posting private
+// key and verifies the OTP (auth_type "normal"). The master password is never sent
+// — the user saves it to log in. Reuses sendSignupOtp (/send-otp-standard) for the
+// OTP, which create-account verifies the same way.
+function createSelfCustodyAccount(baseUrl, username, email, otp, keys, onOk, onErr) {
+    Http.post(baseUrl, "/accounts/create-account", {
+        username: username,
+        email: email,
+        otp: otp,
+        gender_id: 1,
+        first_name: "",
+        last_name: "",
+        country_id: null,
+        owner_public_key: keys.owner_public_key,
+        active_public_key: keys.active_public_key,
+        posting_public_key: keys.posting_public_key,
+        memo_public_key: keys.memo_public_key,
+        posting_private_key: keys.posting_private_key,
+        auth_type: "normal",
+        referral_code: ""
+    }, null, onOk, onErr);
+}
+
 // Step 1 of password reset: validate the username/email pair and send an OTP.
 function requestPasswordReset(baseUrl, username, email, onOk, onErr) {
     Http.post(baseUrl, "/accounts/request-password-reset",

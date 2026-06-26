@@ -12,6 +12,7 @@ Rectangle {
 
     property alias text: input.text
     property alias input: input
+    property alias readOnly: input.readOnly
     property string placeholder: ""
     property int echoMode: TextInput.Normal
     property int inputMethodHints: Qt.ImhNone

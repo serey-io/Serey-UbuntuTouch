@@ -131,7 +131,7 @@ Page {
             LinkButton {
                 width: parent.width
                 label: i18n.tr("Sign up")
-                onClicked: page.pageStack.push(Qt.resolvedUrl("SignupPage.qml"))
+                onClicked: page.pageStack.push(Qt.resolvedUrl("CreateAccountPage.qml"))
             }
         }
     }
