@@ -56,8 +56,11 @@ QtObject {
     }
 
     function setAuth(newToken, newUsername) {
-        token = newToken;
+        // Set username first: assigning `token` fires onTokenChanged synchronously,
+        // and listeners (e.g. SettingsPage) immediately fetch the profile by
+        // username — so username must already be in place or the fetch uses "".
         username = newUsername;
+        token = newToken;
         _save();
     }
 
