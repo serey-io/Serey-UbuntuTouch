@@ -41,6 +41,13 @@ Page {
 
     Component.onCompleted: refreshProfile()
 
+    // Re-fetch every time the Settings tab becomes active. The profile (incl. the
+    // following/followers counts) is held in memory, and following someone happens
+    // on another tab — so without this the count stays stale until something else
+    // (token change, sub-page pop) forces a refresh. The backend invalidates the
+    // profile cache on follow, so this re-fetch returns the up-to-date counts.
+    onVisibleChanged: if (visible) refreshProfile()
+
     Connections {
         target: Session
         function onTokenChanged() { page.refreshProfile(); }
