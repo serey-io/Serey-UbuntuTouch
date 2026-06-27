@@ -383,7 +383,4 @@ Page {
         running: page.loading && page.profile === null
         visible: running
     }
-
-    // __VERIFY__ temporary parse check — remove after build.
-    Loader { active: true; visible: false; source: Qt.resolvedUrl("CreateGalleryPostPage.qml") }
 }
