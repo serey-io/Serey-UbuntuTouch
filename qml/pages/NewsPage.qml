@@ -77,6 +77,38 @@ Page {
         loadMore();
     }
 
+    // Pull-to-refresh: re-fetch the first page but keep the current rows on
+    // screen (clearing only once the new ones arrive) so there's no skeleton
+    // flash — just the pull spinner, Facebook-style.
+    property bool refreshing: false
+    function refresh() {
+        if (page.refreshing) return;
+        page.refreshing = true;
+        page.reqEpoch++;
+        if (inflight) { inflight.abort(); inflight = null; }
+        var epoch = page.reqEpoch;
+        var params = { limit: Config.pageSize, offset: 0 };
+        if (Config.communityId > 0)
+            params.community_id = Config.communityId;
+        inflight = feedFn()(Config.baseUrl, params, Session.token,
+            function (result, rawCount) {
+                if (epoch !== page.reqEpoch) return;
+                inflight = null;
+                page.refreshing = false;
+                page.loading = false;
+                feedModel.clear();
+                for (var i = 0; i < result.length; i++)
+                    feedModel.append(result[i]);
+                page.offset = rawCount;
+                page.endReached = rawCount < Config.pageSize;
+            },
+            function (err) {
+                if (epoch !== page.reqEpoch) return;
+                inflight = null;
+                page.refreshing = false;
+            });
+    }
+
     function loadMore() {
         if (loading || endReached) return;
         loading = true;
@@ -122,6 +154,11 @@ Page {
         clip: true
         model: feedModel
         cacheBuffer: units.gu(12)
+
+        PullToRefresh {
+            refreshing: page.refreshing
+            onRefresh: page.refresh()
+        }
 
         delegate: PostCard {
             width: list.width

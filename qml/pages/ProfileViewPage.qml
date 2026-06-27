@@ -48,10 +48,10 @@ Page {
     function modelFor(t) { return t === 0 ? m0 : t === 1 ? m1 : m2; }
 
     function loadProfile() {
-        profileLoading = true;
+        page.profileLoading = true;
         AccountService.profile(Config.baseUrl, username, Session.token,
-            function (user) { profileLoading = false; page.profile = user; },
-            function (err) { profileLoading = false; /* header falls back to @username */ });
+            function (user) { page.profileLoading = false; page.profile = user; },
+            function (err) { page.profileLoading = false; /* header falls back to @username */ });
     }
 
     function loadFollow() {
@@ -180,10 +180,6 @@ Page {
                         visible: status === Image.Ready
                     }
 
-                    BackButton {
-                        anchors { left: parent.left; top: parent.top; leftMargin: Style.spacingS; topMargin: Style.spacingS }
-                        onClicked: page.pageStack.pop()
-                    }
                 }
 
                 // --- Avatar (overlaps the cover) -------------------------
@@ -389,5 +385,16 @@ Page {
         anchors.centerIn: parent
         running: page.profileLoading && page.profile === null
         visible: running
+    }
+
+    // Back button: a FIXED page overlay (not inside the scrolling list header),
+    // so it's always visible from the first frame regardless of scroll position
+    // or async header relayout. `overlay` gives it a translucent dark pill so it
+    // reads over both the cover and scrolled content.
+    BackButton {
+        anchors { left: parent.left; top: parent.top; leftMargin: Style.spacingS; topMargin: Style.spacingS }
+        z: 100
+        overlay: true
+        onClicked: page.pageStack.pop()
     }
 }

@@ -64,6 +64,37 @@ Page {
         loadMore();
     }
 
+    // Pull-to-refresh: re-fetch page one but keep current rows until the new
+    // ones arrive (no skeleton flash — just the pull spinner).
+    property bool refreshing: false
+    function refresh() {
+        if (page.refreshing) return;
+        page.refreshing = true;
+        page.reqEpoch++;
+        if (inflight) { inflight.abort(); inflight = null; }
+        var epoch = page.reqEpoch;
+        var params = { limit: Config.pageSize, offset: 0 };
+        if (Config.communityId > 0)
+            params.community_id = Config.communityId;
+        inflight = VideoService.listVideos(Config.baseUrl, params, Session.token,
+            function (result, rawCount) {
+                if (epoch !== page.reqEpoch) return;
+                inflight = null;
+                page.refreshing = false;
+                page.loading = false;
+                feedModel.clear();
+                for (var i = 0; i < result.length; i++)
+                    feedModel.append(result[i]);
+                page.offset = rawCount;
+                page.endReached = rawCount < Config.pageSize;
+            },
+            function (err) {
+                if (epoch !== page.reqEpoch) return;
+                inflight = null;
+                page.refreshing = false;
+            });
+    }
+
     function loadMore() {
         if (loading || endReached) return;
         loading = true;
@@ -98,6 +129,11 @@ Page {
         clip: true
         model: feedModel
         cacheBuffer: units.gu(16)
+
+        PullToRefresh {
+            refreshing: page.refreshing
+            onRefresh: page.refresh()
+        }
 
         header: Item {
             width: list.width
