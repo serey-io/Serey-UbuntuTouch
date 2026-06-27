@@ -136,6 +136,7 @@ Page {
 
     LoadingState {
         anchors.fill: list
+        variant: "gallery"
         visible: page.loading && galleryModel.count === 0
     }
     ErrorState {

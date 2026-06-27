@@ -143,6 +143,7 @@ Page {
 
     LoadingState {
         anchors.fill: list
+        variant: "video"
         visible: page.loading && feedModel.count === 0
     }
     ErrorState {
