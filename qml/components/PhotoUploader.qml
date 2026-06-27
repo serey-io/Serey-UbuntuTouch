@@ -29,30 +29,36 @@ Item {
     signal uploaded(string url)
     signal failed(string message)
 
+    // Bumped per upload so a callback from a superseded/timed-out attempt (e.g. a
+    // grab that resolves after the watchdog fired) can't fire a second result.
+    property int _gen: 0
+
     function upload(fileUrl) {
         if (root.uploading)
             return;
         root.uploading = true;
+        root._gen++;
         watchdog.restart();
         // Reassign even if the same file is re-picked so onStatusChanged fires.
         resizer.source = "";
         resizer.source = fileUrl;
     }
 
-    function _finishOk(url) { watchdog.stop(); root.uploading = false; root.uploaded(url); }
-    function _finishErr(msg) { watchdog.stop(); root.uploading = false; root.failed(msg); }
+    function _finishOk(url) { watchdog.stop(); root.uploading = false; resizer.source = ""; root.uploaded(url); }
+    function _finishErr(msg) { watchdog.stop(); root.uploading = false; resizer.source = ""; root.failed(msg); }
 
-    function _uploadFile(fileUrl) {
+    function _uploadFile(fileUrl, gen) {
         Uploads.uploadImage(Config.uploadUrl, Config.uploadSecret, fileUrl,
-            function (url) { root._finishOk(url); },
-            function (err) { root._finishErr((err && err.message) || i18n.tr("Upload failed.")); });
+            function (url) { if (gen === root._gen) root._finishOk(url); },
+            function (err) { if (gen === root._gen) root._finishErr((err && err.message) || i18n.tr("Upload failed.")); });
     }
 
     function _onDecoded() {
+        var gen = root._gen;
         var w = resizer.implicitWidth;
         var h = resizer.implicitHeight;
         if (w <= 0 || h <= 0) {            // couldn't measure — send original
-            root._uploadFile(String(resizer.source));
+            root._uploadFile(String(resizer.source), gen);
             return;
         }
         resizer.width = w;
@@ -61,10 +67,12 @@ Item {
         var dir = src.substring(0, src.lastIndexOf("/")).replace(/^file:\/\//, "");
         var outLocal = dir + "/serey_up_" + Date.now() + ".jpg";
         resizer.grabToImage(function (result) {
+            if (gen !== root._gen)            // superseded or timed out — drop it
+                return;
             if (result && result.saveToFile(outLocal))
-                root._uploadFile("file://" + outLocal);
+                root._uploadFile("file://" + outLocal, gen);
             else
-                root._uploadFile(String(resizer.source));   // fall back to original
+                root._uploadFile(src, gen);   // fall back to original
         }, Qt.size(w, h));
     }
 
@@ -100,7 +108,7 @@ Item {
             if (status === Image.Ready)
                 root._onDecoded();
             else if (status === Image.Error)
-                root._uploadFile(String(resizer.source));   // upload original bytes
+                root._uploadFile(String(resizer.source), root._gen);   // upload original bytes
         }
     }
 }

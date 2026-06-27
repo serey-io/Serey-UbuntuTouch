@@ -38,7 +38,9 @@ Item {
         spacing: 0
 
         Repeater {
-            model: root.count
+            // Gate on visibility so the pulse animations don't keep ticking when
+            // the skeleton is hidden (content loaded) — no work while off-screen.
+            model: root.visible ? root.count : 0
             delegate: Column {
                 width: root.width
                 spacing: Style.spacingS

@@ -32,10 +32,11 @@ Rectangle {
         visible: skeleton.glyph !== ""
     }
 
+    // A slow, shallow breathe — calm rather than a fast flash.
     SequentialAnimation on opacity {
         running: skeleton.loading
         loops: Animation.Infinite
-        NumberAnimation { from: 1.0; to: 0.5; duration: 800; easing.type: Easing.InOutQuad }
-        NumberAnimation { from: 0.5; to: 1.0; duration: 800; easing.type: Easing.InOutQuad }
+        NumberAnimation { from: 1.0; to: 0.7; duration: 1100; easing.type: Easing.InOutSine }
+        NumberAnimation { from: 0.7; to: 1.0; duration: 1100; easing.type: Easing.InOutSine }
     }
 }
