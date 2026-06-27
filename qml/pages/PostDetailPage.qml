@@ -539,12 +539,12 @@ Page {
     }
 
     LoadingState {
-        anchors.fill: parent
+        anchors { top: page.header.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
         visible: page.loading && page.post === null
         count: 1
     }
     ErrorState {
-        anchors.fill: parent
+        anchors { top: page.header.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
         visible: page.errorMsg !== "" && page.post === null
         message: page.errorMsg
         onRetry: page.load()
