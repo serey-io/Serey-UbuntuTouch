@@ -89,6 +89,10 @@ Item {
         cache: false
         smooth: true
         mipmap: true
+        // Apply the EXIF orientation when decoding. Camera photos carry an
+        // orientation tag rather than rotated pixels; without this the grabbed +
+        // re-saved JPEG keeps the raw (sideways) pixels and uploads rotated.
+        autoTransform: true
         fillMode: Image.PreserveAspectFit
         sourceSize.width: root.maxDimension
         sourceSize.height: root.maxDimension

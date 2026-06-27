@@ -185,7 +185,8 @@ Page {
         width: units.gu(5.5); height: width
         z: 10
         onClicked: {
-            page.pageStack.push(Qt.resolvedUrl("CreatePostPage.qml"))
+            var ed = page.pageStack.push(Qt.resolvedUrl("CreatePostPage.qml"));
+            if (ed && ed.saved) ed.saved.connect(page.reload);   // show the new post immediately
         }
 
         Rectangle {
