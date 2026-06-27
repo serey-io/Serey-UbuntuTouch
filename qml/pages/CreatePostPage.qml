@@ -5,7 +5,7 @@ import "../Theme"
 import "../Session"
 import "../components"
 import "../services/PostService.js" as PostService
-import "../services/Uploads.js" as Uploads
+import "../services/CategoryService.js" as CategoryService
 
 Page {
     id: page
@@ -17,11 +17,34 @@ Page {
     property string coverImageUrl: ""
     property bool uploading: false
 
-    readonly property var categories: [
-        "general", "breaking & news", "entertainment", "creativity",
-        "digital art", "culture", "environment", "society",
-        "philosophy", "football", "crypto", "general knowledge"
-    ]
+    // Categories are per-community (each community defines its own set), loaded
+    // from the backend for the currently-selected source rather than hardcoded.
+    property var categories: []
+    property bool categoriesLoading: false
+    property int catEpoch: 0
+
+    function loadCategories() {
+        var epoch = ++page.catEpoch;
+        var prev = page.selectedCategory;
+        page.categoriesLoading = true;
+        CategoryService.listByCommunity(Config.baseUrl, Config.communityName, Session.token,
+            function (names) {
+                if (epoch !== page.catEpoch) return;   // stale community switch
+                page.categoriesLoading = false;
+                page.categories = names;
+                if (names.indexOf(prev) < 0) page.selectedCategory = "";
+            },
+            function () {
+                if (epoch !== page.catEpoch) return;
+                page.categoriesLoading = false;
+                page.categories = [];
+            });
+    }
+
+    Component.onCompleted: loadCategories()
+    // The community can't change while this page is up (header is collapsed), but
+    // react anyway so the list is always correct for the active source.
+    Connections { target: Config; function onSourceIndexChanged() { page.loadCategories() } }
 
     header: Item { height: 0 }
 
@@ -88,21 +111,20 @@ Page {
     Component {
         id: pickerComp
         PhotoPicker {
-            onPicked: {
-                page.uploading = true;
-                Uploads.uploadImage(Config.uploadUrl, Config.uploadSecret, fileUrl,
-                    function (url) {
-                        page.uploading = false;
-                        page.coverImageUrl = url;
-                        Toast.success(i18n.tr("Cover image uploaded"));
-                    },
-                    function (err) {
-                        page.uploading = false;
-                        Toast.error((err && err.message) ? err.message : i18n.tr("Upload failed."));
-                    });
-            }
+            onPicked: imgUploader.upload(fileUrl)
             onCancelled: { /* nothing to do */ }
         }
+    }
+
+    // Downscales + uploads the picked image; keeps the spinner honest.
+    PhotoUploader {
+        id: imgUploader
+        onUploadingChanged: page.uploading = uploading
+        onUploaded: {
+            page.coverImageUrl = url;
+            Toast.success(i18n.tr("Cover image uploaded"));
+        }
+        onFailed: Toast.error(message)
     }
 
     function publish() {
@@ -120,7 +142,8 @@ Page {
             title: titleField.text.trim(),
             body: body,
             communityId: Config.communityId,
-            category: page.selectedCategory
+            communityName: Config.communityName,
+            categories: page.selectedCategory || "general"
         }, Session.token,
         function (data) {
             page.submitting = false;
@@ -525,6 +548,25 @@ Page {
                 }
 
                 Rectangle { width: parent.width; height: units.dp(1); color: Style.divider }
+
+                // Loading / empty state while categories fetch for this community.
+                Item {
+                    width: parent.width
+                    height: units.gu(8)
+                    visible: page.categories.length === 0
+                    ActivityIndicator {
+                        anchors.centerIn: parent
+                        running: page.categoriesLoading
+                        visible: running
+                    }
+                    Label {
+                        anchors.centerIn: parent
+                        visible: !page.categoriesLoading
+                        text: i18n.tr("No categories for this community")
+                        font.pixelSize: Style.fontSmall
+                        color: Style.textSecondary
+                    }
+                }
 
                 Repeater {
                     model: page.categories

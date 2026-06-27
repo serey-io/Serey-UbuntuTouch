@@ -5,23 +5,14 @@ import "../Theme"
 import "../Session"
 import "../components"
 import "../services/PostService.js" as PostService
-import "../services/Uploads.js" as Uploads
 
 Page {
     id: page
 
     property bool submitting: false
     property bool uploading: false
-    property string selectedCategory: ""
     property var imageUrls: []
-    property bool catSheetOpen: false
     readonly property int maxImages: 10
-
-    readonly property var categories: [
-        "general", "breaking & news", "entertainment", "creativity",
-        "digital art", "culture", "environment", "society",
-        "philosophy", "football", "crypto", "general knowledge"
-    ]
 
     header: Item { height: 0 }
 
@@ -86,12 +77,18 @@ Page {
             Toast.error(i18n.tr("Please log in first."));
             return;
         }
+        if (page.imageUrls.length === 0) {
+            Toast.error(i18n.tr("Add at least one photo."));
+            return;
+        }
         page.submitting = true;
         PostService.createPost(Config.baseUrl, {
             title: captionField.text.trim(),
             body: captionField.text.trim(),
             communityId: Config.communityId,
-            category: page.selectedCategory
+            communityName: Config.communityName,
+            categories: "gallery",
+            images: page.imageUrls
         }, Session.token,
         function (data) {
             page.submitting = false;
@@ -110,27 +107,27 @@ Page {
             return;
         }
         if (page.uploading) return;
-        var dlg = Popups.PopupUtils.open(photoPickerComp);
-        dlg.picked.connect(function (fileUrl) {
-            page.uploading = true;
-            Uploads.uploadImage(Config.uploadUrl, Config.uploadSecret, fileUrl,
-                function (url) {
-                    page.uploading = false;
-                    var copy = page.imageUrls.slice();
-                    copy.push(url);
-                    page.imageUrls = copy;
-                    Toast.success(i18n.tr("Photo uploaded"));
-                },
-                function (err) {
-                    page.uploading = false;
-                    Toast.error((err && err.message) ? err.message : i18n.tr("Upload failed."));
-                });
-        });
+        Popups.PopupUtils.open(photoPickerComp);
     }
 
     Component {
         id: photoPickerComp
-        PhotoPicker { }
+        PhotoPicker {
+            onPicked: imgUploader.upload(fileUrl)
+        }
+    }
+
+    // Downscales + uploads each picked photo; appends the hosted URL.
+    PhotoUploader {
+        id: imgUploader
+        onUploadingChanged: page.uploading = uploading
+        onUploaded: {
+            var copy = page.imageUrls.slice();
+            copy.push(url);
+            page.imageUrls = copy;
+            Toast.success(i18n.tr("Photo uploaded"));
+        }
+        onFailed: Toast.error(message)
     }
 
     function removeImage(idx) {
@@ -304,107 +301,5 @@ Page {
         visible: page.submitting
         z: 100
         ActivityIndicator { anchors.centerIn: parent; running: page.submitting }
-    }
-
-    // --- Category picker bottom sheet ----------------------------------------
-    Item {
-        id: galCatSheet
-        anchors.fill: parent
-        visible: page.catSheetOpen
-        z: 200
-        onVisibleChanged: if (visible) { galCatBdFade.start(); galCatSlideAnim.start(); }
-        function closeAnimated() { galCatBdFadeOut.start(); galCatSlideOut.start(); }
-
-        Rectangle {
-            id: galCatBd
-            anchors.fill: parent
-            color: Qt.rgba(0, 0, 0, 0.4)
-            opacity: 0
-            MouseArea { anchors.fill: parent; onClicked: galCatSheet.closeAnimated() }
-        }
-        NumberAnimation { id: galCatBdFade; target: galCatBd; property: "opacity"; from: 0; to: 1; duration: 200 }
-        NumberAnimation { id: galCatBdFadeOut; target: galCatBd; property: "opacity"; to: 0; duration: 200 }
-
-        Rectangle {
-            id: galCatSheetRect
-            anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-            height: galCatSheetCol.height + units.gu(4)
-            radius: units.dp(16)
-            color: Style.surface
-            transform: Translate { id: galCatSlideT; y: 0 }
-            NumberAnimation { id: galCatSlideAnim; target: galCatSlideT; property: "y"; from: galCatSheetRect.height; to: 0; duration: 300; easing.type: Easing.OutCubic }
-            NumberAnimation { id: galCatSlideOut; target: galCatSlideT; property: "y"; to: galCatSheetRect.height; duration: 250; easing.type: Easing.InCubic; onStopped: page.catSheetOpen = false }
-
-            Rectangle {
-                anchors { top: parent.top; topMargin: Style.spacingS; horizontalCenter: parent.horizontalCenter }
-                width: units.gu(4.5); height: units.dp(4); radius: units.dp(2)
-                color: Style.lightGray
-            }
-
-            Column {
-                id: galCatSheetCol
-                anchors { top: parent.top; left: parent.left; right: parent.right; topMargin: Style.spacingL }
-                spacing: 0
-
-                Item {
-                    width: parent.width; height: units.gu(5)
-                    Label {
-                        anchors.centerIn: parent
-                        text: i18n.tr("Select Category")
-                        font.pixelSize: Style.fontMedium
-                        font.weight: Font.DemiBold
-                        color: Style.textPrimary
-                    }
-                    AbstractButton {
-                        anchors { right: parent.right; rightMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
-                        width: units.gu(3.5); height: units.gu(3.5)
-                        onClicked: galCatSheet.closeAnimated()
-                        Icon { anchors.centerIn: parent; width: units.gu(2.2); height: width; name: "close"; color: Style.textPrimary }
-                    }
-                }
-
-                Rectangle { width: parent.width; height: units.dp(1); color: Style.divider }
-
-                Repeater {
-                    model: page.categories
-                    delegate: AbstractButton {
-                        width: galCatSheetCol.width
-                        height: units.gu(6)
-                        onClicked: {
-                            page.selectedCategory = modelData;
-                            galCatSheet.closeAnimated();
-                        }
-
-                        Row {
-                            anchors { fill: parent; leftMargin: Style.spacingM; rightMargin: Style.spacingM }
-                            spacing: Style.spacingM
-                            Label {
-                                anchors.verticalCenter: parent.verticalCenter
-                                width: parent.width - galCheckIcon.width
-                                text: modelData.charAt(0).toUpperCase() + modelData.slice(1)
-                                font.pixelSize: Style.fontRegular
-                                color: page.selectedCategory === modelData ? Style.brand : Style.textPrimary
-                                font.weight: page.selectedCategory === modelData ? Font.DemiBold : Font.Normal
-                            }
-                            Icon {
-                                id: galCheckIcon
-                                anchors.verticalCenter: parent.verticalCenter
-                                width: units.gu(2.5); height: width
-                                name: "tick"
-                                color: Style.brand
-                                visible: page.selectedCategory === modelData
-                            }
-                        }
-
-                        Rectangle {
-                            anchors { bottom: parent.bottom; left: parent.left; right: parent.right; leftMargin: Style.spacingM; rightMargin: Style.spacingM }
-                            height: units.dp(1); color: Style.divider
-                        }
-                    }
-                }
-
-                Item { width: 1; height: Style.spacingM }
-            }
-        }
     }
 }
