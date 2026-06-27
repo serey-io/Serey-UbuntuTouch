@@ -17,6 +17,12 @@ Page {
     property string coverImageUrl: ""
     property bool uploading: false
 
+    // When set, this page edits an existing post (sends its permlink to update in
+    // place) instead of creating a new one. `saved` lets the opener refresh.
+    property var editPost: null
+    readonly property bool isEdit: !!editPost
+    signal saved()
+
     // Categories are per-community (each community defines its own set), loaded
     // from the backend for the currently-selected source rather than hardcoded.
     property var categories: []
@@ -41,7 +47,18 @@ Page {
             });
     }
 
-    Component.onCompleted: loadCategories()
+    Component.onCompleted: {
+        if (page.editPost) {
+            titleField.text = page.editPost.title || "";
+            // Strip the leading cover <img> we prepend on publish so it isn't
+            // duplicated; the cover is restored from the post's thumbnail.
+            bodyArea.text = (page.editPost.body || "").replace(/^\s*<img[^>]*>\s*/i, "");
+            page.coverImageUrl = page.editPost.thumbnail || "";
+            page.selectedCategory = (page.editPost.categories && page.editPost.categories.length)
+                ? page.editPost.categories[0] : "";
+        }
+        loadCategories();   // captures selectedCategory above as the kept value
+    }
     // The community can't change while this page is up (header is collapsed), but
     // react anyway so the list is always correct for the active source.
     Connections { target: Config; function onSourceIndexChanged() { page.loadCategories() } }
@@ -70,7 +87,7 @@ Page {
 
         Label {
             anchors.centerIn: parent
-            text: i18n.tr("Create Post")
+            text: page.isEdit ? i18n.tr("Edit Post") : i18n.tr("Create Post")
             font.pixelSize: Style.fontMedium
             font.weight: Font.DemiBold
             color: Style.textPrimary
@@ -91,7 +108,8 @@ Page {
             Label {
                 id: postPillLabel
                 anchors.centerIn: parent
-                text: page.submitting ? i18n.tr("Posting…") : i18n.tr("Publish")
+                text: page.submitting ? (page.isEdit ? i18n.tr("Saving…") : i18n.tr("Posting…"))
+                                      : (page.isEdit ? i18n.tr("Save") : i18n.tr("Publish"))
                 font.pixelSize: Style.fontSmall
                 font.weight: Font.DemiBold
                 color: parent.enabled ? Style.textOnBrand : Style.textSecondary

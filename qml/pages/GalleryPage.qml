@@ -42,6 +42,16 @@ Page {
                 }
             }
         }
+        function onPostDeleted(author, permlink) {
+            for (var i = galleryModel.count - 1; i >= 0; i--) {
+                if (galleryModel.get(i).permlink === permlink) galleryModel.remove(i);
+            }
+        }
+        function onEditRequested(post) {
+            if (!page.visible) return;
+            var ed = page.pageStack.push(Qt.resolvedUrl("CreateGalleryPostPage.qml"), { editPost: post });
+            if (ed && ed.saved) ed.saved.connect(page.reload);
+        }
     }
 
     function reload() {
@@ -103,7 +113,7 @@ Page {
             onAuthorClicked: page.pageStack.push(Qt.resolvedUrl("ProfileViewPage.qml"),
                 { username: galleryModel.get(index).author })
             onRequireLogin: page.pageStack.push(Qt.resolvedUrl("LoginPage.qml"))
-            onMoreClicked: PostActions.open(galleryModel.get(index))
+            onMoreClicked: PostActions.open(galleryModel.get(index), "gallery")
         }
 
         // Constant-height footer: a conditional height feeds back into

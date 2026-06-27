@@ -197,10 +197,9 @@ Item {
                 }
             }
 
-            // More button — moderation only (hide/report/block), so never on
-            // your own post (you can't block yourself).
+            // More button — owner sees Edit/Delete, others see moderation
+            // actions (the sheet branches on ownership).
             AbstractButton {
-                visible: (p.author || "") !== Session.username
                 Layout.preferredWidth: units.gu(3.5)
                 Layout.preferredHeight: units.gu(3.5)
                 Layout.fillHeight: false

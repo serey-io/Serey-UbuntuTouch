@@ -196,9 +196,8 @@ Item {
                     }
                 }
 
-                // More button — moderation only, so hidden on your own post.
+                // More button — owner sees Edit/Delete, others moderation.
                 AbstractButton {
-                    visible: (p.author || "") !== Session.username
                     Layout.preferredWidth: units.gu(3.5)
                     Layout.preferredHeight: units.gu(3.5)
                     Layout.fillHeight: false

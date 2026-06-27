@@ -108,6 +108,11 @@ function createPost(baseUrl, params, token, onOk, onErr) {
         subcategories: params.subcategories || [],
         images: params.images || []
     };
+    // Editing an existing post: sending its permlink makes the backend update in
+    // place (isCreate=false) instead of creating a new post. Author is taken from
+    // the token, so only your own post can be updated.
+    if (params.permlink)
+        body.permlink = params.permlink;
     if (params.communityId)            // omit when 0/empty so we don't post a falsy id
         body.community_id = Number(params.communityId);
     // The server resolves the target community by id when present, otherwise by
@@ -117,4 +122,15 @@ function createPost(baseUrl, params, token, onOk, onErr) {
         body.country_name = params.communityName;
     Http.post(baseUrl, "/serey-web/create-or-update-post", body,
               token, function (data) { onOk(data || {}); }, onErr);
+}
+
+// Delete one of the signed-in user's own posts (blog, gallery or video — all are
+// Posts server-side). Uses the POST alias of /serey-web/delete-post-or-comment
+// (QML's XMLHttpRequest can't send a DELETE body). The backend authorises by the
+// token's username, so this can only ever delete your own content; the `username`
+// in the body is required by the schema but the author is taken from the token.
+function deletePost(baseUrl, username, permlink, token, onOk, onErr) {
+    Http.post(baseUrl, "/serey-web/delete-post-or-comment",
+              { username: username, permlink: permlink }, token,
+              function (data) { onOk(data || {}); }, onErr);
 }

@@ -45,6 +45,12 @@ Page {
                 }
             }
         }
+        // Video has no in-app editor, so only delete-prune is handled here.
+        function onPostDeleted(author, permlink) {
+            for (var i = feedModel.count - 1; i >= 0; i--) {
+                if (feedModel.get(i).permlink === permlink) feedModel.remove(i);
+            }
+        }
     }
 
     function reload() {
@@ -114,7 +120,7 @@ Page {
                 { video: feedModel.get(index) })
             onAuthorClicked: page.pageStack.push(Qt.resolvedUrl("ProfileViewPage.qml"),
                 { username: feedModel.get(index).author })
-            onMoreClicked: PostActions.open(feedModel.get(index))
+            onMoreClicked: PostActions.open(feedModel.get(index), "video")
         }
 
         // Constant-height footer: a conditional height feeds back into

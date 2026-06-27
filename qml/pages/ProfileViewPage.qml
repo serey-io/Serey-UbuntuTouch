@@ -103,6 +103,15 @@ Page {
                 { author: username, limit: Config.pageSize, offset: s.offset }, Session.token, ok, err);
     }
 
+    // Reset and reload a tab from scratch (after an edit changed its content).
+    function refreshTab(t) {
+        var s = st[t];
+        s.offset = 0; s.loading = false; s.end = false; s.loaded = false;
+        modelFor(t).clear();
+        rev++;
+        loadTab(t);
+    }
+
     function openPost(p) { page.pageStack.push(Qt.resolvedUrl("PostDetailPage.qml"), { author: p.author, permlink: p.permlink, title: p.title }); }
     function openGallery(p) { page.pageStack.push(Qt.resolvedUrl("GalleryDetailPage.qml"), { author: p.author, permlink: p.permlink }); }
     function openVideo(v) { page.pageStack.push(Qt.resolvedUrl("VideoDetailPage.qml"), { video: v }); }
@@ -121,6 +130,14 @@ Page {
     Connections {
         target: PostActions
         function onHideRequested(author, permlink) { page.removeRow(permlink); }
+        function onPostDeleted(author, permlink) { page.removeRow(permlink); }
+        function onEditRequested(post) {
+            if (!page.visible) return;
+            var t = page.tab;
+            var url = t === 1 ? "CreateGalleryPostPage.qml" : "CreatePostPage.qml";
+            var ed = page.pageStack.push(Qt.resolvedUrl(url), { editPost: post });
+            if (ed && ed.saved) ed.saved.connect(function () { page.refreshTab(t); });
+        }
     }
 
     Component.onCompleted: { loadProfile(); loadFollow(); loadTab(0); }
@@ -342,7 +359,7 @@ Page {
             post: rowData
             showFollow: false       // the big Follow button already covers this user
             onClicked: page.openPost(rowData)
-            onMoreClicked: PostActions.open(rowData)
+            onMoreClicked: PostActions.open(rowData, "blog")
             onRequireLogin: page.pageStack.push(Qt.resolvedUrl("LoginPage.qml"))
         }
     }
@@ -353,7 +370,7 @@ Page {
             post: rowData
             showFollow: false       // redundant on this user's own profile
             onClicked: page.openGallery(rowData)
-            onMoreClicked: PostActions.open(rowData)
+            onMoreClicked: PostActions.open(rowData, "gallery")
             onRequireLogin: page.pageStack.push(Qt.resolvedUrl("LoginPage.qml"))
         }
     }
@@ -363,7 +380,7 @@ Page {
             width: parent ? parent.width : list.width
             video: rowData
             onClicked: page.openVideo(rowData)
-            onMoreClicked: PostActions.open(rowData)
+            onMoreClicked: PostActions.open(rowData, "video")
         }
     }
 

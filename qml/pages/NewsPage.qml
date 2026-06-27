@@ -47,6 +47,18 @@ Page {
                 }
             }
         }
+        // Owner deleted a post → drop the row (no-op if it isn't in this feed).
+        function onPostDeleted(author, permlink) {
+            for (var i = feedModel.count - 1; i >= 0; i--) {
+                if (feedModel.get(i).permlink === permlink) feedModel.remove(i);
+            }
+        }
+        // Owner chose Edit → only the active page opens the editor; reload on save.
+        function onEditRequested(post) {
+            if (!page.visible) return;
+            var ed = page.pageStack.push(Qt.resolvedUrl("CreatePostPage.qml"), { editPost: post });
+            if (ed && ed.saved) ed.saved.connect(page.reload);
+        }
     }
 
     function feedFn() {
@@ -122,7 +134,7 @@ Page {
             onAuthorClicked: page.pageStack.push(Qt.resolvedUrl("ProfileViewPage.qml"),
                 { username: feedModel.get(index).author })
             onRequireLogin: page.pageStack.push(Qt.resolvedUrl("LoginPage.qml"))
-            onMoreClicked: PostActions.open(feedModel.get(index))
+            onMoreClicked: PostActions.open(feedModel.get(index), "blog")
         }
 
         // Constant-height footer: a conditional height feeds back into
