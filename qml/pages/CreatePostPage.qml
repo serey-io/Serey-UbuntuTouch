@@ -159,9 +159,13 @@ Page {
         PostService.createPost(Config.baseUrl, {
             title: titleField.text.trim(),
             body: body,
-            communityId: Config.communityId,
-            communityName: Config.communityName,
+            // On edit, keep the post in its own community (resolve by its title)
+            // rather than the currently-selected source.
+            communityId: page.isEdit ? 0 : Config.communityId,
+            communityName: page.isEdit ? (page.editPost.community || Config.communityName)
+                                       : Config.communityName,
             categories: page.selectedCategory || "general",
+            permlink: page.isEdit ? (page.editPost.permlink || "") : "",
             // Also send the cover in `images` (→ json_meta.image), not just the
             // body <img>. The web derives a post's thumbnail from json_meta.image,
             // so without this the cover only shows inside the article, never as
@@ -171,12 +175,15 @@ Page {
         }, Session.token,
         function (data) {
             page.submitting = false;
-            Toast.success(i18n.tr("Post published!"));
+            Toast.success(page.isEdit ? i18n.tr("Post updated!") : i18n.tr("Post published!"));
+            page.saved();
             page.pageStack.pop();
         },
         function (err) {
             page.submitting = false;
-            Toast.error((err && err.message) ? err.message : i18n.tr("Couldn't publish post."));
+            Toast.error((err && err.message) ? err.message
+                                             : (page.isEdit ? i18n.tr("Couldn't update post.")
+                                                            : i18n.tr("Couldn't publish post.")));
         });
     }
 

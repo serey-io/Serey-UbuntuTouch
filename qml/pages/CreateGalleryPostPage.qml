@@ -14,6 +14,18 @@ Page {
     property var imageUrls: []
     readonly property int maxImages: 10
 
+    // When set, edits an existing gallery post (updates in place via its permlink).
+    property var editPost: null
+    readonly property bool isEdit: !!editPost
+    signal saved()
+
+    Component.onCompleted: {
+        if (page.editPost) {
+            captionField.text = page.editPost.caption || "";
+            page.imageUrls = (page.editPost.images || []).slice();
+        }
+    }
+
     header: Item { height: 0 }
 
     // Custom header
@@ -38,7 +50,7 @@ Page {
 
         Label {
             anchors.centerIn: parent
-            text: i18n.tr("Create Gallery Post")
+            text: page.isEdit ? i18n.tr("Edit Gallery Post") : i18n.tr("Create Gallery Post")
             font.pixelSize: Style.fontMedium
             font.weight: Font.DemiBold
             color: Style.textPrimary
@@ -59,7 +71,8 @@ Page {
             Label {
                 id: galPostLabel
                 anchors.centerIn: parent
-                text: page.submitting ? i18n.tr("Posting…") : i18n.tr("Publish")
+                text: page.submitting ? (page.isEdit ? i18n.tr("Saving…") : i18n.tr("Posting…"))
+                                      : (page.isEdit ? i18n.tr("Save") : i18n.tr("Publish"))
                 font.pixelSize: Style.fontSmall
                 font.weight: Font.DemiBold
                 color: parent.enabled ? Style.textOnBrand : Style.textSecondary
@@ -85,19 +98,24 @@ Page {
         PostService.createPost(Config.baseUrl, {
             title: captionField.text.trim(),
             body: captionField.text.trim(),
-            communityId: Config.communityId,
-            communityName: Config.communityName,
+            communityId: page.isEdit ? 0 : Config.communityId,
+            communityName: page.isEdit ? (page.editPost.community || Config.communityName)
+                                       : Config.communityName,
             categories: "gallery",
+            permlink: page.isEdit ? (page.editPost.permlink || "") : "",
             images: page.imageUrls
         }, Session.token,
         function (data) {
             page.submitting = false;
-            Toast.success(i18n.tr("Gallery post published!"));
+            Toast.success(page.isEdit ? i18n.tr("Gallery post updated!") : i18n.tr("Gallery post published!"));
+            page.saved();
             page.pageStack.pop();
         },
         function (err) {
             page.submitting = false;
-            Toast.error((err && err.message) ? err.message : i18n.tr("Couldn't publish post."));
+            Toast.error((err && err.message) ? err.message
+                                             : (page.isEdit ? i18n.tr("Couldn't update post.")
+                                                            : i18n.tr("Couldn't publish post.")));
         });
     }
 
