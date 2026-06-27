@@ -223,7 +223,9 @@ function toUser(username, raw) {
         firstName: fn,
         lastName: ln,
         fullName: full || username,
-        bio: raw.bio || "",
+        // Trim: stored bios often carry trailing newlines/spaces, which a
+        // word-wrapped Label renders as blank lines (a big empty gap below it).
+        bio: (raw.bio || "").trim(),
         gender: raw.gender_title || "",
         dob: raw.dob || "",
         reputation: raw.reputation,

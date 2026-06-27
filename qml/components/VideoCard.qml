@@ -2,6 +2,7 @@ import QtQuick 2.7
 import QtGraphicalEffects 1.0
 import Lomiri.Components 1.3
 import "../Theme"
+import "../Session"
 
 AbstractButton {
     id: root
@@ -127,6 +128,8 @@ AbstractButton {
             AbstractButton {
                 id: moreBtn
                 anchors.top: parent.top
+                // Moderation only — never shown on your own video.
+                visible: (v.author || "") !== Session.username
                 width: units.gu(3.5); height: units.gu(3.5)
                 onClicked: root.moreClicked()
 

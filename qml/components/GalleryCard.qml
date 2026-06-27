@@ -196,8 +196,9 @@ Item {
                     }
                 }
 
-                // More button
+                // More button — moderation only, so hidden on your own post.
                 AbstractButton {
+                    visible: (p.author || "") !== Session.username
                     Layout.preferredWidth: units.gu(3.5)
                     Layout.preferredHeight: units.gu(3.5)
                     Layout.fillHeight: false

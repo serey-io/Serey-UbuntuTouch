@@ -143,7 +143,13 @@ Page {
             body: body,
             communityId: Config.communityId,
             communityName: Config.communityName,
-            categories: page.selectedCategory || "general"
+            categories: page.selectedCategory || "general",
+            // Also send the cover in `images` (→ json_meta.image), not just the
+            // body <img>. The web derives a post's thumbnail from json_meta.image,
+            // so without this the cover only shows inside the article, never as
+            // the card/thumbnail. (Our app body-scrapes as a fallback, which is
+            // why it looked fine on mobile.) The detail view dedupes it.
+            images: page.coverImageUrl.length > 0 ? [page.coverImageUrl] : []
         }, Session.token,
         function (data) {
             page.submitting = false;
@@ -171,6 +177,15 @@ Page {
         bodyArea.forceActiveFocus();
     }
 
+    // Move active focus onto a neutral item so the on-screen keyboard drops.
+    // Tapping any empty area of the form calls this (see the background
+    // MouseArea below) — previously only re-tapping a field would dismiss it.
+    Item { id: focusSink }
+    function dismissKeyboard() {
+        focusSink.forceActiveFocus();
+        Qt.inputMethod.hide();
+    }
+
     Flickable {
         id: scroll
         anchors { top: hdr.bottom; left: parent.left; right: parent.right; bottom: toolbar.top }
@@ -178,6 +193,16 @@ Page {
         clip: true
         opacity: 0
         NumberAnimation on opacity { from: 0; to: 1; duration: 250; easing.type: Easing.OutQuad }
+
+        // Sits behind the form (z -1); taps that miss a field fall through here
+        // and dismiss the keyboard. A plain tap still flicks fine because the
+        // Flickable steals drag gestures from child MouseAreas.
+        MouseArea {
+            width: scroll.width
+            height: Math.max(scroll.height, col.height + Style.spacingL)
+            z: -1
+            onClicked: page.dismissKeyboard()
+        }
 
         Column {
             id: col

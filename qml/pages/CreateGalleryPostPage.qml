@@ -138,12 +138,31 @@ Page {
         page.imageUrls = copy;
     }
 
+    // Move active focus onto a neutral item so the on-screen keyboard drops when
+    // tapping any empty area of the form (see the background MouseArea below).
+    Item { id: focusSink }
+    function dismissKeyboard() {
+        focusSink.forceActiveFocus();
+        Qt.inputMethod.hide();
+    }
+
     Flickable {
+        id: scroll
         anchors { top: hdr.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
         contentHeight: col.height + Style.spacingL
         clip: true
         opacity: 0
         NumberAnimation on opacity { from: 0; to: 1; duration: 250; easing.type: Easing.OutQuad }
+
+        // Sits behind the form (z -1); taps that miss the caption fall through
+        // here and dismiss the keyboard. Drags still flick (the Flickable steals
+        // drag gestures from child MouseAreas).
+        MouseArea {
+            width: scroll.width
+            height: Math.max(scroll.height, col.height + Style.spacingL)
+            z: -1
+            onClicked: page.dismissKeyboard()
+        }
 
         Column {
             id: col
