@@ -22,7 +22,10 @@ Page {
     Component.onCompleted: {
         if (page.editPost) {
             captionField.text = page.editPost.caption || "";
-            page.imageUrls = (page.editPost.images || []).slice();
+            // imagesStr is the newline-joined scalar (the images array is wrapped
+            // by the feed ListModel and its URL strings don't survive .get()).
+            page.imageUrls = (page.editPost.imagesStr || "")
+                .split("\n").filter(function (s) { return s.length > 0; });
         }
     }
 

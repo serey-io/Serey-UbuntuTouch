@@ -101,6 +101,9 @@ function toPost(raw) {
         comments: toInt(raw.answer_count),
         payout: raw.serey_value || "",
         categories: parseList(raw.categories),
+        // Scalar copy of the first category: a dynamicRoles ListModel wraps the
+        // `categories` array (losing [] indexing), so edit-prefill reads this.
+        primaryCategory: parseList(raw.categories)[0] || "",
         voters: voterNames(raw.voters),
         voterStr: "," + voterNames(raw.voters).join(",") + ",",
         flaggers: voterNames(raw.flaggers),
@@ -136,6 +139,8 @@ function toGalleryPost(raw) {
         payout: raw.serey_value || "",
         voters: voterNames(raw.voters),
         voterStr: "," + voterNames(raw.voters).join(",") + ",",
+        // Post's own community title, so editing keeps it in place.
+        community: raw.community_title || "",
         checkmark: raw.checkmark_icon || ""
     };
 }

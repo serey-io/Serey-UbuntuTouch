@@ -54,8 +54,9 @@ Page {
             // duplicated; the cover is restored from the post's thumbnail.
             bodyArea.text = (page.editPost.body || "").replace(/^\s*<img[^>]*>\s*/i, "");
             page.coverImageUrl = page.editPost.thumbnail || "";
-            page.selectedCategory = (page.editPost.categories && page.editPost.categories.length)
-                ? page.editPost.categories[0] : "";
+            // primaryCategory is a scalar (the categories array is wrapped by the
+            // feed ListModel and loses [] indexing).
+            page.selectedCategory = page.editPost.primaryCategory || "";
         }
         loadCategories();   // captures selectedCategory above as the kept value
     }
