@@ -133,6 +133,14 @@ Page {
         PullToRefresh {
             refreshing: page.refreshing
             onRefresh: page.refresh()
+            content: Label {
+                text: i18n.tr("Pull to refresh")
+                opacity: list.dragging ? 1 : 0
+                font.pixelSize: Style.fontSmall
+                color: Style.textSecondary
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+            }
         }
 
         header: Item {

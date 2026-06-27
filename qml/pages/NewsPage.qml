@@ -158,6 +158,20 @@ Page {
         PullToRefresh {
             refreshing: page.refreshing
             onRefresh: page.refresh()
+            // Show "Pull to refresh" only while actively dragging, so it's gone
+            // the moment you release — no built-in "Release to refresh..." text and
+            // no flash during load/retract. We drive OPACITY (not visible): the
+            // PullToRefresh style imperatively sets the content's `visible` per its
+            // own state, which would clobber a `visible` binding; it never touches
+            // opacity, so this is the reliable lever.
+            content: Label {
+                text: i18n.tr("Pull to refresh")
+                opacity: list.dragging ? 1 : 0
+                font.pixelSize: Style.fontSmall
+                color: Style.textSecondary
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+            }
         }
 
         delegate: PostCard {
