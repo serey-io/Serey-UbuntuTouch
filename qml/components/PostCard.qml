@@ -255,6 +255,7 @@ Item {
                 source: p.thumbnail || ""
                 fillMode: Image.PreserveAspectCrop
                 asynchronous: true
+                autoTransform: true     // honour EXIF orientation
                 sourceSize.width: cover.width
                 visible: false
                 Behavior on opacity { NumberAnimation { duration: 200 } }

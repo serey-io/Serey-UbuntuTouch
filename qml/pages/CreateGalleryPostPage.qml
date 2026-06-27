@@ -250,6 +250,7 @@ Page {
                                 source: modelData
                                 fillMode: Image.PreserveAspectCrop
                                 asynchronous: true
+                                autoTransform: true     // honour EXIF orientation
                             }
                         }
 

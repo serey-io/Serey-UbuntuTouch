@@ -370,6 +370,7 @@ Page {
                     source: page.coverImageUrl
                     fillMode: Image.PreserveAspectCrop
                     asynchronous: true
+                    autoTransform: true     // honour EXIF orientation
                     visible: page.coverImageUrl.length > 0
                 }
 

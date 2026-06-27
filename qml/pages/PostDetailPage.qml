@@ -412,6 +412,7 @@ Page {
                     source: page.post ? (page.post.thumbnail || "") : ""
                     fillMode: Image.PreserveAspectCrop
                     asynchronous: true
+                    autoTransform: true     // honour EXIF orientation
                     visible: false
                     Behavior on opacity { NumberAnimation { duration: 200 } }
                     opacity: status === Image.Ready ? 1.0 : 0.0
@@ -462,6 +463,7 @@ Page {
                                     fillMode: Image.PreserveAspectFit
                                     source: model.content
                                     asynchronous: true
+                                    autoTransform: true     // honour EXIF orientation
                                     visible: false
                                     Behavior on opacity { NumberAnimation { duration: 200 } }
                                     opacity: status === Image.Ready ? 1.0 : 0.0

@@ -256,6 +256,7 @@ Page {
                             source: modelData
                             fillMode: Image.PreserveAspectCrop
                             asynchronous: true
+                            autoTransform: true     // honour EXIF orientation
                             sourceSize.width: cover.width * 2
                             Behavior on opacity { NumberAnimation { duration: 200 } }
                             opacity: status === Image.Ready ? 1.0 : 0.0
