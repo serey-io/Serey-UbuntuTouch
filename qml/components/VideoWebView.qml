@@ -69,7 +69,7 @@ WebView {
         if (embedUrl.length === 0)
             return;
         if (directVideo) {
-            _loadDoc(_videoHtml(), "https://serey.io/");
+            _loadDoc(_videoHtml(), _baseUrl());
         } else if (wrap) {
             _loadDoc(_iframeHtml(), _baseUrl());
         } else {

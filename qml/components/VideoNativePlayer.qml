@@ -46,9 +46,9 @@ Item {
         onStatusChanged: if (status === MediaPlayer.Buffered) watchdog.stop()
     }
 
-    // Watchdog for unreachable files (e.g. SEREY .mov returning 504): if nothing
-    // is playing/buffered after a few seconds, stop and hand off to the browser
-    // instead of leaving the UI frozen on a spinner.
+    // Watchdog for stalled/unreachable files: if nothing is playing/buffered
+    // after a few seconds, stop and emit failed() so the caller can retry in-app
+    // (Chromium <video>) instead of leaving the UI frozen on a spinner.
     Timer {
         id: watchdog
         interval: 6000
