@@ -29,7 +29,16 @@ WebView {
     onEmbedUrlChanged: _load()
     onWrapChanged: _load()
     onDirectVideoChanged: _load()
-    Component.onCompleted: _load()
+    Component.onCompleted: { _enableAutoplay(); _load(); }
+
+    // Allow the embedded player / <video> to autoplay without a tap *inside* the
+    // web view, so a single tap on our play overlay both loads AND starts the
+    // video (otherwise Chromium's autoplay policy needs a second tap on the
+    // player's own play button). Guarded: if this Morph build doesn't expose the
+    // WebEngineSettings property we silently keep the default behaviour.
+    function _enableAutoplay() {
+        try { wv.settings.playbackRequiresUserGesture = false; } catch (e) {}
+    }
 
     // The wrapper document is "served from" serey.io so the embedded player sees
     // a normal site origin/referrer. Basing it on the platform's own domain
