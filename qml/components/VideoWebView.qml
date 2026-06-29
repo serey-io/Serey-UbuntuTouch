@@ -46,7 +46,17 @@ WebView {
     // unavailable — Watch on YouTube", error 152). The web embeds from serey.io
     // and plays fine, so we mirror that origin.
     readonly property string _origin: "https://serey.io"
-    function _baseUrl() { return _origin + "/"; }
+    function _baseUrl() {
+        // An offline copy is a local file:// URL — base the wrapper doc on the
+        // file's own directory so the <video src> is same-origin (Chromium blocks
+        // file:// resources loaded from an https-based document). Remote embeds
+        // keep the serey.io origin for the YouTube referrer check.
+        if (directVideo && embedUrl.indexOf("file://") === 0) {
+            var i = embedUrl.lastIndexOf("/");
+            return i > 6 ? embedUrl.substring(0, i + 1) : embedUrl;
+        }
+        return _origin + "/";
+    }
 
     function _iframeHtml() {
         return '<!DOCTYPE html><html><head>' +

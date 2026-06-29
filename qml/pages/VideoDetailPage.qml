@@ -1,5 +1,6 @@
 import QtQuick 2.7
 import Lomiri.Components 1.3
+import Lomiri.Components.Popups 1.3
 import "../Theme"
 import "../Session"
 import "../components"
@@ -38,13 +39,24 @@ Page {
         return /\.(mp4|webm|m4v)(\?|$)/i.test(u || "");
     }
 
-    // The direct media URL for a Serey-hosted clip (empty for third-party embeds).
-    function directUrl() {
+    // The remote direct media URL for a Serey-hosted clip (empty for third-party
+    // embeds). This is also the "is this downloadable?" gate for the offline
+    // download button — embeds return "" because there are no bytes to fetch.
+    function remoteDirectUrl() {
         var v = page.video;
         if (v.platform === "SEREY") return v.videoLink || v.embedUrl || "";
         if (isDirectFile(v.videoLink)) return v.videoLink;
         if (isDirectFile(v.embedUrl)) return v.embedUrl;
         return "";
+    }
+
+    // The URL to actually play: a saved offline copy when one exists, otherwise
+    // the remote file. Extension-based routing in startPlay() still applies (the
+    // local path keeps the original extension), so offline .mp4 → native player
+    // and offline .mov → Chromium <video>, exactly like the streamed case.
+    function directUrl() {
+        var local = Downloads.pathFor((page.video && page.video.permlink) || "");
+        return local.length > 0 ? local : page.remoteDirectUrl();
     }
 
     // Build a playable third-party embed URL, mirroring the web's fallbackEmbedSrc:
@@ -266,6 +278,25 @@ Page {
                 page.moreVideos = filtered.slice(0, 5);
             },
             function (err) { /* ignore */ });
+    }
+
+    // Confirm before forgetting an offline download.
+    Component {
+        id: removeDialog
+        Dialog {
+            id: rdlg
+            title: i18n.tr("Remove download?")
+            text: i18n.tr("This video will no longer be available offline.")
+            Button {
+                text: i18n.tr("Remove")
+                color: Style.danger
+                onClicked: { PopupUtils.close(rdlg); Downloads.remove((page.video && page.video.permlink) || ""); }
+            }
+            Button {
+                text: i18n.tr("Cancel")
+                onClicked: PopupUtils.close(rdlg)
+            }
+        }
     }
 
     Flickable {
@@ -512,6 +543,59 @@ Page {
                             font.pixelSize: Style.fontSmall
                             font.weight: Font.DemiBold
                             color: Style.textPrimary
+                        }
+                    }
+                }
+
+                // Download pill — Serey/direct files only (hidden for embeds, which
+                // have no downloadable bytes). Tri-state: Download → progress% →
+                // Saved. All reactivity is keyed off Downloads.rev.
+                AbstractButton {
+                    id: dlBtn
+                    visible: page.remoteDirectUrl().length > 0
+                    readonly property string _pl: (page.video && page.video.permlink) || ""
+                    readonly property var _active: (Downloads.rev, Downloads.activeFor(_pl))
+                    readonly property bool _saved: (Downloads.rev, Downloads.isSaved(_pl))
+                    width: dlRow.width + Style.spacingM * 2
+                    height: units.gu(4.5)
+                    onClicked: {
+                        if (_active) return;                  // in flight — ignore taps
+                        if (_saved) PopupUtils.open(removeDialog);
+                        else Downloads.start(page.video, page.remoteDirectUrl());
+                    }
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: height / 2
+                        color: dlBtn._saved ? Style.brand : "transparent"
+                        border.width: dlBtn._saved ? 0 : units.dp(1.5)
+                        border.color: Style.divider
+                    }
+                    Row {
+                        id: dlRow
+                        anchors.centerIn: parent
+                        spacing: Style.spacingXs
+                        Icon {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: units.gu(2); height: width
+                            name: dlBtn._saved ? "tick" : "save-to-device"
+                            color: dlBtn._saved ? Style.textOnBrand : Style.textPrimary
+                            visible: !dlBtn._active
+                        }
+                        ActivityIndicator {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: units.gu(2); height: width
+                            running: !!dlBtn._active
+                            visible: running
+                        }
+                        Label {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: dlBtn._active
+                                  ? (Math.round(dlBtn._active.progress) + "%")
+                                  : (dlBtn._saved ? i18n.tr("Saved") : i18n.tr("Download"))
+                            font.pixelSize: Style.fontSmall
+                            font.weight: Font.DemiBold
+                            color: dlBtn._saved ? Style.textOnBrand : Style.textPrimary
                         }
                     }
                 }
