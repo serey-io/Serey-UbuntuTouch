@@ -14,6 +14,12 @@ Item {
     id: root
     property string source: ""
 
+    // True only when the user tapped to pause. media-hub reports the initial
+    // buffering pre-roll as "paused" too, so we can't tell loading from a real
+    // pause by playbackState alone — without this flag the play glyph appears
+    // over the loading frame and the user taps play twice.
+    property bool _userPaused: false
+
     // Emitted when GStreamer can't play the file (decode error or watchdog
     // timeout). The caller retries in-app via a Chromium <video> rather than the
     // external browser.
@@ -25,6 +31,7 @@ Item {
         // this handler's stop() immediately killed, then play() restarted it —
         // doubling time-to-first-frame and leaving the stage black meanwhile.
         player.stop();
+        root._userPaused = false;
         if (source.length > 0) {
             player.source = source;
             watchdog.restart();
@@ -57,7 +64,10 @@ Item {
     // (Chromium <video>) instead of leaving the UI frozen on a spinner.
     Timer {
         id: watchdog
-        interval: 6000
+        // Generous: non-faststart .mov streams buffer ~7-10 s before the first
+        // frame on media-hub. A short timeout would abort them into the Chromium
+        // fallback, which can't render .mov at all — worse than waiting.
+        interval: 20000
         repeat: false
         onTriggered: {
             if (player.playbackState !== MediaPlayer.PlayingState
@@ -75,39 +85,46 @@ Item {
         fillMode: VideoOutput.PreserveAspectFit
     }
 
-    // Tap to toggle play / pause.
+    // Tap to toggle play / pause. Track an *explicit* user pause so the overlay
+    // can tell it apart from media-hub's buffering "paused".
     MouseArea {
         anchors.fill: parent
-        onClicked: player.playbackState === MediaPlayer.PlayingState
-                   ? player.pause() : player.play()
+        onClicked: {
+            if (player.playbackState === MediaPlayer.PlayingState) {
+                player.pause();
+                root._userPaused = true;
+            } else {
+                player.play();
+                root._userPaused = false;
+            }
+        }
     }
 
-    // Buffering / loading spinner. Cover the whole "not yet showing frames"
-    // window (Loading → Loaded → Buffering → Stalled), not just Loading/Buffering,
-    // so the stage isn't a featureless black rectangle while the file streams in.
+    // Loading spinner: shown for the whole "play requested but no frames yet"
+    // window — including media-hub's buffering pre-roll, which reports as paused.
+    // Hidden only once actually playing, ended, or deliberately paused by the user.
     ActivityIndicator {
         anchors.centerIn: parent
         running: root.source.length > 0
-                 && player.status !== MediaPlayer.Buffered
+                 && !root._userPaused
+                 && player.playbackState !== MediaPlayer.PlayingState
                  && player.status !== MediaPlayer.EndOfMedia
                  && player.status !== MediaPlayer.InvalidMedia
-                 && player.playbackState !== MediaPlayer.PausedState
         visible: running
     }
 
-    // Centre play glyph while paused.
+    // Centre play glyph: only on a real user pause (or at end for replay) — never
+    // over the loading frame, where the spinner owns the stage.
     Icon {
         anchors.centerIn: parent
         width: units.gu(7)
         height: width
         name: "media-playback-start"
         color: Style.textOnBrand
-        // Only once the media is actually ready and paused — never over the black
-        // frame during the initial load, where the spinner owns the stage.
-        visible: player.playbackState === MediaPlayer.PausedState
-                 || (player.playbackState === MediaPlayer.StoppedState
-                     && player.status === MediaPlayer.Buffered)
-                 || player.status === MediaPlayer.EndOfMedia
-        MouseArea { anchors.fill: parent; onClicked: player.play() }
+        visible: root._userPaused || player.status === MediaPlayer.EndOfMedia
+        MouseArea {
+            anchors.fill: parent
+            onClicked: { player.play(); root._userPaused = false; }
+        }
     }
 }

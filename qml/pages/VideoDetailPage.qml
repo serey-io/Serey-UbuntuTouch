@@ -88,16 +88,27 @@ Page {
         var v = page.video;
         var direct = page.directUrl();
         if (direct.length > 0) {
-            // Play every Serey direct file — downloaded copies included — in the
-            // in-app Chromium <video> (Morph.Web), NOT QtMultimedia. On Ubuntu
-            // Touch QtMultimedia delegates to the out-of-process media-hub service,
-            // whose AppArmor profile cannot read our download-manager file
-            // ("InsufficientAppArmorPermissions"): it returns a 0x0 surface and the
-            // app then crashes (SIGSEGV). Chromium decodes inside our own
-            // confinement, so it reads the app's own file, and for remote streams
-            // it range-requests the moov tail (Serey's MP4s are non-faststart).
-            page.nativeMode = false;
-            page.webVideoMode = true;
+            var isLocal = direct.indexOf("file://") === 0;
+            if (!isLocal && /\.mov(\?|$)/i.test(direct)) {
+                // Remote QuickTime .mov: Chromium's <video> decodes the audio but
+                // not the video track (black screen, stuttering). media-hub /
+                // GStreamer (qtdemux) renders it, and the AppArmor block that broke
+                // downloads only applies to *local* files — a remote stream is fine
+                // on the native player.
+                page.nativeMode = true;
+                page.webVideoMode = false;
+            } else {
+                // All local downloads and remote mp4/webm/m4v → in-app Chromium
+                // <video> (Morph.Web), NOT QtMultimedia. On Ubuntu Touch
+                // QtMultimedia delegates to the out-of-process media-hub service,
+                // whose AppArmor profile can't read our download-manager file
+                // ("InsufficientAppArmorPermissions") → 0x0 surface then SIGSEGV.
+                // Chromium decodes in our own confinement, so it reads the app's own
+                // file, and for remote mp4 it range-requests the non-faststart moov
+                // tail.
+                page.nativeMode = false;
+                page.webVideoMode = true;
+            }
             page.playing = true;
         } else if (page.embedSrc().length > 0) {
             page.nativeMode = false;
@@ -386,6 +397,10 @@ Page {
                             item.wrap = true;
                             item.embedUrl = page.embedSrc();
                         }
+                        // WebView modes (<video> + YouTube iframe) can request
+                        // fullscreen; the native player can't.
+                        if (!page.nativeMode && item.fullscreenToggled)
+                            item.fullscreenToggled.connect(page.setFullscreen);
                     }
                     onStatusChanged: {
                         if (status === Loader.Error) {
@@ -694,6 +709,16 @@ Page {
 
             Item { width: 1; height: Style.spacingL }
         }
+    }
+
+    // Fullscreen host: setFullscreen() reparents the player Loader in here to fill
+    // the screen. Sits above the content and the bottom sheets (z 1500).
+    Item {
+        id: fsHost
+        anchors.fill: parent
+        z: 2000
+        visible: page.isFullscreen
+        Rectangle { anchors.fill: parent; color: "black" }
     }
 
     // --- Comment bottom sheet ------------------------------------------------

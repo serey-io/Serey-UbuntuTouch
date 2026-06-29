@@ -47,7 +47,18 @@ WebView {
     onEmbedUrlChanged: _load()
     onWrapChanged: _load()
     onDirectVideoChanged: _load()
-    Component.onCompleted: { _enableAutoplay(); _load(); }
+    Component.onCompleted: { _applyMobileUA(); _enableAutoplay(); _load(); }
+
+    // Force a mobile user-agent. QtWebEngine's default UA is desktop ("X11; Linux"),
+    // so YouTube embeds (and any UA-sniffing site) serve the PC player/layout.
+    // Set before _load() so the very first request goes out as mobile. profile vs
+    // context covers both the QtWebEngine and older oxide-style Morph builds.
+    function _applyMobileUA() {
+        var ua = "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 " +
+                 "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36";
+        try { wv.profile.httpUserAgent = ua; } catch (e) {}
+        try { wv.context.userAgent = ua; } catch (e) {}
+    }
 
     // Allow the embedded player / <video> to autoplay without a tap *inside* the
     // web view, so a single tap on our play overlay both loads AND starts the
@@ -88,8 +99,8 @@ WebView {
                '<style>html,body{margin:0;height:100%;background:#000;overflow:hidden}' +
                'iframe{border:0;width:100%;height:100%}</style></head>' +
                '<body><iframe src="' + embedUrl + '" ' +
-               'allow="autoplay; encrypted-media; fullscreen; picture-in-picture" ' +
-               'allowfullscreen></iframe></body></html>';
+               'allow="autoplay; encrypted-media; fullscreen; picture-in-picture">' +
+               '</iframe></body></html>';
     }
 
     function _videoHtml() {
