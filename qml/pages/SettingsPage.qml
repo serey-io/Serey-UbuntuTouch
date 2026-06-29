@@ -200,6 +200,7 @@ Page {
                                 font.family: Style.fontFamily
                                 color: Style.textPrimary
                                 clip: true
+                                inputMethodHints: Qt.ImhNoPredictiveText
                                 onTextChanged: {
                                     if (searchField.text.trim().length < 2) {
                                         page.searchOpen = false
@@ -210,6 +211,7 @@ Page {
                                 Keys.onReturnPressed: {
                                     searchDebounce.stop()
                                     page.doSearch(searchField.text.trim())
+                                    searchField.focus = false
                                 }
                             }
                             Label {
@@ -224,14 +226,21 @@ Page {
 
                             Icon {
                                 anchors { right: parent.right; verticalCenter: parent.verticalCenter }
-                                name: "close"
+                                name: searchField.text.length > 0 ? "close" : "down"
                                 width: units.gu(2); height: width
                                 color: Style.textSecondary
-                                visible: searchField.text.length > 0
+                                visible: searchField.text.length > 0 || searchField.activeFocus
 
                                 MouseArea {
                                     anchors { fill: parent; margins: -units.gu(0.5) }
-                                    onClicked: { searchField.text = ""; searchField.forceActiveFocus() }
+                                    onClicked: {
+                                        if (searchField.text.length > 0) {
+                                            searchField.text = ""
+                                            searchField.forceActiveFocus()
+                                        } else {
+                                            searchField.focus = false
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -621,10 +630,10 @@ Page {
         }
     }
 
-    // Dismiss results when tapping outside the search area
+    // Dismiss results and keyboard when tapping outside the search area
     MouseArea {
         anchors.fill: parent
-        enabled: searchOverlay.visible
+        enabled: searchOverlay.visible || searchField.activeFocus
         z: 199
         propagateComposedEvents: true
         onClicked: {
