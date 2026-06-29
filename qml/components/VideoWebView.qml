@@ -36,11 +36,13 @@ Item {
     onDirectVideoChanged: _load()
     Component.onCompleted: _load()
 
+    // Off-the-record: a transient player shouldn't persist streamed-video HTTP
+    // cache/cookies to the phone's disk. (The Homepage profile is non-OTR because
+    // it needs persistent login; video doesn't.)
     WebEngineProfile {
         id: videoProfile
-        storageName: "SereyVideo"
         httpUserAgent: root.mobileUA
-        offTheRecord: false
+        offTheRecord: true
     }
 
     WebEngineView {

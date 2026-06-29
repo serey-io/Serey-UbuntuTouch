@@ -150,6 +150,7 @@ QtObject {
         });
         dl.failed.connect(function (message) {
             delete _active[permlink];
+            delete store._pendingThumb[permlink];
             dl.destroy();
             store.rev++;
             Toast.error("Download failed.");

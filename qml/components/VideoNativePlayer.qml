@@ -4,11 +4,12 @@ import Lomiri.Components 1.3
 import "../Theme"
 
 /*
- * Native player for Serey-hosted videos (platform_type === "SEREY"), whose
- * `video_link` is a direct media file (mp4 on s3.serey.io / upload.serey.io /
- * fsgw.sabay.com). Third-party embeds use VideoWebView instead. Loaded lazily by
- * VideoDetailPage. On a playback error it emits `failed()` and the caller falls
- * back to a Chromium <video> (broader codec support) instead.
+ * QtMultimedia (media-hub) player. VideoDetailPage routes only *remote* .mov here
+ * — Chromium's <video> decodes the QuickTime audio but not the video track, while
+ * media-hub's GStreamer/qtdemux renders it. Everything else (mp4 and all local
+ * downloads) plays in VideoWebView instead, because media-hub's AppArmor profile
+ * can't read the app's downloaded files. On a playback error it emits `failed()`;
+ * the caller then retries in the Chromium <video> as a last resort.
  */
 Item {
     id: root

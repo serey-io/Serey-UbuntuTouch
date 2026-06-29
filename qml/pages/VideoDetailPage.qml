@@ -34,12 +34,6 @@ Page {
     function isDirectFile(u) {
         return /\.(mp4|webm|m4v|mov)(\?|$)/i.test(u || "");
     }
-    // Formats the device's GStreamer player handles reliably; Serey storage now
-    // serves MP4 (the upload pipeline converts MOV→MP4). Anything else falls back
-    // to the Chromium <video> via onNativeFailed().
-    function isNativeFriendly(u) {
-        return /\.(mp4|webm|m4v)(\?|$)/i.test(u || "");
-    }
 
     // The remote direct media URL for a Serey-hosted clip (empty for third-party
     // embeds). This is also the "is this downloadable?" gate for the offline
@@ -99,7 +93,7 @@ Page {
                 page.webVideoMode = false;
             } else {
                 // All local downloads and remote mp4/webm/m4v → in-app Chromium
-                // <video> (Morph.Web), NOT QtMultimedia. On Ubuntu Touch
+                // <video> (VideoWebView), NOT QtMultimedia. On Ubuntu Touch
                 // QtMultimedia delegates to the out-of-process media-hub service,
                 // whose AppArmor profile can't read our download-manager file
                 // ("InsufficientAppArmorPermissions") → 0x0 surface then SIGSEGV.
@@ -119,9 +113,6 @@ Page {
         }
     }
 
-    // GStreamer couldn't play the file — retry in-app via Chromium's <video>
-    // rather than dumping the user into an external browser. The mode change
-    // re-evaluates the Loader's source, reloading it as a web <video>.
     // Reparent the player Loader into the fullscreen host (or back to the inline
     // stage). On this pushed page the app header and bottom nav are already hidden,
     // so filling the page is genuinely fullscreen. webLoader keeps anchors.fill:
@@ -131,6 +122,10 @@ Page {
         webLoader.parent = on ? fsHost : stage;
     }
 
+    // The native (.mov) player failed — retry in-app via Chromium's <video> rather
+    // than dropping the user into an external browser. The mode change re-evaluates
+    // the Loader's source. (Chromium can't render the .mov container, so this then
+    // usually falls through to the system-handler last resort below.)
     function onNativeFailed() {
         if (page.webVideoMode) {
             // Even Chromium failed — last resort is the system handler.
@@ -397,9 +392,9 @@ Page {
                             item.wrap = true;
                             item.embedUrl = page.embedSrc();
                         }
-                        // WebView modes (<video> + YouTube iframe) can request
+                        // Both WebView modes (<video> + YouTube iframe) can request
                         // fullscreen; the native player can't.
-                        if (!page.nativeMode && item.fullscreenToggled)
+                        if (!page.nativeMode)
                             item.fullscreenToggled.connect(page.setFullscreen);
                     }
                     onStatusChanged: {
