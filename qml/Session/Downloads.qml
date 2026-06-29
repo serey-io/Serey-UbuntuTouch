@@ -30,6 +30,9 @@ QtObject {
 
     // permlink -> { progress, downloader } for downloads in flight.
     property var _active: ({})
+    // permlink -> file:// poster path, and the live poster downloaders.
+    property var _pendingThumb: ({})
+    property var _thumbDls: ({})
     property var _comp: null
     property var _dbHandle: null
 
@@ -129,11 +132,17 @@ QtObject {
         _active[permlink] = { progress: 0, downloader: dl };
         store.rev++;
 
+        // Grab the poster too, so the thumbnail shows offline.
+        store._saveThumb(video, permlink);
+
         dl.progress.connect(function (pct) {
             if (_active[permlink]) { _active[permlink].progress = pct; store.rev++; }
         });
         dl.finished.connect(function (path) {
-            store._persist(video, path);
+            var vm = video;
+            var t = store._pendingThumb[permlink];
+            if (t) { vm = Object.assign({}, video, { localThumb: t }); delete store._pendingThumb[permlink]; }
+            store._persist(vm, path);
             delete _active[permlink];
             dl.destroy();
             store._load();
@@ -148,6 +157,42 @@ QtObject {
 
         Toast.show("Downloading…");
         dl.start(url);
+    }
+
+    // Best-effort local copy of the poster image so the thumbnail shows offline.
+    // Hidden from the system download indicator; failures are silent (the video
+    // still saves, the card just falls back to the remote URL).
+    function _saveThumb(video, permlink) {
+        var thumb = (video && video.thumbnail) || "";
+        if (thumb.indexOf("http") !== 0) return;       // only remote http(s) posters
+        var comp = _downloaderComponent();
+        if (!comp || comp.status === Component.Error) return;
+        var tdl = comp.createObject(store, { url: thumb, title: "thumbnail", showInIndicator: false });
+        if (!tdl) return;
+        _thumbDls[permlink] = tdl;
+        tdl.finished.connect(function (path) {
+            var fp = path.indexOf("file://") === 0 ? path : "file://" + path;
+            store._pendingThumb[permlink] = fp;
+            if (store.isSaved(permlink)) store._updateThumb(permlink, fp);  // video saved first
+            delete store._thumbDls[permlink];
+            tdl.destroy();
+        });
+        tdl.failed.connect(function () { delete store._thumbDls[permlink]; tdl.destroy(); });
+        tdl.start(thumb);
+    }
+
+    // Patch an already-saved row with the local poster path (poster finished after
+    // the video did).
+    function _updateThumb(permlink, fp) {
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].permlink !== permlink) continue;
+            var vm = items[i];
+            vm.localThumb = fp;
+            store._persist(vm, vm.localPath);
+            store.items = items.slice();
+            store.rev++;
+            return;
+        }
     }
 
     function remove(permlink) {

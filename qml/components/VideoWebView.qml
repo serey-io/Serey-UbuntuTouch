@@ -1,91 +1,88 @@
 import QtQuick 2.7
-import Morph.Web 0.1
+import QtWebEngine 1.10
 
 /*
- * Morph WebView wrapper used in three modes:
+ * In-app video web view, on QtWebEngine (same engine the Homepage mini-app uses),
+ * in three modes:
  *  - Direct top-level (wrap=false, directVideo=false): load `embedUrl` as a
- *    top-level page. Used by the Homepage tab to show a community site (those
- *    sites set X-Frame-Options / frame-ancestors, so they MUST be loaded
- *    top-level, not iframed).
+ *    top-level page.
  *  - Iframe wrap (wrap=true): embed `embedUrl` inside a minimal full-bleed HTML
  *    <iframe> document. Used for third-party players (YouTube / TikTok /
  *    Facebook), which render a black frame when pointed at directly on device.
  *  - Direct video (directVideo=true): render `embedUrl` (a direct media file —
- *    e.g. a Serey-hosted .mov/.mp4) inside an HTML5 <video> element. Chromium's
- *    codec support is a superset of the device's GStreamer, so this plays files
- *    (notably .mov) that the native QtMultimedia player can't, and keeps the
- *    user in-app instead of bouncing out to the browser. Mirrors the web's
- *    SereyPlayer (<video controls autoplay playsinline>).
+ *    e.g. a Serey-hosted .mp4, local or remote) inside an HTML5 <video> element.
  *
- * If the engine is unavailable the Loader hosting this file fails and the
- * caller's "Open in browser" fallback takes over.
+ * Mobile identity: QtWebEngine's default UA is desktop ("X11; Linux"), so
+ * YouTube serves the PC player. We force mobile exactly like WebAppView — a
+ * mobile `httpUserAgent` on the profile (fixes the server-side embed) AND a
+ * document-creation user script that overrides navigator.* in every frame,
+ * including the cross-origin YouTube iframe (fixes client-side sniffing).
+ *
+ * `fullscreenToggled(on)` is emitted when the <video> control or the YouTube
+ * iframe requests fullscreen; the host (VideoDetailPage) makes the view fill the
+ * screen.
  */
-WebView {
-    id: wv
+Item {
+    id: root
     property string embedUrl: ""
     property bool wrap: false
     property bool directVideo: false
-
-    // Emitted when the page (HTML5 <video> control or a YouTube iframe) requests
-    // enter/leave fullscreen. The host (VideoDetailPage) makes the view fill the
-    // screen — Morph won't do it on its own.
     signal fullscreenToggled(bool on)
 
-    // The <video>/iframe fullscreen button fires the engine's fullScreenRequested
-    // signal; without accepting it, tapping fullscreen does nothing. Connections +
-    // ignoreUnknownSignals so this is a no-op (not a load error) on engine builds
-    // that name the signal differently.
-    Connections {
-        target: wv
-        ignoreUnknownSignals: true
-        onFullScreenRequested: function (request) {
-            request.accept();
-            wv.fullscreenToggled(request.toggleOn);
-        }
-    }
+    readonly property string mobileUA: "Mozilla/5.0 (Linux; Android 13; Pixel 3a) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
 
     onEmbedUrlChanged: _load()
     onWrapChanged: _load()
     onDirectVideoChanged: _load()
-    Component.onCompleted: { _applyMobileUA(); _enableAutoplay(); _load(); }
+    Component.onCompleted: _load()
 
-    // Force a mobile user-agent. QtWebEngine's default UA is desktop ("X11; Linux"),
-    // so YouTube embeds (and any UA-sniffing site) serve the PC player/layout.
-    // Set before _load() so the very first request goes out as mobile. profile vs
-    // context covers both the QtWebEngine and older oxide-style Morph builds.
-    function _applyMobileUA() {
-        var ua = "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 " +
-                 "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36";
-        try { wv.profile.httpUserAgent = ua; } catch (e) {}
-        try { wv.context.userAgent = ua; } catch (e) {}
+    WebEngineProfile {
+        id: videoProfile
+        storageName: "SereyVideo"
+        httpUserAgent: root.mobileUA
+        offTheRecord: false
     }
 
-    // Allow the embedded player / <video> to autoplay without a tap *inside* the
-    // web view, so a single tap on our play overlay both loads AND starts the
-    // video (otherwise Chromium's autoplay policy needs a second tap on the
-    // player's own play button). Guarded: if this Morph build doesn't expose the
-    // WebEngineSettings property we silently keep the default behaviour.
-    function _enableAutoplay() {
-        try { wv.settings.playbackRequiresUserGesture = false; } catch (e) {}
-        // Let a file:// wrapper document load the file:// video next to it (offline
-        // playback). Guarded — older Morph builds may not expose these.
-        try { wv.settings.allowFileAccessFromFileUrls = true; } catch (e) {}
-        try { wv.settings.localContentCanAccessFileUrls = true; } catch (e) {}
-        // Required for fullScreenRequested to fire at all on QtWebEngine.
-        try { wv.settings.fullScreenSupportEnabled = true; } catch (e) {}
+    WebEngineView {
+        id: wv
+        anchors.fill: parent
+        profile: videoProfile
+
+        // Autoplay without an in-page tap (our overlay tap is the gesture);
+        // fullscreen support must be enabled for fullScreenRequested to fire;
+        // local-file access lets an offline file:// <video> load from a file://
+        // wrapper document.
+        settings.playbackRequiresUserGesture: false
+        settings.fullScreenSupportEnabled: true
+        settings.localContentCanAccessFileUrls: true
+        settings.localContentCanAccessRemoteUrls: true
+
+        // Make every frame (runOnSubframes — reaches the YouTube iframe) report a
+        // mobile navigator, defeating client-side desktop sniffing.
+        userScripts: [
+            WebEngineScript {
+                injectionPoint: WebEngineScript.DocumentCreation
+                worldId: WebEngineScript.MainWorld
+                runOnSubframes: true
+                sourceCode: "" +
+                    "Object.defineProperty(navigator,'userAgent',{get:function(){return '" + root.mobileUA + "';},configurable:true});" +
+                    "Object.defineProperty(navigator,'platform',{get:function(){return 'Linux armv8l';},configurable:true});" +
+                    "Object.defineProperty(navigator,'maxTouchPoints',{get:function(){return 5;},configurable:true});"
+            }
+        ]
+
+        onFullScreenRequested: function (request) {
+            request.accept();
+            root.fullscreenToggled(request.toggleOn);
+        }
     }
 
-    // The wrapper document is "served from" serey.io so the embedded player sees
-    // a normal site origin/referrer. Basing it on the platform's own domain
-    // (youtube.com etc.) trips YouTube's embed referrer check ("Video
-    // unavailable — Watch on YouTube", error 152). The web embeds from serey.io
-    // and plays fine, so we mirror that origin.
+    // The wrapper document is "served from" serey.io so an embedded player sees a
+    // normal site origin/referrer (basing it on youtube.com trips YouTube's embed
+    // referrer check). An offline copy is a local file:// URL — base the wrapper
+    // on the file's own directory so the <video src> is same-origin.
     readonly property string _origin: "https://serey.io"
     function _baseUrl() {
-        // An offline copy is a local file:// URL — base the wrapper doc on the
-        // file's own directory so the <video src> is same-origin (Chromium blocks
-        // file:// resources loaded from an https-based document). Remote embeds
-        // keep the serey.io origin for the YouTube referrer check.
         if (directVideo && embedUrl.indexOf("file://") === 0) {
             var i = embedUrl.lastIndexOf("/");
             return i > 6 ? embedUrl.substring(0, i + 1) : embedUrl;
@@ -112,22 +109,14 @@ WebView {
                'webkit-playsinline preload="auto"></video></body></html>';
     }
 
-    function _loadDoc(html, base) {
-        if (typeof wv.loadHtml === "function")
-            wv.loadHtml(html, base);
-        else
-            wv.url = "data:text/html;charset=utf-8," + encodeURIComponent(html);
-    }
-
     function _load() {
         if (embedUrl.length === 0)
             return;
-        if (directVideo) {
-            _loadDoc(_videoHtml(), _baseUrl());
-        } else if (wrap) {
-            _loadDoc(_iframeHtml(), _baseUrl());
-        } else {
+        if (directVideo)
+            wv.loadHtml(_videoHtml(), _baseUrl());
+        else if (wrap)
+            wv.loadHtml(_iframeHtml(), _baseUrl());
+        else
             wv.url = embedUrl;
-        }
     }
 }

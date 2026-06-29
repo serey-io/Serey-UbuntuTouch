@@ -17,6 +17,7 @@ Item {
 
     property string url: ""
     property string title: ""
+    property bool showInIndicator: true
 
     signal progress(real pct)        // 0..100
     signal finished(string path)     // absolute path on disk
@@ -36,7 +37,7 @@ Item {
         // at 0%.
         autoStart: true
         allowMobileDownload: true
-        metadata: Metadata { showInIndicator: true; title: dl.title }
+        metadata: Metadata { showInIndicator: dl.showInIndicator; title: dl.title }
 
         onProgressChanged: {
             stall.restart();           // real progress — reset the stall watchdog

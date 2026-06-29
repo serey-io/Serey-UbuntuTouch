@@ -351,7 +351,7 @@ Page {
 
                 Image {
                     anchors.fill: parent
-                    source: page.video.thumbnail || ""
+                    source: page.video.localThumb || page.video.thumbnail || ""
                     fillMode: Image.PreserveAspectCrop
                     asynchronous: true
                     sourceSize.width: stage.width * 2
