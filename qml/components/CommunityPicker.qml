@@ -24,6 +24,7 @@ Item {
     property int loadingIndex: -1
     // Map of communityId (string) → true for communities the user is subscribed to.
     property var subscribedMap: ({})
+    property int subscribedRev: 0
     property bool subscriptionsLoaded: false
 
     function open() {
@@ -38,7 +39,7 @@ Item {
     function _loadSubscriptions() {
         picker.subscriptionsLoaded = true  // mark before call so retries don't stack
         SubscriberService.fetchSubscribed(Config.baseUrl, Session.token,
-            function (map) { picker.subscribedMap = map },
+            function (map) { picker.subscribedMap = map; picker.subscribedRev++ },
             function (err) { console.log("fetchSubscribed error:", err.message) })
     }
 
@@ -57,11 +58,11 @@ Item {
 
         if (currentlySubscribed) {
             SubscriberService.unsubscribe(Config.baseUrl, Session.token, id,
-                function () { picker.subscribedMap = _newMap(false); Toast.show(i18n.tr("Unsubscribed")) },
+                function () { picker.subscribedMap = _newMap(false); picker.subscribedRev++; Toast.show(i18n.tr("Unsubscribed")) },
                 function (err) { console.log("unsubscribe error:", JSON.stringify(err)); Toast.show(err.message || i18n.tr("Failed to unsubscribe")) })
         } else {
             SubscriberService.subscribe(Config.baseUrl, Session.token, id,
-                function () { picker.subscribedMap = _newMap(true); Toast.show(i18n.tr("Subscribed!")) },
+                function () { picker.subscribedMap = _newMap(true); picker.subscribedRev++; Toast.show(i18n.tr("Subscribed!")) },
                 function (err) { console.log("subscribe error:", JSON.stringify(err)); Toast.show(err.message || i18n.tr("Failed to subscribe")) })
         }
     }
@@ -494,7 +495,7 @@ Item {
                                             property string commIcon: modelData.icon_url || modelData.logo_url || modelData.profile_image || ""
                                             property bool isSelected: Config.selectedSubCommunity
                                                                       && Config.selectedSubCommunity.id === commBtn.commId
-                                            property bool subscribed: !!picker.subscribedMap[commBtn.commId]
+                                            property bool subscribed: picker.subscribedRev >= 0 && !!picker.subscribedMap[commBtn.commId]
 
                                             // Card
                                             Rectangle {

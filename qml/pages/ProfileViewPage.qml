@@ -244,25 +244,64 @@ Page {
                     color: Style.brand
                 }
                 Item { width: 1; height: Style.spacingXs; visible: bioLabel.visible }
-                Label {
+                Text {
                     id: bioLabel
                     width: Math.min(parent.width - Style.spacingL * 2, units.gu(50))
                     anchors.horizontalCenter: parent.horizontalCenter
                     horizontalAlignment: Text.AlignHCenter
-                    text: page.profile ? (page.profile.bio || "") : ""
-                    visible: text.length > 0
+                    textFormat: Text.RichText
+                    text: {
+                        var html = page.profile ? (page.profile.bioHtml || page.profile.bio || "") : ""
+                        return html.replace(/((?:<a\s[^>]*>[\s\S]*?<\/a>)|https?:\/\/[^\s<>"]+)/g,
+                            function(match) {
+                                if (match.charAt(0) === '<') return match
+                                return '<a href="' + match + '" style="color:' + Style.brand + ';">' + match + '</a>'
+                            })
+                    }
+                    visible: page.profile && (page.profile.bio || "").length > 0
                     font.pixelSize: Style.fontRegular
                     font.family: Style.fontFamily
                     color: Style.textSecondary
                     wrapMode: Text.WordWrap
+                    onLinkActivated: Qt.openUrlExternally(link)
                 }
 
                 Item { width: 1; height: Style.spacingM }
+
+                // --- Stats skeleton (while loading) ----------------------
+                Row {
+                    width: Math.min(parent.width, units.gu(45))
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    visible: !page.profile && page.profileLoading
+                    Repeater {
+                        model: 3
+                        delegate: Column {
+                            width: parent.width / 3
+                            spacing: units.dp(4)
+                            SequentialAnimation on opacity {
+                                running: true; loops: Animation.Infinite
+                                NumberAnimation { to: 0.3; duration: 700; easing.type: Easing.InOutSine }
+                                NumberAnimation { to: 1.0; duration: 700; easing.type: Easing.InOutSine }
+                            }
+                            Rectangle {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: units.gu(5); height: units.gu(2.5)
+                                radius: units.dp(4); color: Style.divider
+                            }
+                            Rectangle {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: units.gu(4); height: units.gu(1.5)
+                                radius: units.dp(4); color: Style.divider
+                            }
+                        }
+                    }
+                }
 
                 // --- Stats -----------------------------------------------
                 Row {
                     width: Math.min(parent.width, units.gu(45))
                     anchors.horizontalCenter: parent.horizontalCenter
+                    visible: !!page.profile
                     Repeater {
                         model: page.profile ? [
                             { label: i18n.tr("Posts"),     value: "" + page.profile.postCount },
@@ -293,9 +332,23 @@ Page {
 
                 Item { width: 1; height: Style.spacingM }
 
-                // --- Follow button (hidden on own profile) ---------------
+                // --- Follow button skeleton ------------------------------
+                Rectangle {
+                    visible: !page.isSelf && !page.profile && page.profileLoading
+                    width: Math.min(parent.width - Style.spacingL * 2, units.gu(50))
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    height: units.gu(5); radius: units.gu(2.5)
+                    color: Style.divider
+                    SequentialAnimation on opacity {
+                        running: true; loops: Animation.Infinite
+                        NumberAnimation { to: 0.3; duration: 700; easing.type: Easing.InOutSine }
+                        NumberAnimation { to: 1.0; duration: 700; easing.type: Easing.InOutSine }
+                    }
+                }
+
+                // --- Follow button (hidden on own profile or while loading) ---
                 PrimaryButton {
-                    visible: !page.isSelf
+                    visible: !page.isSelf && !!page.profile
                     width: Math.min(parent.width - Style.spacingL * 2, units.gu(50))
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: FollowStore.isFollowing(page.username) ? i18n.tr("Following") : i18n.tr("Follow")
@@ -380,12 +433,6 @@ Page {
         }
     }
 
-    // Full-page spinner only until the header has its data.
-    ActivityIndicator {
-        anchors.centerIn: parent
-        running: page.profileLoading && page.profile === null
-        visible: running
-    }
 
     // Back button: a FIXED page overlay (not inside the scrolling list header),
     // so it's always visible from the first frame regardless of scroll position

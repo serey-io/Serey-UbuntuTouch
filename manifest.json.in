@@ -1,12 +1,13 @@
 {
-    "name": "serey.draxler",
+    "name": "serey.ubuntu",
     "description": "Serey network client for Ubuntu Touch — feed, blog, videos and account.",
     "architecture": "$ENV{ARCH}",
     "title": "Serey",
     "hooks": {
         "serey": {
             "apparmor": "serey.apparmor",
-            "desktop": "serey.desktop"
+            "desktop": "serey.desktop",
+            "push-helper": "push-helper.json"
         }
     },
     "version": "0.1.0",

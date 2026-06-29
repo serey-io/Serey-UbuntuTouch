@@ -1,0 +1,81 @@
+#!/usr/bin/python3
+"""
+Ubuntu Touch Push Helper for Serey.
+
+The UBports push server delivers a JSON file to this helper. The helper
+reads it, builds a Notification (postal format), and writes it to the
+output file. The system then displays it as a lock-screen / indicator
+notification and optionally launches the app on tap.
+
+Input JSON (from Serey backend via push.ubports.com):
+{
+  "message": "rex-kibreay started following you.",
+  "actor": "rex-kibreay",
+  "type": "FOLLOW",
+  "count": 3
+}
+
+Output JSON (Ubuntu Touch postal format):
+{
+  "notification": {
+    "tag": "serey-notif",
+    "card": {
+      "summary": "Serey",
+      "body": "rex-kibreay started following you.",
+      "popup": true,
+      "persist": true,
+      "actions": ["appid://serey.ubuntu/serey/current-user-version"]
+    },
+    "sound": true,
+    "vibrate": { "duration": 200 }
+  }
+}
+"""
+
+import sys
+import json
+
+if len(sys.argv) < 3:
+    sys.exit(1)
+
+input_path = sys.argv[1]
+output_path = sys.argv[2]
+
+try:
+    with open(input_path, "r") as f:
+        push_data = json.load(f)
+except Exception:
+    sys.exit(1)
+
+msg = push_data.get("message", "")
+actor = push_data.get("actor", "")
+count = push_data.get("count", 0)
+
+if not msg and count:
+    if count == 1:
+        msg = "You have 1 new notification"
+    else:
+        msg = "You have {} new notifications".format(count)
+
+if not msg:
+    msg = "New activity on Serey"
+
+output = {
+    "notification": {
+        "tag": "serey-notif",
+        "card": {
+            "summary": "Serey",
+            "body": msg,
+            "popup": True,
+            "persist": True,
+            "actions": ["appid://serey.ubuntu/serey/current-user-version"]
+        },
+        "sound": True,
+        "vibrate": {
+            "duration": 200
+        }
+    }
+}
+
+with open(output_path, "w") as f:
+    json.dump(output, f)

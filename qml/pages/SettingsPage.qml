@@ -22,31 +22,55 @@ Page {
 
     property bool searching: false
     property bool searchOpen: false
-    property var searchResults: []
+    property int searchGeneration: 0
+
+    ListModel { id: searchModel }
+
+    function closeSearch() {
+        searchModel.clear()
+        page.searchOpen = false
+        page.searchGeneration++
+        searchField.text = ""
+    }
 
     function doSearch(query) {
         var q = query.trim()
         if (q.length < 2) {
-            page.searchResults = []
+            searchModel.clear()
             page.searchOpen = false
             return
         }
         page.searching = true
         page.searchOpen = true
-        console.log("Searching for:", q)
-        AccountService.searchUser(Config.baseUrl, q,
+        var gen = ++page.searchGeneration
+        AccountService.searchUser(Config.baseUrl, Session.token, q,
             function (users) {
+                if (gen !== page.searchGeneration) return
                 page.searching = false
-                console.log("Search results count:", users.length)
-                if (users.length > 0)
-                    console.log("First result keys:", JSON.stringify(Object.keys(users[0])))
-                page.searchResults = users
+                searchModel.clear()
+                for (var i = 0; i < users.length; i++)
+                    searchModel.append({ username: users[i].username, profileUrl: "" })
                 page.searchOpen = true
+                for (var j = 0; j < users.length; j++) {
+                    (function(capturedGen, uname) {
+                        AccountService.profile(Config.baseUrl, uname, Session.token,
+                            function(user) {
+                                if (capturedGen !== page.searchGeneration) return
+                                for (var k = 0; k < searchModel.count; k++) {
+                                    if (searchModel.get(k).username === uname) {
+                                        searchModel.setProperty(k, "profileUrl", user.profileUrl || "")
+                                        break
+                                    }
+                                }
+                            },
+                            function(_) {})
+                    })(gen, users[j].username)
+                }
             },
             function (err) {
+                if (gen !== page.searchGeneration) return
                 page.searching = false
-                page.searchResults = []
-                console.log("Search error:", err.message)
+                searchModel.clear()
             })
     }
 
@@ -131,6 +155,7 @@ Page {
                 height: units.gu(7)
 
                 Rectangle {
+                    id: searchBarBg
                     anchors {
                         fill: parent
                         leftMargin: Style.spacingM
@@ -138,47 +163,84 @@ Page {
                         topMargin: Style.spacingS
                         bottomMargin: Style.spacingS
                     }
-                    radius: units.gu(1)
-                    color: Style.inputBackground || "#F2F2F7"
+                    radius: height / 2
+                    color: searchField.activeFocus ? Style.surface : (Style.inputBackground || "#F2F2F7")
+                    border.width: searchField.activeFocus ? units.dp(2) : 0
+                    border.color: Style.brand
+
+                    Behavior on color { ColorAnimation { duration: 150 } }
+                    Behavior on border.width { NumberAnimation { duration: 150 } }
 
                     Row {
-                        anchors { fill: parent; leftMargin: Style.spacingS; rightMargin: Style.spacingS }
-                        spacing: Style.spacingS
+                        anchors {
+                            fill: parent
+                            leftMargin: units.gu(1.5); rightMargin: units.gu(1.5)
+                        }
+                        spacing: units.gu(1)
 
                         Icon {
                             anchors.verticalCenter: parent.verticalCenter
                             name: "find"
                             width: units.gu(2.2); height: width
-                            color: Style.textSecondary
+                            color: searchField.activeFocus ? Style.brand : Style.textSecondary
+
+                            Behavior on color { ColorAnimation { duration: 150 } }
                         }
 
-                        TextField {
-                            id: searchField
+                        Item {
                             anchors.verticalCenter: parent.verticalCenter
-                            width: parent.width - units.gu(2.2) - Style.spacingS
-                            placeholderText: i18n.tr("Search users...")
-                            font.pixelSize: Style.fontRegular
-                            font.family: Style.fontFamily
-                            hasClearButton: true
-                            onTextChanged: {
-                                if (searchField.text.trim().length < 2) {
-                                    page.searchOpen = false
-                                    page.searchResults = []
+                            width: parent.width - units.gu(2.2) - units.gu(1)
+                            height: units.gu(3)
+
+                            TextInput {
+                                id: searchField
+                                anchors.fill: parent
+                                verticalAlignment: TextInput.AlignVCenter
+                                font.pixelSize: Style.fontRegular
+                                font.family: Style.fontFamily
+                                color: Style.textPrimary
+                                clip: true
+                                onTextChanged: {
+                                    if (searchField.text.trim().length < 2) {
+                                        page.searchOpen = false
+                                        searchModel.clear()
+                                    }
+                                    searchDebounce.restart()
                                 }
-                                searchDebounce.restart()
+                                Keys.onReturnPressed: {
+                                    searchDebounce.stop()
+                                    page.doSearch(searchField.text.trim())
+                                }
                             }
-                            Keys.onReturnPressed: {
-                                searchDebounce.stop()
-                                page.doSearch(searchField.text.trim())
+                            Label {
+                                anchors.fill: parent
+                                verticalAlignment: Text.AlignVCenter
+                                text: i18n.tr("Search users...")
+                                font.pixelSize: Style.fontRegular
+                                font.family: Style.fontFamily
+                                color: Style.textSecondary
+                                visible: searchField.text.length === 0 && !searchField.activeFocus
+                            }
+
+                            Icon {
+                                anchors { right: parent.right; verticalCenter: parent.verticalCenter }
+                                name: "close"
+                                width: units.gu(2); height: width
+                                color: Style.textSecondary
+                                visible: searchField.text.length > 0
+
+                                MouseArea {
+                                    anchors { fill: parent; margins: -units.gu(0.5) }
+                                    onClicked: { searchField.text = ""; searchField.forceActiveFocus() }
+                                }
                             }
                         }
                     }
                 }
 
-                // Debounce timer — waits 350 ms after last keystroke before searching
                 Timer {
                     id: searchDebounce
-                    interval: 350
+                    interval: 200
                     onTriggered: page.doSearch(searchField.text.trim())
                 }
             }
@@ -449,7 +511,7 @@ Page {
     // ── Search results overlay ────────────────────────────────────────────────
     Rectangle {
         id: searchOverlay
-        visible: page.searchOpen && (page.searchResults.length > 0 || page.searching)
+        visible: page.searchOpen && (searchModel.count > 0 || page.searching)
         anchors {
             top: parent.top
             topMargin: units.gu(7)
@@ -458,13 +520,12 @@ Page {
             leftMargin: Style.spacingM
             rightMargin: Style.spacingM
         }
-        height: Math.min(resultsCol.height, units.gu(40))
+        height: Math.min(searchModel.count * units.gu(7.5), units.gu(40))
         radius: units.gu(1)
         color: Style.surface
         clip: true
         z: 200
 
-        // Drop shadow effect
         Rectangle {
             anchors { fill: parent; margins: -units.dp(1) }
             radius: parent.radius + units.dp(1)
@@ -476,90 +537,84 @@ Page {
 
         ActivityIndicator {
             anchors.centerIn: parent
-            running: page.searching && page.searchResults.length === 0
+            running: page.searching && searchModel.count === 0
             visible: running
         }
 
-        Flickable {
+        ListView {
+            id: searchListView
             anchors.fill: parent
-            contentHeight: resultsCol.height
-            contentWidth: width
+            model: searchModel
             clip: true
+            boundsBehavior: Flickable.StopAtBounds
 
-            Column {
-                id: resultsCol
-                width: searchOverlay.width
+            delegate: Item {
+                width: searchListView.width
+                height: units.gu(7.5)
 
-                Repeater {
-                    model: page.searchResults
+                Rectangle {
+                    anchors.fill: parent
+                    color: rowMouse.pressed ? Style.pressed : "transparent"
+                }
 
-                    delegate: AbstractButton {
-                        width: resultsCol.width
-                        height: units.gu(7.5)
-                        onClicked: {
-                            searchField.text = ""
-                            page.searchResults = []
-                            page.searchOpen = false
-                            page.pageStack.push(Qt.resolvedUrl("ProfileViewPage.qml"),
-                                                { username: modelData.name || modelData.username || "" })
+                Row {
+                    anchors { fill: parent; leftMargin: Style.spacingM; rightMargin: Style.spacingM }
+                    spacing: Style.spacingM
+
+                    Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: units.gu(5); height: width; radius: width / 2
+                        color: Style.iconBackground
+
+                        CircleImage {
+                            id: resultAvatar
+                            anchors { fill: parent; margins: units.dp(2) }
+                            source: model.profileUrl || ""
                         }
-
-                        Rectangle {
-                            anchors.fill: parent
-                            color: parent.pressed ? Style.pressed : "transparent"
+                        Label {
+                            anchors.centerIn: parent
+                            text: (model.username || "?").charAt(0).toUpperCase()
+                            font.pixelSize: Style.fontMedium
+                            font.bold: true
+                            color: Style.brand
+                            visible: !resultAvatar.loaded
                         }
+                    }
 
-                        Row {
-                            anchors { fill: parent; leftMargin: Style.spacingM; rightMargin: Style.spacingM }
-                            spacing: Style.spacingM
+                    Column {
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: units.dp(2)
 
-                            // Avatar
-                            Rectangle {
-                                anchors.verticalCenter: parent.verticalCenter
-                                width: units.gu(5); height: width; radius: width / 2
-                                color: Style.iconBackground
-
-                                CircleImage {
-                                    id: resultAvatar
-                                    anchors { fill: parent; margins: units.dp(2) }
-                                    source: modelData.profile_url || modelData.avatar_url || modelData.profile_image || ""
-                                }
-                                Label {
-                                    anchors.centerIn: parent
-                                    text: (modelData.name || modelData.username || "?").charAt(0).toUpperCase()
-                                    font.pixelSize: Style.fontMedium
-                                    font.bold: true
-                                    color: Style.brand
-                                    visible: !resultAvatar.loaded
-                                }
-                            }
-
-                            // Name + @username
-                            Column {
-                                anchors.verticalCenter: parent.verticalCenter
-                                spacing: units.dp(2)
-
-                                Label {
-                                    text: modelData.full_name || modelData.name || modelData.username || ""
-                                    font.pixelSize: Style.fontRegular
-                                    font.weight: Font.DemiBold
-                                    font.family: Style.fontFamily
-                                    color: Style.textPrimary
-                                }
-                                Label {
-                                    text: "@" + (modelData.name || modelData.username || "")
-                                    font.pixelSize: Style.fontSmall
-                                    font.family: Style.fontFamily
-                                    color: Style.textSecondary
-                                }
-                            }
+                        Label {
+                            text: model.username || ""
+                            font.pixelSize: Style.fontRegular
+                            font.weight: Font.DemiBold
+                            font.family: Style.fontFamily
+                            color: Style.textPrimary
                         }
-
-                        Rectangle {
-                            anchors { bottom: parent.bottom; left: parent.left; right: parent.right; leftMargin: units.gu(8) }
-                            height: units.dp(1); color: Style.divider
-                            visible: index < page.searchResults.length - 1
+                        Label {
+                            text: "@" + (model.username || "")
+                            font.pixelSize: Style.fontSmall
+                            font.family: Style.fontFamily
+                            color: Style.textSecondary
                         }
+                    }
+                }
+
+                Rectangle {
+                    anchors { bottom: parent.bottom; left: parent.left; right: parent.right; leftMargin: units.gu(8) }
+                    height: units.dp(1); color: Style.divider
+                    visible: index < searchModel.count - 1
+                }
+
+                MouseArea {
+                    id: rowMouse
+                    anchors.fill: parent
+                    onClicked: {
+                        var uname = model.username || ""
+                        page.closeSearch()
+                        page.pageStack.push(Qt.resolvedUrl("ProfileViewPage.qml"),
+                                            { username: uname })
                     }
                 }
             }
@@ -574,7 +629,7 @@ Page {
         propagateComposedEvents: true
         onClicked: {
             searchField.focus = false
-            page.searchResults = []
+            searchModel.clear()
             page.searchOpen = false
             mouse.accepted = false
         }

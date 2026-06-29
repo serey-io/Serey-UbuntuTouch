@@ -18,6 +18,24 @@ function _list(baseUrl, path, params, token, onOk, onErr) {
     }, onErr);
 }
 
+function listFeedMixed(baseUrl, params, token, onOk, onErr) {
+    return _list(baseUrl, "/serey-web/list-by-feed-mixed", params, token, onOk, onErr);
+}
+
+function listDrumFeed(baseUrl, params, token, onOk, onErr) {
+    return _list(baseUrl, "/serey-web/list-drum-post-by-feed", params, token, onOk, onErr);
+}
+
+function listGalleryFeed(baseUrl, params, token, onOk, onErr) {
+    return Http.get(baseUrl, "/serey-web/list-gallery-post-by-feed", params, token, function (data) {
+        var raw = data.posts || [];
+        var posts = raw.map(M.toGalleryPost).filter(function (p) {
+            return p.images.length > 0;
+        });
+        onOk(posts, raw.length);
+    }, onErr);
+}
+
 function listTrending(baseUrl, params, token, onOk, onErr) {
     return _list(baseUrl, "/serey-web/list-by-trending", params, token, onOk, onErr);
 }

@@ -19,7 +19,7 @@ import "services/NotificationService.js" as NotificationService
 MainView {
     id: root
     objectName: "mainView"
-    applicationName: "serey.draxler"
+    applicationName: "serey.ubuntu"
     automaticOrientation: true
 
     width: units.gu(45)
@@ -33,10 +33,9 @@ MainView {
     // root (depth 1); pushed sub-pages (detail/login) bring their own back-bar.
     property int activeDepth: currentTab === 0 ? homeStack.depth
                             : currentTab === 1 ? newsStack.depth
-                            : currentTab === 2 ? galleryStack.depth
-                            : currentTab === 3 ? videoStack.depth
+                            : currentTab === 2 ? videoStack.depth
                             : settingsStack.depth
-    readonly property bool showHeader: activeDepth <= 1 && currentTab !== 4
+    readonly property bool showHeader: activeDepth <= 1 && currentTab !== 3
     readonly property bool showNavBar: activeDepth <= 1
 
     Component.onCompleted: {
@@ -106,7 +105,7 @@ MainView {
         try {
             root.pushClient = Qt.createQmlObject(
                 'import Ubuntu.PushNotifications 0.1; PushClient {' +
-                '  appId: "serey.draxler_serey"; }',
+                '  appId: "serey.ubuntu_serey"; }',
                 root, "pushClient")
 
             root.pushClient.tokenChanged.connect(function () {
@@ -181,6 +180,27 @@ MainView {
         height: root.showHeader ? units.gu(6) : 0
         visible: root.showHeader
         onCommunityButtonClicked: communityPicker.open()
+
+        AbstractButton {
+            id: feedBtn
+            visible: Session.isLoggedIn
+            anchors.verticalCenter: parent.verticalCenter
+            width: units.gu(4); height: width
+            onClicked: {
+                var stack = root.currentTab === 0 ? homeStack
+                          : root.currentTab === 1 ? newsStack
+                          : root.currentTab === 2 ? videoStack
+                          : settingsStack;
+                stack.push(Qt.resolvedUrl("pages/FeedPage.qml"));
+            }
+            Image {
+                anchors.centerIn: parent
+                width: units.gu(3.5); height: width
+                source: Qt.resolvedUrl("../assets/iconFeed.png")
+                fillMode: Image.PreserveAspectFit
+                asynchronous: true
+            }
+        }
     }
 
     // --- Content area: four stacks, only the active one visible ----------
@@ -206,21 +226,15 @@ MainView {
             Component.onCompleted: push(Qt.resolvedUrl("pages/NewsPage.qml"))
         }
         PageStack {
-            id: galleryStack
-            anchors.fill: parent
-            visible: root.currentTab === 2
-            Component.onCompleted: push(Qt.resolvedUrl("pages/GalleryPage.qml"))
-        }
-        PageStack {
             id: videoStack
             anchors.fill: parent
-            visible: root.currentTab === 3
+            visible: root.currentTab === 2
             Component.onCompleted: push(Qt.resolvedUrl("pages/VideoPage.qml"))
         }
         PageStack {
             id: settingsStack
             anchors.fill: parent
-            visible: root.currentTab === 4
+            visible: root.currentTab === 3
             Component.onCompleted: push(Qt.resolvedUrl("pages/SettingsPage.qml"))
         }
     }
@@ -246,12 +260,11 @@ MainView {
                 model: [
                     { label: i18n.tr("Homepage"), icon: "home" },
                     { label: i18n.tr("News"),     icon: "stock_note" },
-                    { label: i18n.tr("Gallery"),  icon: "image-x-generic-symbolic" },
                     { label: i18n.tr("Video"),    icon: "camcorder" },
                     { label: i18n.tr("Settings"), icon: "settings" }
                 ]
                 delegate: AbstractButton {
-                    width: navBar.width / 5
+                    width: navBar.width / 4
                     height: navBar.height
                     property bool active: root.currentTab === index
 

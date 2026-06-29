@@ -20,14 +20,14 @@ Page {
         leadingActionBar.actions: [
             Action { iconName: "back"; text: i18n.tr("Back"); onTriggered: page.pageStack.pop() }
         ]
-        trailingActionBar.actions: [
-            Action {
-                iconName: "select"
-                text: i18n.tr("Mark all read")
-                enabled: page.unreadCount > 0
-                onTriggered: page.markAllRead()
-            }
-        ]
+        trailingActionBar.actions: page.unreadCount > 0 ? [markAllReadAction] : []
+    }
+
+    Action {
+        id: markAllReadAction
+        iconName: "select"
+        text: i18n.tr("Mark all read")
+        onTriggered: page.markAllRead()
     }
 
     ListModel { id: notifModel; dynamicRoles: true }
@@ -53,11 +53,12 @@ Page {
                 if (items.length === 0) { page.endReached = true; return }
                 for (var i = 0; i < items.length; i++) {
                     var n = items[i]
+                    var info = n.information || {}
                     notifModel.append({
                         nid:        String(n.id || n._id || ""),
-                        message:    n.message || n.content || n.description || "",
-                        actorName:  n.actor_name || n.actor || n.from_user || "",
-                        actorIcon:  n.actor_image_url || n.actor_image || n.from_user_image || "",
+                        message:    n.actor + " " + (info.description || n.message || n.content || ""),
+                        actorName:  n.actor || n.actor_name || n.from_user || "",
+                        actorIcon:  n.actor_image_url || n.actor_image || "",
                         timeAgo:    Style.formatTimeAgo(n.created_at || n.createdAt || ""),
                         isRead:     !!(n.is_read || n.read || false),
                         ntype:      n.type || n.notification_type || ""
@@ -110,40 +111,45 @@ Page {
         clip: true
         spacing: 0
 
-        delegate: AbstractButton {
+        delegate: Item {
             width: list.width
-            height: units.gu(8)
-            onClicked: page.markOneRead(index, model.nid)
+            height: contentRow.height + units.gu(2)
 
-            // Unread background tint
             Rectangle {
                 anchors.fill: parent
-                color: model.isRead ? "transparent" : Qt.rgba(0, 0.51, 0.98, 0.05)
+                color: model.isRead ? "transparent" : Qt.rgba(0, 0.51, 0.98, 0.04)
+            }
+
+            Rectangle {
+                anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
+                width: units.dp(3)
+                color: Style.brand
+                visible: !model.isRead
+                radius: units.dp(1)
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                onClicked: page.markOneRead(index, model.nid)
             }
 
             Row {
-                anchors { fill: parent; leftMargin: Style.spacingM; rightMargin: Style.spacingM }
+                id: contentRow
+                anchors {
+                    left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter
+                    leftMargin: Style.spacingM; rightMargin: Style.spacingM
+                }
                 spacing: Style.spacingM
 
-                // Unread dot
-                Rectangle {
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: units.gu(1); height: width; radius: width / 2
-                    color: Style.brand
-                    visible: !model.isRead
-                }
                 Item {
                     anchors.verticalCenter: parent.verticalCenter
-                    width: units.gu(1); height: width
-                    visible: model.isRead
-                }
+                    width: units.gu(5.5); height: width
 
-                // Actor avatar
-                Rectangle {
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: units.gu(5); height: width; radius: width / 2
-                    color: Style.iconBackground
-
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: width / 2
+                        color: Style.iconBackground
+                    }
                     CircleImage {
                         id: actorImg
                         anchors { fill: parent; margins: units.dp(2) }
@@ -157,37 +163,74 @@ Page {
                         color: Style.brand
                         visible: !actorImg.loaded
                     }
+
+                    Rectangle {
+                        anchors { right: parent.right; bottom: parent.bottom; rightMargin: -units.dp(1); bottomMargin: -units.dp(1) }
+                        width: units.gu(2.4); height: width; radius: width / 2
+                        color: Style.surface
+                        Rectangle {
+                            anchors { fill: parent; margins: units.dp(2) }
+                            radius: width / 2
+                            color: model.ntype === "FOLLOW" ? Style.brand
+                                 : model.ntype === "VOTE" ? Style.success
+                                 : model.ntype === "REPLY" || model.ntype === "COMMENT" ? "#6C63FF"
+                                 : model.ntype === "BAN" || model.ntype === "BANNED" ? Style.danger
+                                 : Style.brand
+                            Icon {
+                                anchors.centerIn: parent
+                                width: units.gu(1.4); height: width
+                                color: "white"
+                                name: model.ntype === "FOLLOW" ? "contact-new"
+                                    : model.ntype === "VOTE" ? "like"
+                                    : model.ntype === "REPLY" || model.ntype === "COMMENT" ? "message"
+                                    : model.ntype === "BAN" || model.ntype === "BANNED" ? "dialog-warning-symbolic"
+                                    : "notification"
+                            }
+                        }
+                    }
                 }
 
-                // Message + time
                 Column {
                     anchors.verticalCenter: parent.verticalCenter
-                    width: parent.width - units.gu(6) - units.gu(1) - Style.spacingM * 2
-                    spacing: units.dp(3)
+                    width: parent.width - units.gu(5.5) - parent.spacing
+                    spacing: units.dp(4)
 
-                    Label {
+                    Text {
                         width: parent.width
-                        text: model.message
+                        textFormat: Text.RichText
+                        text: "<span style='font-weight:600; color:" + Style.textPrimary + ";'>" +
+                              (model.actorName || "") + "</span> <span style='color:" +
+                              (model.isRead ? Style.textSecondary : Style.textPrimary) + ";'>" +
+                              ((model.message || "").replace(model.actorName + " ", "")) + "</span>"
                         font.pixelSize: Style.fontSmall
                         font.family: Style.fontFamily
-                        font.weight: model.isRead ? Font.Normal : Font.DemiBold
-                        color: model.isRead ? Style.textSecondary : Style.textPrimary
                         wrapMode: Text.WordWrap
                         maximumLineCount: 2
                         elide: Text.ElideRight
                     }
-                    Label {
-                        text: model.timeAgo
-                        font.pixelSize: Style.fontXSmall
-                        font.family: Style.fontFamily
-                        color: Style.textSecondary
+
+                    Row {
+                        spacing: units.dp(6)
+                        Label {
+                            text: model.timeAgo
+                            font.pixelSize: Style.fontXSmall
+                            font.family: Style.fontFamily
+                            color: Style.textSecondary
+                        }
+                        Label {
+                            visible: !model.isRead
+                            text: "• " + i18n.tr("New")
+                            font.pixelSize: Style.fontXSmall
+                            font.family: Style.fontFamily
+                            font.weight: Font.DemiBold
+                            color: Style.brand
+                        }
                     }
                 }
             }
 
-            // Divider
             Rectangle {
-                anchors { bottom: parent.bottom; left: parent.left; right: parent.right; leftMargin: Style.spacingM }
+                anchors { bottom: parent.bottom; left: parent.left; right: parent.right; leftMargin: units.gu(8) }
                 height: units.dp(1)
                 color: Style.divider
             }
@@ -245,10 +288,4 @@ Page {
         }
     }
 
-    // Initial full-screen spinner
-    ActivityIndicator {
-        anchors.centerIn: parent
-        running: page.loading && notifModel.count === 0
-        visible: running
-    }
 }

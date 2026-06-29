@@ -18,14 +18,20 @@ function unregisterPushToken(baseUrl, token, pushToken, onOk, onErr) {
 function listSerey(baseUrl, token, limit, offset, onOk, onErr) {
     Http.get(baseUrl, "/notification/list-by-current-user-for-serey",
              { limit: limit, offset: offset }, token, function (data) {
-        onOk((data && (data.data || data.notifications || data.results)) || []);
+        var d = data && data.data
+        var items = Array.isArray(d) ? d
+                  : (d && d.notifications) || []
+        onOk(items)
     }, onErr);
 }
 
 function unreadCount(baseUrl, token, onOk, onErr) {
     Http.get(baseUrl, "/notification/unread-count-for-serey",
              {}, token, function (data) {
-        onOk((data && (data.data !== undefined ? data.data : (data.count || data.unread_count || 0))) || 0);
+        var d = data && data.data
+        var count = (typeof d === "number") ? d
+                  : (d && (d.unread_count || d.count || 0)) || 0
+        onOk(parseInt(count, 10) || 0)
     }, onErr);
 }
 

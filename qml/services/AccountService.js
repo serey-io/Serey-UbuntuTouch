@@ -143,9 +143,10 @@ function setCoverPhoto(baseUrl, token, imageUrl, onOk, onErr) {
     Http.post(baseUrl, "/user-cover-photo/add", { image_url: imageUrl }, token, onOk, onErr);
 }
 
-function searchUser(baseUrl, query, onOk, onErr) {
-    Http.get(baseUrl, "/accounts/search-user", { username: query }, null, function (data) {
-        onOk((data && (data.data || data.results || data.users)) || []);
+function searchUser(baseUrl, token, query, onOk, onErr) {
+    Http.get(baseUrl, "/accounts/search-user", { search_text: query }, token, function (data) {
+        var arr = Array.isArray(data) ? data : [];
+        onOk(arr.map(function(u) { return { username: u, name: u }; }));
     }, onErr);
 }
 
