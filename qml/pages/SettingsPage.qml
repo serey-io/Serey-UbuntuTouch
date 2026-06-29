@@ -1,6 +1,7 @@
 import QtQuick 2.7
 import Lomiri.Components 1.3
 import Lomiri.Components.Popups 1.3
+import QtGraphicalEffects 1.0
 import "../Theme"
 import "../Session"
 import "../components"
@@ -18,6 +19,36 @@ Page {
     property var profile: null
     property bool loading: false
     property string errorMsg: ""
+
+    property bool searching: false
+    property bool searchOpen: false
+    property var searchResults: []
+
+    function doSearch(query) {
+        var q = query.trim()
+        if (q.length < 2) {
+            page.searchResults = []
+            page.searchOpen = false
+            return
+        }
+        page.searching = true
+        page.searchOpen = true
+        console.log("Searching for:", q)
+        AccountService.searchUser(Config.baseUrl, q,
+            function (users) {
+                page.searching = false
+                console.log("Search results count:", users.length)
+                if (users.length > 0)
+                    console.log("First result keys:", JSON.stringify(Object.keys(users[0])))
+                page.searchResults = users
+                page.searchOpen = true
+            },
+            function (err) {
+                page.searching = false
+                page.searchResults = []
+                console.log("Search error:", err.message)
+            })
+    }
 
     // Zero-height header: the global AppHeader is the real top bar.
     header: Item { height: 0 }
@@ -93,97 +124,174 @@ Page {
             id: col
             width: parent.width
 
-            // ===== Cover banner + overlapping avatar (iOS style) ==========
+            // ===== Search bar =================================================
             Item {
+                id: searchBarContainer
                 width: parent.width
-                height: Session.isLoggedIn ? units.gu(22) : units.gu(13)
+                height: units.gu(7)
 
-                // Cover image
                 Rectangle {
-                    id: coverBanner
-                    anchors { top: parent.top; left: parent.left; right: parent.right }
-                    height: units.gu(16)
-                    visible: Session.isLoggedIn
-                    clip: true
-
-                    Rectangle {
-                        anchors.fill: parent
-                        gradient: Gradient {
-                            GradientStop { position: 0.0; color: Style.brand }
-                            GradientStop { position: 1.0; color: Style.brandDark }
-                        }
+                    anchors {
+                        fill: parent
+                        leftMargin: Style.spacingM
+                        rightMargin: Style.spacingM
+                        topMargin: Style.spacingS
+                        bottomMargin: Style.spacingS
                     }
-                    Image {
-                        anchors.fill: parent
-                        source: page.profile && page.profile.coverUrl ? page.profile.coverUrl : ""
-                        fillMode: Image.PreserveAspectCrop
-                        asynchronous: true
-                        autoTransform: true
-                        sourceSize.width: parent.width
-                        visible: status === Image.Ready
+                    radius: units.gu(1)
+                    color: Style.inputBackground || "#F2F2F7"
+
+                    Row {
+                        anchors { fill: parent; leftMargin: Style.spacingS; rightMargin: Style.spacingS }
+                        spacing: Style.spacingS
+
+                        Icon {
+                            anchors.verticalCenter: parent.verticalCenter
+                            name: "find"
+                            width: units.gu(2.2); height: width
+                            color: Style.textSecondary
+                        }
+
+                        TextField {
+                            id: searchField
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: parent.width - units.gu(2.2) - Style.spacingS
+                            placeholderText: i18n.tr("Search users...")
+                            font.pixelSize: Style.fontRegular
+                            font.family: Style.fontFamily
+                            hasClearButton: true
+                            onTextChanged: {
+                                if (searchField.text.trim().length < 2) {
+                                    page.searchOpen = false
+                                    page.searchResults = []
+                                }
+                                searchDebounce.restart()
+                            }
+                            Keys.onReturnPressed: {
+                                searchDebounce.stop()
+                                page.doSearch(searchField.text.trim())
+                            }
+                        }
                     }
                 }
 
-                // Avatar overlapping cover bottom-left
+                // Debounce timer — waits 350 ms after last keystroke before searching
+                Timer {
+                    id: searchDebounce
+                    interval: 350
+                    onTriggered: page.doSearch(searchField.text.trim())
+                }
+            }
+
+            // ===== Profile card row (signed-in) / Welcome row (signed-out) =====
+            Item {
+                width: parent.width
+                height: units.gu(10)
+
+                // Signed-in: tappable profile card → ProfileViewPage
                 AbstractButton {
-                    id: avatarBtn
-                    anchors {
-                        left: parent.left
-                        leftMargin: Style.spacingM
-                        bottom: coverBanner.bottom
-                        bottomMargin: units.gu(-3)
-                    }
-                    width: units.gu(9); height: width
+                    anchors.fill: parent
                     visible: Session.isLoggedIn
-                    onClicked: page.pageStack.push(Qt.resolvedUrl("EditProfilePage.qml"), { initial: page.profile })
+                    onClicked: page.pageStack.push(Qt.resolvedUrl("ProfileViewPage.qml"),
+                                                   { username: Session.username })
 
                     Rectangle {
                         anchors.fill: parent
-                        radius: width / 2
-                        color: Style.surface
-                        border.width: units.dp(3)
-                        border.color: Style.surface
+                        color: profileCardMouse.containsMouse ? Style.divider : "transparent"
                     }
 
-                    Rectangle {
+                    MouseArea {
+                        id: profileCardMouse
                         anchors.fill: parent
-                        anchors.margins: units.dp(3)
-                        radius: width / 2
-                        color: Style.avatarTint("")
-                        visible: !(page.profile && page.profile.profileUrl)
+                        hoverEnabled: true
+                        enabled: false
+                    }
 
-                        Label {
-                            anchors.centerIn: parent
-                            text: (page.profile && page.profile.username
-                                   ? page.profile.username : "?").charAt(0).toUpperCase()
-                            font.pixelSize: Style.fontTitle
-                            font.bold: true
-                            color: Style.brand
+                    Row {
+                        anchors {
+                            left: parent.left; right: parent.right
+                            verticalCenter: parent.verticalCenter
+                            leftMargin: Style.spacingM; rightMargin: Style.spacingM
                         }
-                    }
-                    Item {
-                        anchors.fill: parent
-                        anchors.margins: units.dp(3)
-                        visible: !!(page.profile && page.profile.profileUrl)
-                        CircleImage {
-                            anchors.fill: parent
-                            source: page.profile && page.profile.profileUrl ? page.profile.profileUrl : ""
-                            decode: units.gu(18)
-                        }
-                    }
+                        spacing: Style.spacingM
 
-                    // Camera cue badge
-                    Rectangle {
-                        anchors { right: parent.right; bottom: parent.bottom; bottomMargin: units.dp(2); rightMargin: units.dp(2) }
-                        width: units.gu(2.6); height: width
-                        radius: width / 2
-                        color: Style.brand
-                        border.width: units.dp(1.5); border.color: Style.surface
+                        // Avatar: rounded square with initial or photo
+                        Item {
+                            id: avatarBox
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: units.gu(6.5); height: width
+
+                            // Brand-colour background + initial letter
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: units.gu(1.2)
+                                color: Style.brand
+
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: (page.profile && page.profile.username
+                                           ? page.profile.username : Session.username).charAt(0).toUpperCase()
+                                    font.pixelSize: Style.fontTitle
+                                    font.bold: true
+                                    color: Style.textOnBrand
+                                    visible: !(page.profile && page.profile.profileUrl)
+                                }
+                            }
+
+                            // Profile photo clipped to rounded square via OpacityMask
+                            Image {
+                                id: avatarImg
+                                anchors.fill: parent
+                                source: page.profile && page.profile.profileUrl ? page.profile.profileUrl : ""
+                                fillMode: Image.PreserveAspectCrop
+                                asynchronous: true
+                                autoTransform: true
+                                visible: !!(page.profile && page.profile.profileUrl)
+                                layer.enabled: true
+                                layer.effect: OpacityMask { maskSource: avatarMask }
+                            }
+
+                            Rectangle {
+                                id: avatarMask
+                                anchors.fill: parent
+                                radius: units.gu(1.2)
+                                visible: false
+                            }
+                        }
+
+                        // Name + "See your profile"
+                        Column {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: parent.width - avatarBox.width - chevronIcon.width - Style.spacingM * 2
+                            spacing: units.dp(3)
+
+                            Label {
+                                width: parent.width
+                                text: (page.profile && page.profile.fullName) ? page.profile.fullName
+                                      : Session.username
+                                font.pixelSize: Style.fontLarge
+                                font.weight: Font.DemiBold
+                                font.family: Style.fontFamily
+                                color: Style.textTitle
+                                elide: Text.ElideRight
+                            }
+                            Label {
+                                width: parent.width
+                                text: i18n.tr("See your profile")
+                                font.pixelSize: Style.fontSmall
+                                font.family: Style.fontFamily
+                                color: Style.textSecondary
+                                elide: Text.ElideRight
+                            }
+                        }
+
+                        // Chevron
                         Icon {
-                            anchors.centerIn: parent
-                            width: units.gu(1.5); height: width
-                            name: "camera-symbolic"
-                            color: Style.textOnBrand
+                            id: chevronIcon
+                            anchors.verticalCenter: parent.verticalCenter
+                            name: "go-next"
+                            width: units.gu(2); height: width
+                            color: Style.textSecondary
                         }
                     }
                 }
@@ -254,74 +362,13 @@ Page {
                 }
             }
 
-            // Name + @username (below avatar, signed-in only)
-            Column {
-                visible: Session.isLoggedIn
-                width: parent.width - Style.spacingM * 2
-                x: Style.spacingM
-                spacing: units.dp(2)
+            Rectangle { width: parent.width; height: units.dp(1); color: Style.divider }
 
-                Label {
-                    width: parent.width
-                    text: (page.profile && page.profile.fullName) ? page.profile.fullName
-                          : (page.profile ? page.profile.username : Session.username)
-                    font.pixelSize: Style.fontLarge
-                    font.weight: Font.DemiBold
-                    font.family: Style.fontFamily
-                    color: Style.textTitle
-                    elide: Text.ElideRight
-                }
-                Label {
-                    width: parent.width
-                    text: page.profile ? ("@" + page.profile.username) : ("@" + Session.username)
-                    font.pixelSize: Style.fontSmall
-                    font.family: Style.fontFamily
-                    color: Style.textSecondary
-                    elide: Text.ElideRight
-                }
-            }
-
-            Item { width: 1; height: Style.spacingS; visible: Session.isLoggedIn }
-
-            // Stats strip: Posts · Followers · Following
-            Rectangle { width: parent.width; height: units.dp(1); color: Style.divider; visible: Session.isLoggedIn && page.profile !== null }
-            Row {
-                width: parent.width
-                height: units.gu(7)
-                visible: Session.isLoggedIn && page.profile !== null
-                Repeater {
-                    model: page.profile ? [
-                        { label: i18n.tr("Posts"),     value: "" + page.profile.postCount },
-                        { label: i18n.tr("Followers"), value: "" + page.profile.followers },
-                        { label: i18n.tr("Following"), value: "" + page.profile.following }
-                    ] : []
-                    delegate: Column {
-                        width: parent.width / 3
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: units.dp(2)
-                        Label {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            text: modelData.value
-                            font.pixelSize: Style.fontLarge
-                            font.weight: Font.DemiBold
-                            font.family: Style.fontFamily
-                            color: Style.textPrimary
-                        }
-                        Label {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            text: modelData.label
-                            font.pixelSize: Style.fontXSmall
-                            font.family: Style.fontFamily
-                            color: Style.textSecondary
-                        }
-                    }
-                }
-            }
-
-            // ===== Preferences ============================================
-            SettingsSectionHeader { text: i18n.tr("Preferences") }
+            // ===== Preferences (dev-only, hidden in production) ===========
+            SettingsSectionHeader { text: i18n.tr("Preferences"); visible: Config.showDevOptions }
 
             SettingsRow {
+                visible: Config.showDevOptions
                 iconName: "settings"
                 label: i18n.tr("Use local dev server")
                 showSwitch: true
@@ -329,6 +376,7 @@ Page {
                 onSwitchToggled: Config.useLocalDev = checked
             }
             Item {
+                visible: Config.showDevOptions
                 width: parent.width
                 height: units.gu(4)
                 Label {
@@ -340,6 +388,37 @@ Page {
                     color: Style.textSecondary
                     elide: Text.ElideRight
                 }
+            }
+
+            // ===== Account ================================================
+            SettingsSectionHeader { text: i18n.tr("Account"); visible: Session.isLoggedIn }
+            SettingsRow {
+                visible: Session.isLoggedIn
+                iconName: "edit"
+                label: i18n.tr("Edit profile")
+                showChevron: true
+                onClicked: page.pageStack.push(Qt.resolvedUrl("EditProfilePage.qml"), { initial: page.profile })
+            }
+            SettingsRow {
+                visible: Session.isLoggedIn
+                iconName: "system-lock-screen"
+                label: i18n.tr("Password & Security")
+                showChevron: true
+                onClicked: page.pageStack.push(Qt.resolvedUrl("ChangePasswordPage.qml"))
+            }
+            SettingsRow {
+                visible: Session.isLoggedIn
+                iconName: "notification"
+                label: i18n.tr("Notifications")
+                showChevron: true
+                onClicked: page.pageStack.push(Qt.resolvedUrl("NotificationsPage.qml"))
+            }
+            SettingsRow {
+                visible: Session.isLoggedIn
+                iconName: "system-log-out"
+                label: i18n.tr("Log out")
+                danger: true
+                onClicked: PopupUtils.open(logoutDialog)
             }
 
             // ===== About ==================================================
@@ -357,23 +436,6 @@ Page {
                 onClicked: Qt.openUrlExternally("https://serey.io")
             }
 
-            // ===== Account ================================================
-            SettingsSectionHeader { text: i18n.tr("Account"); visible: Session.isLoggedIn }
-            SettingsRow {
-                visible: Session.isLoggedIn
-                iconName: "edit"
-                label: i18n.tr("Edit profile")
-                showChevron: true
-                onClicked: page.pageStack.push(Qt.resolvedUrl("EditProfilePage.qml"), { initial: page.profile })
-            }
-            SettingsRow {
-                visible: Session.isLoggedIn
-                iconName: "system-log-out"
-                label: i18n.tr("Log out")
-                danger: true
-                onClicked: PopupUtils.open(logoutDialog)
-            }
-
             Item { width: 1; height: Style.spacingL }
         }
     }
@@ -382,5 +444,139 @@ Page {
         anchors.centerIn: parent
         running: page.loading && page.profile === null
         visible: running
+    }
+
+    // ── Search results overlay ────────────────────────────────────────────────
+    Rectangle {
+        id: searchOverlay
+        visible: page.searchOpen && (page.searchResults.length > 0 || page.searching)
+        anchors {
+            top: parent.top
+            topMargin: units.gu(7)
+            left: parent.left
+            right: parent.right
+            leftMargin: Style.spacingM
+            rightMargin: Style.spacingM
+        }
+        height: Math.min(resultsCol.height, units.gu(40))
+        radius: units.gu(1)
+        color: Style.surface
+        clip: true
+        z: 200
+
+        // Drop shadow effect
+        Rectangle {
+            anchors { fill: parent; margins: -units.dp(1) }
+            radius: parent.radius + units.dp(1)
+            color: "transparent"
+            border.width: units.dp(1)
+            border.color: Style.divider
+            z: -1
+        }
+
+        ActivityIndicator {
+            anchors.centerIn: parent
+            running: page.searching && page.searchResults.length === 0
+            visible: running
+        }
+
+        Flickable {
+            anchors.fill: parent
+            contentHeight: resultsCol.height
+            contentWidth: width
+            clip: true
+
+            Column {
+                id: resultsCol
+                width: searchOverlay.width
+
+                Repeater {
+                    model: page.searchResults
+
+                    delegate: AbstractButton {
+                        width: resultsCol.width
+                        height: units.gu(7.5)
+                        onClicked: {
+                            searchField.text = ""
+                            page.searchResults = []
+                            page.searchOpen = false
+                            page.pageStack.push(Qt.resolvedUrl("ProfileViewPage.qml"),
+                                                { username: modelData.name || modelData.username || "" })
+                        }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            color: parent.pressed ? Style.pressed : "transparent"
+                        }
+
+                        Row {
+                            anchors { fill: parent; leftMargin: Style.spacingM; rightMargin: Style.spacingM }
+                            spacing: Style.spacingM
+
+                            // Avatar
+                            Rectangle {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: units.gu(5); height: width; radius: width / 2
+                                color: Style.iconBackground
+
+                                CircleImage {
+                                    id: resultAvatar
+                                    anchors { fill: parent; margins: units.dp(2) }
+                                    source: modelData.profile_url || modelData.avatar_url || modelData.profile_image || ""
+                                }
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: (modelData.name || modelData.username || "?").charAt(0).toUpperCase()
+                                    font.pixelSize: Style.fontMedium
+                                    font.bold: true
+                                    color: Style.brand
+                                    visible: !resultAvatar.loaded
+                                }
+                            }
+
+                            // Name + @username
+                            Column {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: units.dp(2)
+
+                                Label {
+                                    text: modelData.full_name || modelData.name || modelData.username || ""
+                                    font.pixelSize: Style.fontRegular
+                                    font.weight: Font.DemiBold
+                                    font.family: Style.fontFamily
+                                    color: Style.textPrimary
+                                }
+                                Label {
+                                    text: "@" + (modelData.name || modelData.username || "")
+                                    font.pixelSize: Style.fontSmall
+                                    font.family: Style.fontFamily
+                                    color: Style.textSecondary
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            anchors { bottom: parent.bottom; left: parent.left; right: parent.right; leftMargin: units.gu(8) }
+                            height: units.dp(1); color: Style.divider
+                            visible: index < page.searchResults.length - 1
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Dismiss results when tapping outside the search area
+    MouseArea {
+        anchors.fill: parent
+        enabled: searchOverlay.visible
+        z: 199
+        propagateComposedEvents: true
+        onClicked: {
+            searchField.focus = false
+            page.searchResults = []
+            page.searchOpen = false
+            mouse.accepted = false
+        }
     }
 }

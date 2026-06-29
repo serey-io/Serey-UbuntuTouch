@@ -137,6 +137,19 @@ function setCoverPhoto(baseUrl, token, imageUrl, onOk, onErr) {
     Http.post(baseUrl, "/user-cover-photo/add", { image_url: imageUrl }, token, onOk, onErr);
 }
 
+function searchUser(baseUrl, query, onOk, onErr) {
+    Http.get(baseUrl, "/accounts/search-user", { username: query }, null, function (data) {
+        onOk((data && (data.data || data.results || data.users)) || []);
+    }, onErr);
+}
+
+// Change password while authenticated (POST /accounts/change-password, Bearer).
+function changePassword(baseUrl, token, currentPassword, newPassword, onOk, onErr) {
+    Http.post(baseUrl, "/accounts/change-password",
+              { current_password: currentPassword, new_password: newPassword },
+              token, onOk, onErr);
+}
+
 // Step 0 of password reset: look up the account's masked contact hint so the UI
 // can tell the user which email/phone the code will go to. onOk receives the
 // parsed response; the masked values are at data.data.{email,phone}.

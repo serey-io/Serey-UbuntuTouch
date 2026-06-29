@@ -16,6 +16,7 @@ QtObject {
     readonly property string prodBase: "https://global-api.serey.io/api/v2"
     readonly property string devBase: "http://localhost:5050/api/v2"
 
+    readonly property bool showDevOptions: false   // set true locally to expose dev tools
     property bool useLocalDev: false
 
     readonly property string baseUrl: useLocalDev ? devBase : prodBase
@@ -49,8 +50,21 @@ QtObject {
     readonly property var sourceNames: ["Global", "Netherlands", "United States"]
 
     property int sourceIndex: 0
+    // Set when user picks a sub-community from the picker; null = use top-level source.
+    property var selectedSubCommunity: null
 
-    readonly property int communityId: sources[sourceIndex].id
+    readonly property int communityId: selectedSubCommunity
+                                       ? selectedSubCommunity.id
+                                       : sources[sourceIndex].id
+
+    // These two drive the AppHeader pill — they reflect the sub-community
+    // when one is selected, otherwise fall back to the top-level source.
+    readonly property string currentCommunityName: selectedSubCommunity
+                                                   ? selectedSubCommunity.name
+                                                   : communityName
+    readonly property string currentCommunityIconUrl: selectedSubCommunity
+                                                      ? (selectedSubCommunity.icon || "")
+                                                      : communityIcon(communityDns)
     readonly property string communityDns: sources[sourceIndex].dns
     readonly property string communityName: sources[sourceIndex].name
 
