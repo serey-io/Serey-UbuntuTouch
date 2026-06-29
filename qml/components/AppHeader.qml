@@ -11,7 +11,7 @@ import "../Theme"
 Rectangle {
     id: appHeader
 
-    property string communityName: Config.communityName
+    property string communityName: Config.currentCommunityName
     default property alias trailing: trailingSlot.data
 
     signal communityButtonClicked()
@@ -47,7 +47,7 @@ Rectangle {
                 CircleImage {
                     id: pillIcon
                     anchors.fill: parent
-                    source: Config.communityIcon(Config.communityDns)
+                    source: Config.currentCommunityIconUrl
                 }
                 Icon {
                     anchors.centerIn: parent

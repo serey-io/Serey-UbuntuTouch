@@ -6,5 +6,6 @@
         "content_exchange",
         "audio",
         "video"
+        "push-notification-client"
     ]
 }

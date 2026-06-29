@@ -90,6 +90,10 @@ function post(baseUrl, path, bodyObj, token, onOk, onErr) {
     return send("POST", baseUrl + path, token, bodyObj || {}, onOk, onErr);
 }
 
+function put(baseUrl, path, bodyObj, token, onOk, onErr) {
+    return send("PUT", baseUrl + path, token, bodyObj || {}, onOk, onErr);
+}
+
 function del(baseUrl, path, token, onOk, onErr) {
     return send("DELETE", baseUrl + path, token, null, onOk, onErr);
 }
