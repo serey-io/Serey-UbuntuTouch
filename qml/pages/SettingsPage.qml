@@ -496,7 +496,7 @@ Page {
             SettingsSectionHeader { text: i18n.tr("Library") }
 
             SettingsRow {
-                iconName: "save-to-device"
+                iconName: "save"
                 label: i18n.tr("Offline videos")
                 showChevron: true
                 onClicked: page.pageStack.push(Qt.resolvedUrl("DownloadsPage.qml"))

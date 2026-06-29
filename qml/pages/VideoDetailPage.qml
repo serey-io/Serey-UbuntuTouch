@@ -16,6 +16,7 @@ Page {
     property bool playing: false
     property bool nativeMode: false     // QtMultimedia (efficient, mp4/webm/m4v)
     property bool webVideoMode: false   // Chromium HTML5 <video> (mov / native fallback)
+    property bool isFullscreen: false   // player reparented to fill the whole screen
     property bool isFollowing: false
     property bool descSheetOpen: false
     property bool commentSheetOpen: false
@@ -33,8 +34,9 @@ Page {
     function isDirectFile(u) {
         return /\.(mp4|webm|m4v|mov)(\?|$)/i.test(u || "");
     }
-    // Formats the device's GStreamer plays reliably. Everything else (notably
-    // .mov / QuickTime) goes through Chromium's HTML5 <video> instead.
+    // Formats the device's GStreamer player handles reliably; Serey storage now
+    // serves MP4 (the upload pipeline converts MOV→MP4). Anything else falls back
+    // to the Chromium <video> via onNativeFailed().
     function isNativeFriendly(u) {
         return /\.(mp4|webm|m4v)(\?|$)/i.test(u || "");
     }
@@ -86,10 +88,16 @@ Page {
         var v = page.video;
         var direct = page.directUrl();
         if (direct.length > 0) {
-            // Serey-hosted file: native player for codecs GStreamer handles,
-            // in-app Chromium <video> for the rest (e.g. .mov).
-            page.nativeMode = page.isNativeFriendly(direct);
-            page.webVideoMode = !page.nativeMode;
+            // Play every Serey direct file — downloaded copies included — in the
+            // in-app Chromium <video> (Morph.Web), NOT QtMultimedia. On Ubuntu
+            // Touch QtMultimedia delegates to the out-of-process media-hub service,
+            // whose AppArmor profile cannot read our download-manager file
+            // ("InsufficientAppArmorPermissions"): it returns a 0x0 surface and the
+            // app then crashes (SIGSEGV). Chromium decodes inside our own
+            // confinement, so it reads the app's own file, and for remote streams
+            // it range-requests the moov tail (Serey's MP4s are non-faststart).
+            page.nativeMode = false;
+            page.webVideoMode = true;
             page.playing = true;
         } else if (page.embedSrc().length > 0) {
             page.nativeMode = false;
@@ -103,6 +111,15 @@ Page {
     // GStreamer couldn't play the file — retry in-app via Chromium's <video>
     // rather than dumping the user into an external browser. The mode change
     // re-evaluates the Loader's source, reloading it as a web <video>.
+    // Reparent the player Loader into the fullscreen host (or back to the inline
+    // stage). On this pushed page the app header and bottom nav are already hidden,
+    // so filling the page is genuinely fullscreen. webLoader keeps anchors.fill:
+    // parent, so it resizes to whichever container it lands in.
+    function setFullscreen(on) {
+        page.isFullscreen = on;
+        webLoader.parent = on ? fsHost : stage;
+    }
+
     function onNativeFailed() {
         if (page.webVideoMode) {
             // Even Chromium failed — last resort is the system handler.
@@ -152,6 +169,7 @@ Page {
     function loadComments() {
         PostService.detail(Config.baseUrl, video.author, video.permlink, Session.token,
             function (result) {
+                if (!result) return;   // empty/failed detail fetch — keep current state
                 var replies = result.replies || [];
                 page.comments = replies;
                 // The backend's answer_count can be stale; trust the actual
@@ -578,7 +596,7 @@ Page {
                         Icon {
                             anchors.verticalCenter: parent.verticalCenter
                             width: units.gu(2); height: width
-                            name: dlBtn._saved ? "tick" : "save-to-device"
+                            name: dlBtn._saved ? "tick" : "save"
                             color: dlBtn._saved ? Style.textOnBrand : Style.textPrimary
                             visible: !dlBtn._active
                         }

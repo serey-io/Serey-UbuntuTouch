@@ -15,16 +15,22 @@ Item {
     property string source: ""
 
     // Emitted when GStreamer can't play the file (decode error or watchdog
-    // timeout — typically a .mov). The caller decides what to do; VideoDetailPage
-    // retries in-app via a Chromium <video> rather than the external browser.
+    // timeout). The caller retries in-app via a Chromium <video> rather than the
+    // external browser.
     signal failed()
 
     onSourceChanged: {
+        // Set the player source explicitly (not via a binding + autoPlay) so the
+        // file is loaded exactly once. Doing both let autoPlay start a load that
+        // this handler's stop() immediately killed, then play() restarted it —
+        // doubling time-to-first-frame and leaving the stage black meanwhile.
         player.stop();
         if (source.length > 0) {
+            player.source = source;
             watchdog.restart();
             player.play();
         } else {
+            player.source = "";
             watchdog.stop();
         }
     }
@@ -35,8 +41,8 @@ Item {
 
     MediaPlayer {
         id: player
-        source: root.source
-        autoPlay: true
+        // source is assigned in onSourceChanged (single load — see above), not
+        // bound here, and autoPlay is off so it can't race that explicit load.
         onError: {
             watchdog.stop();
             root.failed();
@@ -76,11 +82,16 @@ Item {
                    ? player.pause() : player.play()
     }
 
-    // Buffering / loading spinner.
+    // Buffering / loading spinner. Cover the whole "not yet showing frames"
+    // window (Loading → Loaded → Buffering → Stalled), not just Loading/Buffering,
+    // so the stage isn't a featureless black rectangle while the file streams in.
     ActivityIndicator {
         anchors.centerIn: parent
-        running: player.status === MediaPlayer.Loading
-                 || player.status === MediaPlayer.Buffering
+        running: root.source.length > 0
+                 && player.status !== MediaPlayer.Buffered
+                 && player.status !== MediaPlayer.EndOfMedia
+                 && player.status !== MediaPlayer.InvalidMedia
+                 && player.playbackState !== MediaPlayer.PausedState
         visible: running
     }
 
@@ -91,9 +102,12 @@ Item {
         height: width
         name: "media-playback-start"
         color: Style.textOnBrand
-        visible: player.playbackState !== MediaPlayer.PlayingState
-                 && player.status !== MediaPlayer.Loading
-                 && player.status !== MediaPlayer.Buffering
+        // Only once the media is actually ready and paused — never over the black
+        // frame during the initial load, where the spinner owns the stage.
+        visible: player.playbackState === MediaPlayer.PausedState
+                 || (player.playbackState === MediaPlayer.StoppedState
+                     && player.status === MediaPlayer.Buffered)
+                 || player.status === MediaPlayer.EndOfMedia
         MouseArea { anchors.fill: parent; onClicked: player.play() }
     }
 }

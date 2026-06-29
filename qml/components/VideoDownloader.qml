@@ -25,17 +25,33 @@ Item {
     function start(u) {
         if (u && u.length > 0)
             dl.url = u;
+        stall.restart();
         single.download(dl.url);
     }
 
     SingleDownload {
         id: single
-        autoStart: false
+        // autoStart (default true): download() begins immediately. With it false
+        // the transfer is created but never started — which left the button stuck
+        // at 0%.
+        autoStart: true
         allowMobileDownload: true
         metadata: Metadata { showInIndicator: true; title: dl.title }
 
-        onProgressChanged: dl.progress(progress)
-        onFinished: dl.finished(path)
-        onErrorChanged: if (errorMessage && errorMessage.length > 0) dl.failed(errorMessage)
+        onProgressChanged: {
+            stall.restart();           // real progress — reset the stall watchdog
+            dl.progress(progress);
+        }
+        onFinished: { stall.stop(); dl.finished(path); }
+        onErrorChanged: if (errorMessage && errorMessage.length > 0) { stall.stop(); dl.failed(errorMessage); }
+    }
+
+    // If nothing moves for a while — no download daemon (the desktop preview) or a
+    // dead stall — give up so the UI resets instead of sitting at 0% forever.
+    Timer {
+        id: stall
+        interval: 30000
+        repeat: false
+        onTriggered: dl.failed("Download timed out")
     }
 }

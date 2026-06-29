@@ -26,6 +26,24 @@ WebView {
     property bool wrap: false
     property bool directVideo: false
 
+    // Emitted when the page (HTML5 <video> control or a YouTube iframe) requests
+    // enter/leave fullscreen. The host (VideoDetailPage) makes the view fill the
+    // screen — Morph won't do it on its own.
+    signal fullscreenToggled(bool on)
+
+    // The <video>/iframe fullscreen button fires the engine's fullScreenRequested
+    // signal; without accepting it, tapping fullscreen does nothing. Connections +
+    // ignoreUnknownSignals so this is a no-op (not a load error) on engine builds
+    // that name the signal differently.
+    Connections {
+        target: wv
+        ignoreUnknownSignals: true
+        onFullScreenRequested: function (request) {
+            request.accept();
+            wv.fullscreenToggled(request.toggleOn);
+        }
+    }
+
     onEmbedUrlChanged: _load()
     onWrapChanged: _load()
     onDirectVideoChanged: _load()
@@ -38,6 +56,12 @@ WebView {
     // WebEngineSettings property we silently keep the default behaviour.
     function _enableAutoplay() {
         try { wv.settings.playbackRequiresUserGesture = false; } catch (e) {}
+        // Let a file:// wrapper document load the file:// video next to it (offline
+        // playback). Guarded — older Morph builds may not expose these.
+        try { wv.settings.allowFileAccessFromFileUrls = true; } catch (e) {}
+        try { wv.settings.localContentCanAccessFileUrls = true; } catch (e) {}
+        // Required for fullScreenRequested to fire at all on QtWebEngine.
+        try { wv.settings.fullScreenSupportEnabled = true; } catch (e) {}
     }
 
     // The wrapper document is "served from" serey.io so the embedded player sees

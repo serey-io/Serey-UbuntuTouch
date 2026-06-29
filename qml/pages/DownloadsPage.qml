@@ -86,7 +86,7 @@ Page {
     EmptyState {
         anchors.fill: list
         visible: Downloads.items.length === 0
-        iconName: "save-to-device"
+        iconName: "save"
         message: i18n.tr("No downloaded videos yet")
     }
 }

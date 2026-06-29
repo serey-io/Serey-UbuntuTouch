@@ -170,7 +170,7 @@ Page {
                     Icon {
                         anchors.verticalCenter: parent.verticalCenter
                         width: units.gu(2); height: width
-                        name: "save-to-device"
+                        name: "save"
                         color: Style.brand
                     }
                     Label {
