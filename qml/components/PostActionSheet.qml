@@ -213,7 +213,9 @@ Item {
     // Sheet
     Rectangle {
         id: sheetRect
-        anchors { left: parent.left; right: parent.right; bottom: parent.bottom; bottomMargin: sheet.kbHeight }
+        // Convergence: centered, width-capped panel on wide windows
+        anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom; bottomMargin: sheet.kbHeight }
+        width: Math.min(parent.width, Adaptive.sheetMaxWidth)
         height: (sheet.step === 0 ? mainCol.height
                  : sheet.step === 1 ? reportCol.height
                  : sheet.step === 2 ? deleteCol.height

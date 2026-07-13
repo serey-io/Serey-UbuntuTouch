@@ -7,6 +7,11 @@ QtObject {
     // What kind of content the menu was opened for: "blog" | "gallery" | "video".
     // Drives owner actions (e.g. Edit is hidden for video — no video editor).
     property string kind: "blog"
+    // The page whose card opened the sheet. Edit handlers must check
+    // `PostActions.origin === page` instead of `page.visible`: in the wide
+    // master-detail layout two list pages can be visible at once, and a
+    // visible-only guard would push two composers for one edit.
+    property var origin: null
 
     signal hideRequested(string author, string permlink)
     signal editRequested(var post)
@@ -20,9 +25,10 @@ QtObject {
     // pages can patch the row's count without a full reload.
     signal commentCountChanged(string permlink, int count)
 
-    function open(postData, postKind) {
+    function open(postData, postKind, originPage) {
         post = postData;
         kind = postKind || "blog";
+        origin = originPage || null;
         visible = true;
     }
     function close() {

@@ -425,7 +425,7 @@ Page {
                         { video: feedModel.get(index) })
                     onAuthorClicked: page.pageStack.push(Qt.resolvedUrl("ProfileViewPage.qml"),
                         { username: feedModel.get(index).author })
-                    onMoreClicked: PostActions.open(feedModel.get(index), "video")
+                    onMoreClicked: PostActions.open(feedModel.get(index), "video", page)
                 }
             }
         }

@@ -29,30 +29,38 @@ MainView {
     property int currentTab: 0
     onCurrentTabChanged: { Config.currentTab = currentTab; _ensureTab(currentTab); body.opacity = 0; tabFadeIn.start(); }
 
+    // Convergence: the Adaptive singleton mirrors the window size so every
+    // separately-compiled page switches layout at the same breakpoint.
+    Binding { target: Adaptive; property: "windowWidth"; value: root.width }
+    Binding { target: Adaptive; property: "windowHeight"; value: root.height }
+
     // Tabs are created lazily on first visit: launching all four at once made
     // the Homepage web view slow/janky on low-end devices (Pixel 3).
     function _ensureTab(tab) {
-        if (tab === 0 && homeStack.depth === 0)
-            homeStack.push(Qt.resolvedUrl("pages/HomepagePage.qml"));
-        else if (tab === 1 && newsStack.depth === 0)
-            newsStack.push(Qt.resolvedUrl("pages/NewsPage.qml"));
-        else if (tab === 2 && videoStack.depth === 0)
-            videoStack.push(Qt.resolvedUrl("pages/VideoPage.qml"));
-        else if (tab === 3 && settingsStack.depth === 0)
-            settingsStack.push(Qt.resolvedUrl("pages/SettingsPage.qml"));
+        if (tab === 0) homeStack.ensureRoot();
+        else if (tab === 1) newsStack.ensureRoot();
+        else if (tab === 2) videoStack.ensureRoot();
+        else if (tab === 3) settingsStack.ensureRoot();
     }
     NumberAnimation { id: tabFadeIn; target: body; property: "opacity"; from: 0; to: 1; duration: 200; easing.type: Easing.OutQuad }
 
-    // The global header/nav only show at a tab's root (depth 1); pushed
-    // sub-pages bring their own back-bar.
+    // The global header/nav show at a tab's root (depth 1); pushed sub-pages
+    // bring their own back-bar. In split (master-detail) mode the root panel
+    // stays on screen, so header and nav stay too.
     property int activeDepth: currentTab === 0 ? homeStack.depth
                             : currentTab === 1 ? newsStack.depth
                             : currentTab === 2 ? videoStack.depth
                             : settingsStack.depth
-    readonly property bool showHeader: activeDepth <= 1 && currentTab !== 3
-    readonly property bool showNavBar: activeDepth <= 1
+    readonly property bool activeSplit: currentTab === 0 ? homeStack.split
+                                      : currentTab === 1 ? newsStack.split
+                                      : currentTab === 2 ? videoStack.split
+                                      : settingsStack.split
+    readonly property bool showHeader: (activeDepth <= 1 || activeSplit) && currentTab !== 3
+    readonly property bool showNavBar: activeDepth <= 1 || activeSplit
 
     Component.onCompleted: {
+        _ensureTab(currentTab);
+
         // Expired tokens are caught lazily via 401 (they can't be checked
         // up-front: /auth/authenticated needs a device JWT we never have and
         // always 401s — validating on launch wrongly logged users out). Only
@@ -404,47 +412,100 @@ MainView {
             top: appHeader.bottom
             bottom: root.showNavBar ? navBar.top : parent.bottom
         }
+        // Wide windows: content sits beside the left nav rail. Anchors can't be
+        // conditionally reset from a plain binding, so the switch is a State.
+        // (navBar.bottom == window bottom while the rail is active.)
+        states: State {
+            name: "besideRail"
+            when: Adaptive.isWide
+            AnchorChanges {
+                target: body
+                anchors.left: navBar.right
+                anchors.bottom: navBar.bottom
+            }
+        }
 
-        PageStack {
+        // Convergent per-tab containers: plain full-screen stack on phones,
+        // master-detail panels on wide windows (see AdaptiveStack.qml).
+        // News/Video/Settings roots are loaded lazily by _ensureTab().
+        AdaptiveStack {
             id: homeStack
             anchors.fill: parent
             visible: root.currentTab === 0
-            Component.onCompleted: push(Qt.resolvedUrl("pages/HomepagePage.qml"))
+            rootSource: Qt.resolvedUrl("pages/HomepagePage.qml")
+            // The web app is the panel; pushes stay full-screen at every width.
+            adaptive: false
         }
-        // News/Video/Settings are filled lazily by _ensureTab() on first visit.
-        PageStack {
+        AdaptiveStack {
             id: newsStack
             anchors.fill: parent
             visible: root.currentTab === 1
+            rootSource: Qt.resolvedUrl("pages/NewsPage.qml")
+            emptyIcon: "stock_note"
+            emptyText: Lang.tr("Select an article to read")
         }
-        PageStack {
+        AdaptiveStack {
             id: videoStack
             anchors.fill: parent
             visible: root.currentTab === 2
+            rootSource: Qt.resolvedUrl("pages/VideoPage.qml")
+            emptyIcon: "camcorder"
+            emptyText: Lang.tr("Select a video to watch")
         }
-        PageStack {
+        AdaptiveStack {
             id: settingsStack
             anchors.fill: parent
             visible: root.currentTab === 3
+            rootSource: Qt.resolvedUrl("pages/SettingsPage.qml")
+            emptyIcon: "settings"
+            emptyText: Lang.tr("Select a setting")
         }
     }
 
-    // --- Bottom navigation ------------------------------------------------
+    // --- Navigation: bottom tab bar on phones, left rail on wide windows ---
+    // (HIG convergence: adapt the chrome to the form factor, don't stretch a
+    // phone tab bar across a desktop window.)
     Rectangle {
         id: navBar
+        // Base state: bottom tab bar. The rail is a State because anchors can't
+        // be conditionally reset from a plain binding (a `cond ? line : undefined`
+        // expression leaves the stale anchor in place).
         anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
         height: root.showNavBar ? units.gu(7) : 0
         visible: root.showNavBar
         color: Style.surface
 
+        states: State {
+            name: "rail"
+            when: Adaptive.isWide
+            AnchorChanges {
+                target: navBar
+                anchors.right: undefined
+                anchors.top: appHeader.bottom
+            }
+            PropertyChanges {
+                target: navBar
+                width: root.showNavBar ? Adaptive.navRailWidth : 0
+            }
+        }
+
+        // Hairline: top edge as a bar, right edge as a rail.
         Rectangle {
             anchors { left: parent.left; right: parent.right; top: parent.top }
             height: units.dp(1)
             color: Style.divider
+            visible: !Adaptive.isWide
+        }
+        Rectangle {
+            anchors { top: parent.top; bottom: parent.bottom; right: parent.right }
+            width: units.dp(1)
+            color: Style.divider
+            visible: Adaptive.isWide
         }
 
-        Row {
+        Grid {
             anchors.fill: parent
+            columns: Adaptive.isWide ? 1 : 4
 
             Repeater {
                 model: [
@@ -454,16 +515,30 @@ MainView {
                     { label: Lang.tr("Settings"), icon: "settings" }
                 ]
                 delegate: AbstractButton {
-                    width: navBar.width / 4
-                    height: navBar.height
+                    width: Adaptive.isWide ? navBar.width : navBar.width / 4
+                    height: Adaptive.isWide ? units.gu(8) : navBar.height
                     property bool active: root.currentTab === index
 
-                    Icon {
+                    Column {
                         anchors.centerIn: parent
-                        width: units.gu(3)
-                        height: width
-                        name: modelData.icon
-                        color: active ? Style.brand : Style.textSecondary
+                        spacing: units.gu(0.5)
+
+                        Icon {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: units.gu(3)
+                            height: width
+                            name: modelData.icon
+                            color: active ? Style.brand : Style.textSecondary
+                        }
+                        Label {
+                            // Room for labels on the rail; icons-only on phones.
+                            visible: Adaptive.isWide
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: modelData.label
+                            font.pixelSize: Style.fontSmall
+                            font.family: Style.fontFamily
+                            color: active ? Style.brand : Style.textSecondary
+                        }
                     }
                     onClicked: root.currentTab = index
                 }

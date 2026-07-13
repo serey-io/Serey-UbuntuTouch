@@ -96,68 +96,86 @@ Item {
         }
     }
 
-    Rectangle { anchors.fill: parent; color: Style.surface }
-
-    // Header: title + close
-    Item {
-        id: header
-        anchors { top: parent.top; left: parent.left; right: parent.right }
-        height: units.gu(6)
-
-        Label {
-            anchors.centerIn: parent
-            text: Lang.tr("Secure checkout")
-            font.pixelSize: Style.fontMedium
-            font.weight: Font.DemiBold
-            font.family: Style.fontFamily
-            color: Style.textPrimary
-        }
-        AbstractButton {
-            anchors { right: parent.right; rightMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
-            width: units.gu(4); height: units.gu(4)
-            onClicked: {
-                // Leaving checkout mid-flow counts as a cancel; Stripe expires
-                // the abandoned session on its own.
-                Payments.closeStripe();
-                Toast.show(Lang.tr("Payment cancelled."));
-            }
-            Icon { anchors.centerIn: parent; width: units.gu(2.2); height: width; name: "close"; color: Style.textPrimary }
-        }
-    }
+    // Full-bleed dim behind the width-capped chrome (invisible on phone, where
+    // the opaque chrome covers it edge-to-edge). Swallows taps so nothing under
+    // the checkout can be hit through the side gutters on wide windows.
     Rectangle {
-        anchors { top: header.bottom; left: parent.left; right: parent.right }
-        height: units.dp(1); color: Style.divider
+        anchors.fill: parent
+        color: Qt.rgba(0, 0, 0, 0.4)
+        MouseArea { anchors.fill: parent }
     }
 
-    Loader {
-        id: webLoader
-        anchors { top: header.bottom; topMargin: units.dp(1); left: parent.left; right: parent.right; bottom: parent.bottom }
-        // The WebEngineView only exists while there is a URL to show; clearing
-        // this tears the whole Chromium renderer down (see file-top comment).
-        property string checkoutUrl: ""
-        active: Payments.stripeOpen && checkoutUrl.length > 0
-        sourceComponent: Component {
-            WebEngineView {
-                profile: WebEngineProfile {
-                    storageName: "SereyCheckout"
-                    offTheRecord: false
-                    httpUserAgent: "Mozilla/5.0 (Linux; Android 13; Pixel 3a) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+    // Convergence: centered, width-capped checkout chrome on wide windows.
+    // Static wrapper only — the WebEngineView is never reparented or recreated
+    // on resize; its geometry bindings just track this Item.
+    Item {
+        id: chrome
+        anchors { top: parent.top; bottom: parent.bottom; horizontalCenter: parent.horizontalCenter }
+        width: Math.min(parent.width, units.gu(60))
+
+        Rectangle { anchors.fill: parent; color: Style.surface }
+
+        // Header: title + close
+        Item {
+            id: header
+            anchors { top: parent.top; left: parent.left; right: parent.right }
+            height: units.gu(6)
+
+            Label {
+                anchors.centerIn: parent
+                text: Lang.tr("Secure checkout")
+                font.pixelSize: Style.fontMedium
+                font.weight: Font.DemiBold
+                font.family: Style.fontFamily
+                color: Style.textPrimary
+            }
+            AbstractButton {
+                anchors { right: parent.right; rightMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
+                width: units.gu(4); height: units.gu(4)
+                onClicked: {
+                    // Leaving checkout mid-flow counts as a cancel; Stripe expires
+                    // the abandoned session on its own.
+                    Payments.closeStripe();
+                    Toast.show(Lang.tr("Payment cancelled."));
                 }
-                Component.onCompleted: url = webLoader.checkoutUrl
-                onUrlChanged: {
-                    var s = url.toString();
-                    if (s.indexOf("/subscription/return") !== -1)
-                        sheet._handleReturn(s);
+                Icon { anchors.centerIn: parent; width: units.gu(2.2); height: width; name: "close"; color: Style.textPrimary }
+            }
+        }
+        Rectangle {
+            anchors { top: header.bottom; left: parent.left; right: parent.right }
+            height: units.dp(1); color: Style.divider
+        }
+
+        Loader {
+            id: webLoader
+            anchors { top: header.bottom; topMargin: units.dp(1); left: parent.left; right: parent.right; bottom: parent.bottom }
+            // The WebEngineView only exists while there is a URL to show; clearing
+            // this tears the whole Chromium renderer down (see file-top comment).
+            property string checkoutUrl: ""
+            active: Payments.stripeOpen && checkoutUrl.length > 0
+            sourceComponent: Component {
+                WebEngineView {
+                    profile: WebEngineProfile {
+                        storageName: "SereyCheckout"
+                        offTheRecord: false
+                        httpUserAgent: "Mozilla/5.0 (Linux; Android 13; Pixel 3a) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+                    }
+                    Component.onCompleted: url = webLoader.checkoutUrl
+                    onUrlChanged: {
+                        var s = url.toString();
+                        if (s.indexOf("/subscription/return") !== -1)
+                            sheet._handleReturn(s);
+                    }
                 }
             }
         }
-    }
 
-    // Spinner while the checkout session is being created / first page loads.
-    ActivityIndicator {
-        anchors.centerIn: parent
-        running: sheet.visible && (sheet.creating
-                 || (webLoader.item !== null && webLoader.item.loading))
-        visible: running
+        // Spinner while the checkout session is being created / first page loads.
+        ActivityIndicator {
+            anchors.centerIn: parent
+            running: sheet.visible && (sheet.creating
+                     || (webLoader.item !== null && webLoader.item.loading))
+            visible: running
+        }
     }
 }

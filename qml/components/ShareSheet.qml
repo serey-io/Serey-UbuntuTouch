@@ -51,7 +51,9 @@ Item {
 
     Rectangle {
         id: panel
-        anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
+        // Convergence: centered, width-capped panel on wide windows
+        anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom }
+        width: Math.min(parent.width, Adaptive.sheetMaxWidth)
         height: Math.min(sheet.height * 0.75, units.gu(58))
         radius: units.dp(16)
         color: Style.surface

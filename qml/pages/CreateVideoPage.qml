@@ -265,7 +265,8 @@ Page {
 
         Column {
             id: col
-            width: parent.width - Style.spacingM * 2
+            // Convergence: centered gu-capped form column on wide windows.
+            width: Math.min(parent.width - Style.spacingM * 2, units.gu(60))
             anchors.horizontalCenter: parent.horizontalCenter
             spacing: Style.spacingM
 

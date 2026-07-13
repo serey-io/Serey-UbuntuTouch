@@ -1,4 +1,5 @@
 import QtQuick 2.7
+import QtQuick.Window 2.2
 import QtQuick.Layouts 1.3
 import Lomiri.Components 1.3
 import Lomiri.Components.Popups 1.3
@@ -178,11 +179,16 @@ Page {
     }
 
     // Reparent the player Loader into the fullscreen host (or back to the inline
-    // stage). On this pushed page the app header and bottom nav are already hidden,
-    // so filling the page is genuinely fullscreen. webLoader keeps anchors.fill:
+    // stage). In the wide master-detail layout this page is only the detail
+    // panel (the header, nav rail and list panel stay on screen), so the host
+    // itself is lifted to the window's content item to cover everything;
+    // Window.contentItem is null only before the page is shown, and falling
+    // back to the page keeps the phone behavior. webLoader keeps anchors.fill:
     // parent, so it resizes to whichever container it lands in.
+    readonly property Item _windowContent: Window.contentItem
     function setFullscreen(on) {
         page.isFullscreen = on;
+        fsHost.parent = (on && page._windowContent) ? page._windowContent : page;
         webLoader.parent = on ? fsHost : stage;
     }
 
@@ -559,7 +565,10 @@ Page {
 
         Column {
             id: contentCol
-            width: scroll.width
+            // Convergence: cap the stage/reading column on wide windows; a
+            // 16:9 stage at full desktop-pane width would dwarf everything.
+            width: Math.min(scroll.width, Adaptive.readingMaxWidth)
+            anchors.horizontalCenter: parent.horizontalCenter
 
             // Player / thumbnail (full-bleed)
             Rectangle {
@@ -1005,7 +1014,9 @@ Page {
 
         Rectangle {
             id: cmtSheetRect
-            anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
+            // Convergence: centered, width-capped panel on wide windows.
+            anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom }
+            width: Math.min(parent.width, Adaptive.sheetMaxWidth)
             height: parent.height * 0.8
             radius: units.gu(1)
             color: Style.surface
@@ -1198,7 +1209,9 @@ Page {
 
         Rectangle {
             id: descSheetRect
-            anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
+            // Convergence: centered, width-capped panel on wide windows.
+            anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom }
+            width: Math.min(parent.width, Adaptive.sheetMaxWidth)
             height: Math.min(descCol.height + units.gu(4), parent.height * 0.75)
             radius: units.gu(1)
             color: Style.surface
