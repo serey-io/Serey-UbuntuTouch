@@ -12,6 +12,9 @@ import "../Theme"
  *   variant "video"   VideoCard   — inset 16:9 thumbnail · avatar + title rows
  *
  * Detail pages set fullBleedCover (one full-width cover) instead of a feed row.
+ * detailArticle uses the article-detail shape instead: category · centered
+ * title · centered author · divider · inset cover · body lines (matches
+ * PostDetailPage), so the skeleton and the loaded article line up.
  */
 Item {
     id: root
@@ -20,8 +23,10 @@ Item {
     property int count: 3
     // "post" | "gallery" | "video" — picks the card shape to imitate.
     property string variant: "post"
-    // Detail pages (PostDetailPage, GalleryDetailPage) show one full-bleed cover.
+    // Detail pages (GalleryDetailPage) show one full-bleed cover.
     property bool fullBleedCover: false
+    // PostDetailPage: mirror the article-detail layout (centered, capped).
+    property bool detailArticle: false
 
     readonly property real inset: Style.spacingM
     readonly property real contentWidth: root.width - inset * 2
@@ -43,101 +48,171 @@ Item {
             model: root.visible ? root.count : 0
             delegate: Column {
                 width: root.width
-                spacing: Style.spacingS
+                spacing: 0
 
-                Item { width: 1; height: Style.spacingM }
-
-                // --- Video: thumbnail leads (inset 16:9) ---------------------
-                SkeletonRect {
-                    visible: root.variant === "video" && !root.fullBleedCover
-                    x: root.inset
-                    width: root.contentWidth
-                    height: width * 0.56
-                    radius: Style.thumbRadius
-                    baseColor: root.coverTone
-                    glyph: root.photoGlyph
-                }
-
-                // --- Header: avatar + name/time (post, gallery, detail) ------
-                Row {
-                    visible: root.variant !== "video" || root.fullBleedCover
-                    x: root.inset
-                    spacing: Style.spacingS
-                    SkeletonRect { width: units.gu(4.25); height: width; radius: width / 2 }
-                    Column {
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: Style.spacingXs
-                        SkeletonRect { width: units.gu(17); height: units.gu(1.6); radius: height / 2 }
-                        SkeletonRect { width: units.gu(9); height: units.gu(1.2); radius: height / 2 }
-                    }
-                }
-
-                // --- Title lines (post only — two uneven lines) --------------
+                // --- Article detail: centered, capped (mirrors PostDetailPage) --
                 Column {
-                    visible: root.variant === "post" && !root.fullBleedCover
-                    x: root.inset
-                    spacing: Style.spacingXs
-                    SkeletonRect { width: root.contentWidth; height: units.gu(1.9); radius: height / 2 }
-                    SkeletonRect { width: root.contentWidth * 0.55; height: units.gu(1.9); radius: height / 2 }
-                }
-
-                // --- Post cover (inset 16:9) ---------------------------------
-                SkeletonRect {
-                    visible: root.variant === "post" && !root.fullBleedCover
-                    x: root.inset
-                    width: root.contentWidth
-                    height: width * 0.56
-                    radius: Style.thumbRadius
-                    baseColor: root.coverTone
-                    glyph: root.photoGlyph
-                }
-
-                // --- Gallery photo (full-bleed square) -----------------------
-                SkeletonRect {
-                    visible: root.variant === "gallery" && !root.fullBleedCover
+                    visible: root.detailArticle
                     width: root.width
-                    height: width
-                    radius: 0
-                    baseColor: root.coverTone
-                    glyph: root.photoGlyph
-                }
-
-                // --- Detail cover (full-bleed square) ------------------------
-                SkeletonRect {
-                    visible: root.fullBleedCover
-                    width: root.width
-                    height: width
-                    radius: 0
-                    baseColor: root.coverTone
-                    glyph: root.photoGlyph
-                }
-
-                // --- Video info: avatar + two title lines (after thumbnail) --
-                Row {
-                    visible: root.variant === "video" && !root.fullBleedCover
-                    x: root.inset
-                    spacing: Style.spacingS
-                    SkeletonRect { width: units.gu(4.5); height: width; radius: width / 2 }
-                    Column {
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: Style.spacingXs
-                        SkeletonRect { width: root.contentWidth * 0.8; height: units.gu(1.7); radius: height / 2 }
-                        SkeletonRect { width: units.gu(12); height: units.gu(1.3); radius: height / 2 }
-                    }
-                }
-
-                // --- Action chips: mirrors the VoteBar's left icon+count row -
-                Row {
-                    visible: root.variant !== "video"
-                    x: root.inset
                     spacing: Style.spacingM
-                    SkeletonRect { width: units.gu(5); height: units.gu(2); radius: height / 2 }
-                    SkeletonRect { width: units.gu(3); height: units.gu(2); radius: height / 2 }
-                    SkeletonRect { width: units.gu(5); height: units.gu(2); radius: height / 2 }
+
+                    Item { width: 1; height: Style.spacingS }
+
+                    // Category badge (short, leading)
+                    SkeletonRect {
+                        x: root.inset
+                        width: units.gu(8); height: units.gu(1.4); radius: height / 2
+                    }
+
+                    // Title lines (centered, large)
+                    SkeletonRect {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        width: root.contentWidth * 0.85; height: units.gu(2.4); radius: height / 2
+                    }
+                    SkeletonRect {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        width: root.contentWidth * 0.5; height: units.gu(2.4); radius: height / 2
+                    }
+
+                    // Author row (centered): avatar + name/time
+                    Row {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        spacing: Style.spacingS
+                        SkeletonRect { width: units.gu(4.25); height: width; radius: width / 2 }
+                        Column {
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: Style.spacingXs
+                            SkeletonRect { width: units.gu(12); height: units.gu(1.4); radius: height / 2 }
+                            SkeletonRect { width: units.gu(7); height: units.gu(1.1); radius: height / 2 }
+                        }
+                    }
+
+                    Rectangle {
+                        width: root.width; height: units.dp(1); color: Style.divider
+                    }
+
+                    // Cover (inset, rounded, same 0.6 ratio as the real cover)
+                    SkeletonRect {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        width: root.contentWidth; height: width * 0.6
+                        radius: Style.thumbRadius
+                        baseColor: root.coverTone
+                        glyph: root.photoGlyph
+                    }
+
+                    // Body lines
+                    Column {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        width: root.contentWidth
+                        spacing: Style.spacingXs
+                        SkeletonRect { width: parent.width; height: units.gu(1.5); radius: height / 2 }
+                        SkeletonRect { width: parent.width; height: units.gu(1.5); radius: height / 2 }
+                        SkeletonRect { width: parent.width * 0.65; height: units.gu(1.5); radius: height / 2 }
+                    }
+
+                    Item { width: 1; height: Style.spacingS }
                 }
 
-                Item { width: 1; height: Style.spacingS }
-                Rectangle { width: parent.width; height: units.dp(1); color: Style.divider }
+                // --- Feed / gallery / video card shapes ------------------------
+                Column {
+                    visible: !root.detailArticle
+                    width: root.width
+                    spacing: Style.spacingS
+
+                    Item { width: 1; height: Style.spacingM }
+
+                    // --- Video: thumbnail leads (inset 16:9) -------------------
+                    SkeletonRect {
+                        visible: root.variant === "video" && !root.fullBleedCover
+                        x: root.inset
+                        width: root.contentWidth
+                        height: width * 0.56
+                        radius: Style.thumbRadius
+                        baseColor: root.coverTone
+                        glyph: root.photoGlyph
+                    }
+
+                    // --- Header: avatar + name/time (post, gallery, detail) ----
+                    Row {
+                        visible: root.variant !== "video" || root.fullBleedCover
+                        x: root.inset
+                        spacing: Style.spacingS
+                        SkeletonRect { width: units.gu(4.25); height: width; radius: width / 2 }
+                        Column {
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: Style.spacingXs
+                            SkeletonRect { width: units.gu(17); height: units.gu(1.6); radius: height / 2 }
+                            SkeletonRect { width: units.gu(9); height: units.gu(1.2); radius: height / 2 }
+                        }
+                    }
+
+                    // --- Title lines (post only — two uneven lines) ------------
+                    Column {
+                        visible: root.variant === "post" && !root.fullBleedCover
+                        x: root.inset
+                        spacing: Style.spacingXs
+                        SkeletonRect { width: root.contentWidth; height: units.gu(1.9); radius: height / 2 }
+                        SkeletonRect { width: root.contentWidth * 0.55; height: units.gu(1.9); radius: height / 2 }
+                    }
+
+                    // --- Post cover (inset 16:9) -------------------------------
+                    SkeletonRect {
+                        visible: root.variant === "post" && !root.fullBleedCover
+                        x: root.inset
+                        width: root.contentWidth
+                        height: width * 0.56
+                        radius: Style.thumbRadius
+                        baseColor: root.coverTone
+                        glyph: root.photoGlyph
+                    }
+
+                    // --- Gallery photo (full-bleed square) ---------------------
+                    SkeletonRect {
+                        visible: root.variant === "gallery" && !root.fullBleedCover
+                        width: root.width
+                        height: width
+                        radius: 0
+                        baseColor: root.coverTone
+                        glyph: root.photoGlyph
+                    }
+
+                    // --- Detail cover (full-bleed square) ----------------------
+                    SkeletonRect {
+                        visible: root.fullBleedCover
+                        width: root.width
+                        height: width
+                        radius: 0
+                        baseColor: root.coverTone
+                        glyph: root.photoGlyph
+                    }
+
+                    // --- Video info: avatar + two title lines (after thumbnail) -
+                    Row {
+                        visible: root.variant === "video" && !root.fullBleedCover
+                        x: root.inset
+                        spacing: Style.spacingS
+                        SkeletonRect { width: units.gu(4.5); height: width; radius: width / 2 }
+                        Column {
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: Style.spacingXs
+                            SkeletonRect { width: root.contentWidth * 0.8; height: units.gu(1.7); radius: height / 2 }
+                            SkeletonRect { width: units.gu(12); height: units.gu(1.3); radius: height / 2 }
+                        }
+                    }
+
+                    // --- Action chips: mirrors the VoteBar's left icon+count row
+                    Row {
+                        visible: root.variant !== "video"
+                        x: root.inset
+                        spacing: Style.spacingM
+                        SkeletonRect { width: units.gu(5); height: units.gu(2); radius: height / 2 }
+                        SkeletonRect { width: units.gu(3); height: units.gu(2); radius: height / 2 }
+                        SkeletonRect { width: units.gu(5); height: units.gu(2); radius: height / 2 }
+                    }
+
+                    Item { width: 1; height: Style.spacingS }
+                    Rectangle { width: parent.width; height: units.dp(1); color: Style.divider }
+                }
             }
         }
     }

@@ -770,9 +770,12 @@ Page {
     }
 
     LoadingState {
-        anchors { top: page.header.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
+        // Match the real article column: capped + centered, article-detail shape.
+        anchors { top: page.header.bottom; bottom: parent.bottom; horizontalCenter: parent.horizontalCenter }
+        width: Math.min(parent.width, Adaptive.readingMaxWidth)
         visible: page.loading && page.post === null
         count: 1
+        detailArticle: true
     }
     ErrorState {
         anchors { top: page.header.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }

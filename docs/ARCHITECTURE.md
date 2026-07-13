@@ -106,6 +106,42 @@ A **source switcher** in the UI maps the chosen source to:
 
 ---
 
+## 6b. Convergence (adapt, not scale)
+
+Implemented 2026-07-13 per the Lomiri HIG (see
+`docs/ubports-other-considerations/01-convergence.md`) after direct founder
+feedback that percentage scaling is wrong and panels must adapt per device.
+
+- **`qml/Theme/Adaptive.qml`** (singleton): window size fed by `Main.qml`;
+  metrics `isWide` (> 80gu — the toolkit's AdaptivePageLayout collapse point),
+  `listPaneWidth` 40gu, `readingMaxWidth` 80gu, `sheetMaxWidth` 50gu,
+  `navRailWidth` 9gu.
+- **`qml/components/AdaptiveStack.qml`**: per-tab master–detail container that
+  mimics the PageStack API (`push/pop/depth/currentPage`) so all existing
+  `pageStack.push()` call sites work unchanged. Phone: full-screen pushes
+  (unchanged). Wide: root list page in a fixed 40gu left panel, pushes go to a
+  right detail panel (a real inner PageStack) with an EmptyState placeholder.
+  Crossing the breakpoint is pure geometry — nothing reparents, so live
+  WebViews survive window resizes. Homepage opts out (`adaptive: false`).
+  We deliberately did **not** migrate to `AdaptivePageLayout`: it has no
+  push/pop API, injects back buttons only into `PageHeader`s, and takes over
+  headers — it would have broken ~60 call sites and the custom shell.
+- **Shell** (`Main.qml`): bottom tab bar becomes a labeled left nav rail on
+  wide windows; global header and nav stay visible while a tab is split. The
+  bar↔rail switch uses States + AnchorChanges (anchors cannot be conditionally
+  reset from a plain binding).
+- **Content**: detail/reading columns cap at `readingMaxWidth` centered
+  (PostDetail, GalleryDetail, VideoDetail, FeedPage/ProfileView cards);
+  composers cap at gu(60); all bottom sheets cap at `sheetMaxWidth` centered;
+  ReelsPage centers a gu(45) column on black; VideoDetailPage fullscreen
+  reparents its host to `Window.contentItem` to cover the whole window.
+  Full-width list rows (Notifications, Downloads, SavedPosts, BlockedUsers)
+  intentionally stay full-width — that is the native UT System Settings look.
+- **Known follow-ups**: keyboard input parity (focus + MENU key reaching swipe
+  actions) and pointer hover states are not yet implemented anywhere.
+
+---
+
 ## 7. Open decisions
 
 1. **Independent Media Hub** has no published community yet — confirm with Serey

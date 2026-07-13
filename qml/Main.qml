@@ -23,10 +23,10 @@ MainView {
     applicationName: "serey.serey-io"
     automaticOrientation: true
 
-    width: units.gu(45)
-    height: units.gu(80)
+    width: units.gu(120)   // TEMP wide-mode test
+    height: units.gu(70)   // TEMP wide-mode test
 
-    property int currentTab: 0
+    property int currentTab: 1
     onCurrentTabChanged: { Config.currentTab = currentTab; _ensureTab(currentTab); body.opacity = 0; tabFadeIn.start(); }
 
     // Convergence: the Adaptive singleton mirrors the window size so every
