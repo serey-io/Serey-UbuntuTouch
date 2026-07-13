@@ -358,7 +358,9 @@ Page {
     }
 
     LoadingState {
-        anchors { top: page.header.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
+        // Match the real gallery column: capped + centered on wide windows.
+        anchors { top: page.header.bottom; bottom: parent.bottom; horizontalCenter: parent.horizontalCenter }
+        width: Math.min(parent.width, Adaptive.readingMaxWidth)
         visible: page.loading && page.post === null
         count: 1
         fullBleedCover: true
