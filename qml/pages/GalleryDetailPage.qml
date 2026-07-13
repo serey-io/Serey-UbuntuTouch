@@ -210,7 +210,10 @@ Page {
 
         Column {
             id: contentCol
-            width: scroll.width
+            // Convergence: cap the media/reading column on wide windows (the
+            // square carousel at full desktop-pane width would be enormous).
+            width: Math.min(scroll.width, Adaptive.readingMaxWidth)
+            anchors.horizontalCenter: parent.horizontalCenter
 
             // Post header: avatar + author + time (Instagram-style row above the image)
             AbstractButton {

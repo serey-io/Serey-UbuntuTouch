@@ -69,7 +69,9 @@ Page {
         }
         function onUserUnblocked(username) { page.reload(); }
         function onEditRequested(post) {
-            if (!page.visible) return;
+            // Origin (not visibility) guard: in the wide master-detail layout
+            // two list pages can be visible at once.
+            if (PostActions.origin !== page) return;
             var ed = page.pageStack.push(Qt.resolvedUrl("CreatePostPage.qml"), { editPost: post });
             if (ed && ed.saved) ed.saved.connect(page.reload);
         }
@@ -274,7 +276,7 @@ Page {
                 onAuthorClicked: page.pageStack.push(Qt.resolvedUrl("ProfileViewPage.qml"),
                     { username: feedModel.get(index).author })
                 onRequireLogin: page.pageStack.push(Qt.resolvedUrl("LoginPage.qml"))
-                onMoreClicked: PostActions.open(feedModel.get(index), "blog")
+                onMoreClicked: PostActions.open(feedModel.get(index), "blog", page)
             }
         }
 

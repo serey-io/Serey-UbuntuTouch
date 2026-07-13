@@ -285,7 +285,8 @@ Page {
 
         Column {
             id: col
-            width: parent.width - Style.spacingM * 2
+            // Convergence: centered gu-capped form column on wide windows.
+            width: Math.min(parent.width - Style.spacingM * 2, units.gu(60))
             anchors.horizontalCenter: parent.horizontalCenter
             spacing: Style.spacingM
 
@@ -670,7 +671,9 @@ Page {
 
         Rectangle {
             id: catSheetRect
-            anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
+            // Convergence: centered, width-capped panel on wide windows.
+            anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom }
+            width: Math.min(parent.width, Adaptive.sheetMaxWidth)
             height: catSheetCol.height + units.gu(4)
             radius: units.gu(1)
             color: Style.surface

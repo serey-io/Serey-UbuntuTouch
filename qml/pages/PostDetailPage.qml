@@ -429,7 +429,10 @@ Page {
 
         Column {
             id: contentCol
-            width: scroll.width
+            // Convergence: cap the reading column on wide windows; long-form
+            // text stretched across a desktop pane is unreadable.
+            width: Math.min(scroll.width, Adaptive.readingMaxWidth)
+            anchors.horizontalCenter: parent.horizontalCenter
             spacing: Style.spacingM
 
             Item { width: 1; height: Style.spacingS }

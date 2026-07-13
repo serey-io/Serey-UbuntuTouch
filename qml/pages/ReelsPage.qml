@@ -159,7 +159,11 @@ Page {
 
     ListView {
         id: pager
-        anchors.fill: parent
+        // Convergence: a 9:16 reel owns a phone-width column centered on the
+        // black backdrop (TikTok-web style) instead of stretching across a
+        // wide pane; the per-reel overlays anchor to this column with it.
+        anchors { top: parent.top; bottom: parent.bottom; horizontalCenter: parent.horizontalCenter }
+        width: Math.min(parent.width, units.gu(45))
         model: page.reels
         orientation: ListView.Vertical
         snapMode: ListView.SnapOneItem
@@ -509,7 +513,7 @@ Page {
                     // More (3-dot)
                     AbstractButton {
                         width: units.gu(7); height: units.gu(7)
-                        onClicked: PostActions.open(modelData, "video")
+                        onClicked: PostActions.open(modelData, "video", page)
                         Column {
                             anchors.centerIn: parent
                             spacing: units.dp(3)

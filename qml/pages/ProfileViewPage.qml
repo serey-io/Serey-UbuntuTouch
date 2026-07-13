@@ -191,7 +191,9 @@ Page {
         function onUserBlocked(username) { if (username === page.username) page.isBlocked = true; }
         function onUserUnblocked(username) { if (username === page.username) page.isBlocked = false; }
         function onEditRequested(post) {
-            if (!page.visible) return;
+            // Origin (not visibility) guard: in the wide master-detail layout
+            // two list pages can be visible at once.
+            if (PostActions.origin !== page) return;
             var t = page.tab;
             var url = t === 1 ? "CreateGalleryPostPage.qml" : "CreatePostPage.qml";
             var ed = page.pageStack.push(Qt.resolvedUrl(url), { editPost: post });
@@ -483,7 +485,10 @@ Page {
 
         // One delegate that becomes the right card for the active tab.
         delegate: Loader {
-            width: list.width
+            // Convergence: cap cards in a wide detail panel and center them
+            // (media scales with card width).
+            width: Math.min(list.width, Adaptive.readingMaxWidth)
+            x: (list.width - width) / 2
             height: item ? item.implicitHeight : 0
             property var rowData: page.curModel.get(index)
             sourceComponent: page.tab === 0 ? cPost : page.tab === 1 ? cGallery : cVideo
@@ -522,7 +527,7 @@ Page {
             post: rowData
             showFollow: false       // the big Follow button already covers this user
             onClicked: page.openPost(rowData)
-            onMoreClicked: PostActions.open(rowData, "blog")
+            onMoreClicked: PostActions.open(rowData, "blog", page)
             onRequireLogin: page.pageStack.push(Qt.resolvedUrl("LoginPage.qml"))
         }
     }
@@ -533,7 +538,7 @@ Page {
             post: rowData
             showFollow: false       // redundant on this user's own profile
             onClicked: page.openGallery(rowData)
-            onMoreClicked: PostActions.open(rowData, "gallery")
+            onMoreClicked: PostActions.open(rowData, "gallery", page)
             onRequireLogin: page.pageStack.push(Qt.resolvedUrl("LoginPage.qml"))
         }
     }
@@ -543,7 +548,7 @@ Page {
             width: parent ? parent.width : list.width
             video: rowData
             onClicked: page.openVideo(rowData)
-            onMoreClicked: PostActions.open(rowData, "video")
+            onMoreClicked: PostActions.open(rowData, "video", page)
         }
     }
 

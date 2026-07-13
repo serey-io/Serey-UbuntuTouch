@@ -161,7 +161,9 @@ Item {
         id: panel
         // Anchored above the keyboard; height clamps so it never runs off the top
         // when the OSK is up.
-        anchors { left: parent.left; right: parent.right; bottom: parent.bottom; bottomMargin: sheet.kbHeight }
+        // Convergence: centered, width-capped panel on wide windows
+        anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom; bottomMargin: sheet.kbHeight }
+        width: Math.min(parent.width, Adaptive.sheetMaxWidth)
         height: Math.min(sheet.height * 0.72, sheet.height - sheet.kbHeight - units.gu(2))
         color: Style.surface
         radius: Style.cardRadius

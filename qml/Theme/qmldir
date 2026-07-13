@@ -1,3 +1,4 @@
+singleton Adaptive 1.0 Adaptive.qml
 singleton Config 1.0 Config.qml
 singleton Style 1.0 Style.qml
 singleton Toast 1.0 Toast.qml

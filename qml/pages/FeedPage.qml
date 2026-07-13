@@ -324,7 +324,9 @@ Page {
         }
         function onUserUnblocked(username) { page.reload(); }
         function onEditRequested(post) {
-            if (!page.visible) return;
+            // Origin (not visibility) guard: in the wide master-detail layout
+            // two list pages can be visible at once.
+            if (PostActions.origin !== page) return;
             var ed = page.pageStack.push(Qt.resolvedUrl("CreatePostPage.qml"), { editPost: post });
             if (ed && ed.saved) ed.saved.connect(page.reload);
         }
@@ -412,7 +414,10 @@ Page {
 
             Loader {
                 id: contentLoader
-                width: parent.width
+                // Convergence: cap cards in a wide detail panel (media scales
+                // with card width); the swipe row still spans the full width.
+                width: Math.min(parent.width, Adaptive.readingMaxWidth)
+                anchors.horizontalCenter: parent.horizontalCenter
                 height: item ? item.implicitHeight : 0
                 sourceComponent: feedItem.isVideo ? videoDelegate : blogDelegate
 
@@ -426,7 +431,7 @@ Page {
                         onAuthorClicked: page.pageStack.push(Qt.resolvedUrl("ProfileViewPage.qml"),
                             { username: feedItem.postData.author })
                         onRequireLogin: page.pageStack.push(Qt.resolvedUrl("LoginPage.qml"))
-                        onMoreClicked: PostActions.open(feedItem.postData, "blog")
+                        onMoreClicked: PostActions.open(feedItem.postData, "blog", page)
                     }
                 }
 
@@ -439,7 +444,7 @@ Page {
                             { video: feedItem.postData })
                         onAuthorClicked: page.pageStack.push(Qt.resolvedUrl("ProfileViewPage.qml"),
                             { username: feedItem.postData.author })
-                        onMoreClicked: PostActions.open(feedItem.postData, "video")
+                        onMoreClicked: PostActions.open(feedItem.postData, "video", page)
                     }
                 }
             }

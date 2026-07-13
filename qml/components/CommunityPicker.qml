@@ -256,7 +256,9 @@ Item {
     // ── Sheet ─────────────────────────────────────────────────────────────────
     Rectangle {
         id: sheet
-        anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
+        // Convergence: centered, width-capped panel on wide windows
+        anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom }
+        width: Math.min(parent.width, Adaptive.sheetMaxWidth)
         height: Math.min(sheetContent.height + units.gu(4), picker.height * 0.82)
         radius: units.gu(1)
         color: Style.surface
