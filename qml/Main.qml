@@ -23,8 +23,8 @@ MainView {
     applicationName: "serey.serey-io"
     automaticOrientation: true
 
-    width: units.gu(120)   // TEMP wide-mode test
-    height: units.gu(70)   // TEMP wide-mode test
+    width: units.gu(45)   // TEMP narrow-mode test
+    height: units.gu(80)   // TEMP narrow-mode test
 
     property int currentTab: 1
     onCurrentTabChanged: { Config.currentTab = currentTab; _ensureTab(currentTab); body.opacity = 0; tabFadeIn.start(); }
