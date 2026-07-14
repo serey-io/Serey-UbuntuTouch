@@ -23,10 +23,10 @@ MainView {
     applicationName: "serey.serey-io"
     automaticOrientation: true
 
-    width: units.gu(45)   // TEMP narrow-mode test
-    height: units.gu(80)   // TEMP narrow-mode test
+    width: units.gu(45)
+    height: units.gu(80)
 
-    property int currentTab: 1
+    property int currentTab: 0
     onCurrentTabChanged: { Config.currentTab = currentTab; _ensureTab(currentTab); body.opacity = 0; tabFadeIn.start(); }
 
     // Convergence: the Adaptive singleton mirrors the window size so every
@@ -57,6 +57,9 @@ MainView {
                                       : settingsStack.split
     readonly property bool showHeader: (activeDepth <= 1 || activeSplit) && currentTab !== 3
     readonly property bool showNavBar: activeDepth <= 1 || activeSplit
+    // Thickness the nav chrome consumes: a bottom bar (height) on phones, a left
+    // rail (width) on wide windows; 0 when hidden. Drives body + navBar layout.
+    readonly property real navThick: showNavBar ? (Adaptive.isWide ? Adaptive.navRailWidth : units.gu(7)) : 0
 
     Component.onCompleted: {
         _ensureTab(currentTab);
@@ -406,24 +409,16 @@ MainView {
     // --- Content area: four stacks, only the active one visible ----------
     Item {
         id: body
-        anchors {
-            left: parent.left
-            right: parent.right
-            top: appHeader.bottom
-            bottom: root.showNavBar ? navBar.top : parent.bottom
-        }
-        // Wide windows: content sits beside the left nav rail. Anchors can't be
-        // conditionally reset from a plain binding, so the switch is a State.
-        // (navBar.bottom == window bottom while the rail is active.)
-        states: State {
-            name: "besideRail"
-            when: Adaptive.isWide
-            AnchorChanges {
-                target: body
-                anchors.left: navBar.right
-                anchors.bottom: navBar.bottom
-            }
-        }
+        // Explicit geometry, NOT anchor states: a State's AnchorChanges can't
+        // cleanly revert an anchor that also carries a ternary binding, and on a
+        // wide->narrow resize that left body.height stuck at 0 (blank content).
+        // Plain size bindings re-evaluate correctly at every window size.
+        // Wide: content sits to the right of the left nav rail (full height).
+        // Narrow: content sits above the bottom tab bar.
+        x: Adaptive.isWide ? root.navThick : 0
+        y: appHeader.height
+        width: root.width - (Adaptive.isWide ? root.navThick : 0)
+        height: root.height - appHeader.height - (Adaptive.isWide ? 0 : root.navThick)
 
         // Convergent per-tab containers: plain full-screen stack on phones,
         // master-detail panels on wide windows (see AdaptiveStack.qml).
@@ -467,27 +462,15 @@ MainView {
     // phone tab bar across a desktop window.)
     Rectangle {
         id: navBar
-        // Base state: bottom tab bar. The rail is a State because anchors can't
-        // be conditionally reset from a plain binding (a `cond ? line : undefined`
-        // expression leaves the stale anchor in place).
-        anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-        height: root.showNavBar ? units.gu(7) : 0
+        // Explicit geometry (same reasoning as body): bottom tab bar on phones,
+        // left rail on wide windows. Kept binding-driven so resizes never strand
+        // a stale anchor.
+        x: 0
+        y: Adaptive.isWide ? appHeader.height : root.height - height
+        width: Adaptive.isWide ? root.navThick : root.width
+        height: Adaptive.isWide ? root.height - appHeader.height : root.navThick
         visible: root.showNavBar
         color: Style.surface
-
-        states: State {
-            name: "rail"
-            when: Adaptive.isWide
-            AnchorChanges {
-                target: navBar
-                anchors.right: undefined
-                anchors.top: appHeader.bottom
-            }
-            PropertyChanges {
-                target: navBar
-                width: root.showNavBar ? Adaptive.navRailWidth : 0
-            }
-        }
 
         // Hairline: top edge as a bar, right edge as a rail.
         Rectangle {
