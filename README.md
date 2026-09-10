@@ -97,3 +97,11 @@ plugins/Serey/FileUtils   Small C++ plugin for chunked file reads during large
 
 The app identity is `serey.serey-io`, and it must match across `manifest.json.in`,
 `Main.qml`, and `serey.desktop`.
+
+## License
+
+Released under the [GNU General Public License v3.0](LICENSE).
+
+Bundled third-party components keep their own terms: the Noto fonts in
+`assets/fonts/` under the SIL Open Font License (`assets/fonts/OFL.txt`), and
+`qml/services/QrCodeGen.js` under the MIT license.
