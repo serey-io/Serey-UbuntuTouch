@@ -152,6 +152,22 @@ QtObject {
         return -1;
     }
 
+    // Top-level (country) community id for a lowercase ISO2 code, or "". An exact
+    // name beats a substring hit, so a hub titled after a country can't take its place.
+    function countryCommunityId(code) {
+        if (!code) return "";
+        var loose = "";
+        for (var t in topLevelCommunityIds) {
+            var n = communityById[t];
+            if (!n || Flags.flagCodeFromTitle(n.title) !== code) continue;
+            if (Flags.COUNTRY_NAME_TO_ISO2[String(n.title).trim().toLowerCase()] === code) return t;
+            if (!loose) loose = t;
+        }
+        return loose;
+    }
+    // The reader's own country row (Cambodia included, unlike sources), "" until known.
+    readonly property string homeCountryCommunityId: countryCommunityId(detectedCountryCode.toLowerCase())
+
     // Map of community dns -> icon URL, fetched from the backend at startup so the source switcher shows each country's real icon.
     property var iconByDns: ({})
 

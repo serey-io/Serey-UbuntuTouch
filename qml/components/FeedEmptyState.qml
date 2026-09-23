@@ -2,7 +2,6 @@ import QtQuick 2.7
 import Lomiri.Components 1.3
 import "../Theme"
 import "../Session"
-import "../services/CommunitySubscriberService.js" as SubscriberService
 import "../services/PostService.js" as PostService
 import "../services/VideoService.js" as VideoService
 import "../services/HiddenPosts.js" as HiddenPosts
@@ -23,8 +22,6 @@ Item {
     // A card's vote bar was used while logged out.
     signal loginRequested()
 
-    property var suggested: []      // [{id, title, dns, icon, subscribers}]
-    property bool suggestionsLoading: true
     // Three of each: enough to show what Serey is about, few enough that the
     // create-your-own-post action stays in reach on a phone screen.
     readonly property int maxSuggestions: 3
@@ -50,36 +47,18 @@ Item {
         return all;
     }
 
-    property var subscribedMap: ({})
-    property int subscribedRev: 0
-
-    // Suggestion rows may omit meta_description; the startup community tree has it.
-    function descriptionFor(item) {
-        if (!item) return "";
-        if (item.description) return item.description;
-        var c = Config.communityById[String(item.id)];
-        return (c && c.description) || "";
-    }
-
-    // Most platforms have no blurb; reserve the two lines only if some do.
-    readonly property bool anyDescription: {
-        for (var i = 0; i < suggested.length; i++)
-            if (root.descriptionFor(suggested[i])) return true;
-        return false;
-    }
-
     // > 0 = intro in a leading column of that width, cards in the pane beside it.
     property real leadingWidth: 0
     readonly property bool split: leadingWidth > 0
 
-    // First Tab stop on this surface, claimed by the first Subscribe pill (or the
-    // create-post button when there are no suggestions yet).
+    // Fallback Tab stop (the create-post button) when there are no platform cards.
     property Item firstFocusItem: null
 
     // Called by FeedPage when keyboard nav lands on My Feed while this state is up:
     // focusing the hidden, empty feed list would look like the keyboard was dead.
     function focusFirst() {
-        var it = root.firstFocusItem;
+        var it = (platforms.firstFocusItem && platforms.firstFocusItem.visible)
+                 ? platforms.firstFocusItem : root.firstFocusItem;
         if (!it || !it.visible) return false;
         // Drop focus first: Qt skips focusInEvent (and the key-nav reason) if already focused.
         it.focus = false;
@@ -95,25 +74,29 @@ Item {
 
     function _load() {
         root._loaded = true;
-        SubscriberService.suggestedCommunities(Config.baseUrl, root.maxSuggestions,
-            function (list) { root.suggested = list; root.suggestionsLoading = false; },
-            function () { root.suggestionsLoading = false; });
-        if (Session.isLoggedIn)
-            SubscriberService.fetchSubscribed(Config.baseUrl, Session.token,
-                function (map) { root.subscribedMap = map; root.subscribedRev++ },
-                function () { /* rows just start unsubscribed */ });
+        platforms.load();
 
-        // Scoped to the community in the header, which launch already set from the
-        // reader's country (Global when their country isn't on Serey). community_id
-        // filters recursively, so a country also covers the platforms under it.
-        // All three run in parallel; each section paints as its own answer lands.
-        PostService.listTrending(Config.baseUrl, root._scopeParams(root.maxPosts), Session.token,
-            function (posts) { root.suggestedPosts = posts.slice(0, root.maxPosts); },
-            function () { /* the section just stays hidden */ });
+        // Scoped to the reader's country first, like the platform picks; the header's
+        // community can't stand in (the picker has no Cambodia row, so KH readers sit
+        // on Global, which hides Cambodia). A country with nothing falls back to it.
+        // community_id filters recursively, so a country covers its platforms too.
+        var home = Config.homeCountryCommunityId;
+        root._loadScoped(PostService.listTrending, root.maxPosts, home,
+            function (posts) { root.suggestedPosts = posts; });
+        root._loadScoped(VideoService.listVideos, root.maxVideos, home,
+            function (videos) { root.suggestedVideos = videos; });
+    }
 
-        VideoService.listVideos(Config.baseUrl, root._scopeParams(root.maxVideos), Session.token,
-            function (videos) { root.suggestedVideos = videos.slice(0, root.maxVideos); },
-            function () { /* the section just stays hidden */ });
+    // One suggestion section: home country, else the header scope. Failures just hide it.
+    function _loadScoped(fetch, limit, home, done) {
+        function fallback() {
+            fetch(Config.baseUrl, root._scopeParams(limit), Session.token,
+                function (rows) { done(rows.slice(0, limit)); }, function () {});
+        }
+        if (!home) { fallback(); return; }
+        fetch(Config.baseUrl, { limit: limit, offset: 0, community_id: home }, Session.token,
+            function (rows) { if (rows.length) done(rows.slice(0, limit)); else fallback(); },
+            fallback);
     }
 
     function _hideSuggestion(entry) {
@@ -145,33 +128,12 @@ Item {
         Toast.show(now ? Lang.tr("Following") : Lang.tr("Unfollowed"));
     }
 
-    // Suggestions follow the header's community, so a Dutch reader gets Dutch
-    // trending and everyone else falls back to the Global mix.
+    // Fallback scope: the header's community, or the Global mix.
     function _scopeParams(limit) {
         var params = { limit: limit, offset: 0 };
         if (Config.communityId > 0) params.community_id = Config.communityId;
         else params.exclude_home = 1;   // Global hides the Cambodia community + children
         return params;
-    }
-
-    function _toggleSubscribe(commId, currentlySubscribed) {
-        if (!Session.isLoggedIn) return;
-        var id = String(commId);
-        function newMap(add) {
-            var m = {};
-            for (var k in root.subscribedMap) m[k] = true;
-            if (add) m[id] = true; else delete m[id];
-            return m;
-        }
-        if (currentlySubscribed) {
-            SubscriberService.unsubscribe(Config.baseUrl, Session.token, id,
-                function () { root.subscribedMap = newMap(false); root.subscribedRev++; },
-                function (err) { Toast.show(err.message || Lang.tr("Couldn't unsubscribe. Try again.")); });
-        } else {
-            SubscriberService.subscribe(Config.baseUrl, Session.token, id,
-                function () { root.subscribedMap = newMap(true); root.subscribedRev++; root.followed(); },
-                function (err) { Toast.show(err.message || Lang.tr("Couldn't subscribe. Try again.")); });
-        }
     }
 
     // Leading column (or the whole surface when narrow): intro + create action.
@@ -234,20 +196,13 @@ Item {
                         }
                     }
 
-                    ActivityIndicator {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        running: root.suggestionsLoading && !root.split
-                        visible: running
-                    }
-
                 }
 
-                // Host for the cards when there is no detail pane to put them in: close to
-                // the feed's own list width (gu(60) cap, centred), but inset so the cards
-                // never run into the window edge the way a full-bleed list would.
+                // Host for the lists when there is no detail pane: the feed's own list width
+                // (gu(60) cap, centred). Rows inset themselves, so dividers run full width.
                 Item {
                     id: narrowHost
-                    width: Math.min(parent.width - Style.spacingM * 2, units.gu(60))
+                    width: Math.min(parent.width, units.gu(60))
                     anchors.horizontalCenter: parent.horizontalCenter
                     height: root.split ? 0 : discover.height
                     visible: !root.split
@@ -329,11 +284,6 @@ Item {
                     }
                 }
 
-                ActivityIndicator {
-                    running: root.suggestionsLoading && root.split
-                    visible: running
-                }
-
                 Item {
                     id: wideHost
                     width: parent.width
@@ -349,162 +299,28 @@ Item {
         id: discover
         parent: root.split ? wideHost : narrowHost
         width: parent ? parent.width : 0
-        spacing: Style.spacingL
+        spacing: Style.spacingS
 
-        Grid {
-            id: grid
-            // Fill the pane: wider windows add columns rather than leaving dead space.
+        // The wide pane already titles this list ("Discover platforms to follow").
+        ListSectionHeader {
+            visible: !root.split && (platforms.loading || platforms.suggested.length > 0)
+            text: Lang.tr("Suggested platforms")
+        }
+        PlatformSuggestions {
+            id: platforms
             width: parent.width
-            columns: Math.max(1, Math.floor(width / units.gu(38)))
-            spacing: columns === 1 ? Style.spacingS : Style.spacingM
-
-            readonly property real cellWidth:
-                (width - spacing * (columns - 1)) / columns
-
-            Repeater {
-                model: root.suggested
-
-                delegate: Rectangle {
-                    id: card
-                    width: grid.cellWidth
-                    height: cardCol.height + cardCol.anchors.margins * 2
-                    radius: Style.cardRadius
-                    color: cardTap.pressed ? Style.pressed : Style.card
-                    border.width: units.dp(1)
-                    border.color: Style.divider
-
-                    // Declared before the content so the Subscribe pill still wins its taps.
-                    MouseArea {
-                        id: cardTap
-                        anchors.fill: parent
-                        onClicked: root.communityRequested(modelData)
-                    }
-
-                    property string commId: String(modelData.id)
-                    property bool subscribed: root.subscribedRev >= 0 && !!root.subscribedMap[card.commId]
-                    // One column = phone-sized: fold the card into a single scannable row.
-                    readonly property bool compact: grid.columns === 1
-                    readonly property real avatarW: compact ? units.gu(4) : units.gu(5)
-
-                    Column {
-                        id: cardCol
-                        anchors {
-                            left: parent.left; right: parent.right; top: parent.top
-                            margins: card.compact ? Style.spacingS : Style.spacingM
-                        }
-                        spacing: Style.spacingS
-
-                        Row {
-                            width: parent.width
-                            spacing: Style.spacingS
-
-                            Rectangle {
-                                anchors.verticalCenter: parent.verticalCenter
-                                width: card.avatarW; height: width; radius: width / 2
-                                color: Style.iconBackground
-                                CircleImage {
-                                    anchors { fill: parent; margins: units.dp(2) }
-                                    source: modelData.icon || ""
-                                    decode: units.gu(6)
-                                }
-                            }
-
-                            Column {
-                                anchors.verticalCenter: parent.verticalCenter
-                                width: parent.width - card.avatarW - Style.spacingS
-                                       - (card.compact ? inlineBtn.width + Style.spacingS : 0)
-                                spacing: units.dp(2)
-
-                                Label {
-                                    width: parent.width
-                                    text: modelData.title
-                                    font.pixelSize: card.compact ? Style.fontRegular : Style.fontLarge
-                                    font.weight: Font.DemiBold
-                                    font.family: Style.fontFor(text)
-                                    color: Style.textPrimary
-                                    elide: Text.ElideRight
-                                }
-                                Label {
-                                    width: parent.width
-                                    visible: card.compact
-                                    text: Lang.tr("%1 subscribers").arg(modelData.subscribers || 0)
-                                    font.pixelSize: Style.fontSmall
-                                    font.family: Style.fontFor(text)
-                                    color: Style.textSecondary
-                                    elide: Text.ElideRight
-                                }
-                            }
-
-                            SubscribePill {
-                                id: inlineBtn
-                                anchors.verticalCenter: parent.verticalCenter
-                                visible: card.compact
-                                width: units.gu(12); height: units.gu(4)
-                                subscribed: card.subscribed
-                                onClicked: root._toggleSubscribe(card.commId, card.subscribed)
-
-                                KeyTapArea {
-                                    onActivated: root._toggleSubscribe(card.commId, card.subscribed)
-                                    Component.onCompleted: if (index === 0 && card.compact) root.firstFocusItem = this
-                                }
-                            }
-                        }
-
-                        Label {
-                            id: descLabel
-                            width: parent.width
-                            visible: !card.compact && root.anyDescription
-                            // Fixed two lines: cards in a Grid row must end up the same height.
-                            height: visible ? Math.ceil(font.pixelSize * 1.4) * 2 : 0
-                            text: root.descriptionFor(modelData)
-                            font.pixelSize: Style.fontSmall
-                            font.family: Style.fontFor(text)
-                            color: Style.textSecondary
-                            wrapMode: Text.WordWrap
-                            maximumLineCount: 2
-                            elide: Text.ElideRight
-                        }
-
-                        Label {
-                            width: parent.width
-                            visible: !card.compact
-                            text: Lang.tr("%1 subscribers").arg(modelData.subscribers || 0)
-                            font.pixelSize: Style.fontRegular
-                            font.family: Style.fontFor(text)
-                            color: Style.textSecondary
-                            elide: Text.ElideRight
-                        }
-
-                        SubscribePill {
-                            id: wideBtn
-                            visible: !card.compact
-                            width: parent.width
-                            subscribed: card.subscribed
-                            onClicked: root._toggleSubscribe(card.commId, card.subscribed)
-
-                            KeyTapArea {
-                                onActivated: root._toggleSubscribe(card.commId, card.subscribed)
-                                Component.onCompleted: if (index === 0 && !card.compact) root.firstFocusItem = this
-                            }
-                        }
-                    }
-                }
-            }
+            maxSuggestions: root.maxSuggestions
+            onSubscribed: root.followed()
+            onCommunityRequested: root.communityRequested(community)
         }
 
         // Something to read and watch right now, mixed like a real feed.
         Column {
             width: parent.width
-            spacing: Style.spacingS
+            spacing: 0
             visible: root.suggestions.length > 0
 
-            Label {
-                text: Lang.tr("Trending now")
-                font.pixelSize: Style.fontRegular
-                font.weight: Font.DemiBold
-                font.family: Style.fontFor(text)
-                color: Style.textTitle
-            }
+            ListSectionHeader { text: Lang.tr("Trending now") }
 
             // Rows sit flush like the feed's list: a gap between them would show the page
             // behind each card as soon as one is swiped.

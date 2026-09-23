@@ -778,6 +778,9 @@ var nl = {
     "Choose other category":                            "Kies een andere categorie",
     "Pick where this post belongs.":                    "Kies waar dit artikel thuishoort.",
     "Trending now":                                     "Nu populair",
+    "1 trending post":                                  "1 populair artikel",
+    "%1 trending posts":                                "%1 populaire artikelen",
+    "Suggested platforms":                              "Voorgestelde platforms",
     "Preview":                                          "Voorbeeld",
     "now":                                              "nu",
     // Stragglers that were still falling back to English
