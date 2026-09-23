@@ -18,7 +18,11 @@ Column {
     signal communityRequested(var community)
 
     property int maxSuggestions: 3
-    readonly property var suggested: root._pickSuggestions()   // [{id, title, dns, icon, trending}]
+    // [{id, title, dns, icon, trending}]. Frozen once shown: a late answer (trending after
+    // trendCap, the community tree) used to swap the rows under the reader.
+    property var suggested: []
+    readonly property var _live: root._pickSuggestions()
+    on_LiveChanged: if (root.suggested.length === 0) root.suggested = root._live
     // Skeleton rows show while true; hosts reserve the space so nothing shifts.
     readonly property bool loading: root._loaded && !root._ready
     // First Tab stop: the first Subscribe pill.
@@ -39,7 +43,7 @@ Column {
     readonly property bool _ready: root._subsLoaded && root._trendDone
     property bool _loaded: false
 
-    Timer { id: trendCap; interval: 2500; onTriggered: root._trendDone = true }
+    Timer { id: trendCap; interval: 5000; onTriggered: root._trendDone = true }
 
     // Callers load on first show, so a hidden instance costs no requests.
     function load() {
