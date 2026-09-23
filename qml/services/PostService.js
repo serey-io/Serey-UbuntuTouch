@@ -2,11 +2,16 @@
 .import "Http.js" as Http
 .import "Mappers.js" as M
 
+// Notes hidden for now (app has no note UI yet)
+function _notNote(raw) {
+    return !(raw && (raw.is_note === true || raw.is_note === "true"));
+}
+
 // onOk receives (posts, rawCount); rawCount is the pre-filter server count so callers paginate against the true offset, not a filtered length.
 function _list(baseUrl, path, params, token, onOk, onErr) {
     return Http.get(baseUrl, path, params, token, function (data) {
         var raw = data.posts || [];
-        onOk(raw.map(M.toPost), raw.length);
+        onOk(raw.filter(_notNote).map(M.toPost), raw.length);
     }, onErr);
 }
 
@@ -109,6 +114,9 @@ function createPost(baseUrl, params, token, onOk, onErr) {
         body.permlink = params.permlink;
     // Explicit bool so an edit can flip it either way; omitting it defaults true
     body.post_to_blockchain = (params.postToBlockchain !== false);
+    // Winston result (Netherlands scope only)
+    if (params.isAiGenerated !== undefined)
+        body.is_ai_generated = !!params.isAiGenerated;
     // Publishing scope: the ceiling community, null for everywhere. Only sent for
     // a real community - Global is the combined feed, so capping there would just
     // hide the post from the one feed it was posted to.
@@ -173,10 +181,12 @@ function deletePost(baseUrl, username, permlink, token, onOk, onErr) {
 
 // --- Admin/CMS moderation (requires an owner/manager token) ----------------
 
-// Moderator delete by numeric row id, unlike deletePost not limited to own username
-function adminDeletePost(baseUrl, id, token, onOk, onErr) {
-    Http.del(baseUrl, "/serey-web/admin-delete-post-or-comment/" + id, token,
-             function (data) { onOk(data || {}); }, onErr);
+// Moderator delete by numeric row id, unlike deletePost not limited to own username.
+// Backend requires body { type: POST|COMMENT|VIDEO, reason }.
+function adminDeletePost(baseUrl, id, token, onOk, onErr, type, reason) {
+    Http.delWithBody(baseUrl, "/serey-web/admin-delete-post-or-comment/" + id,
+                     { type: type || "POST", reason: reason || "" }, token,
+                     function (data) { onOk(data || {}); }, onErr);
 }
 
 // Needs a JSON body (list of ids), so uses Http.delWithBody not bodiless del()
@@ -189,7 +199,7 @@ function adminBulkDeletePosts(baseUrl, ids, token, onOk, onErr) {
 function searchAdvanced(baseUrl, params, token, onOk, onErr) {
     return Http.get(baseUrl, "/serey-web/search-advanced", params, token, function (data) {
         var buckets = (data.new_posts || []).concat(data.trending_posts || [], data.feed_posts || []);
-        onOk(buckets.map(M.toPost));
+        onOk(buckets.filter(_notNote).map(M.toPost));
     }, onErr);
 }
 
