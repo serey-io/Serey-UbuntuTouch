@@ -785,7 +785,26 @@ var nl = {
     "Upvotes":                                          "Stemmen",
     "less":                                             "minder",
     "OK":                                               "OK",
-    "Video (%1/1)":                                     "Video (%1/1)"
+    "Video (%1/1)":                                     "Video (%1/1)",
+    // Notes
+    "Article":                                          "Artikel",
+    "Note":                                             "Notitie",
+    "Edit Note":                                        "Notitie bewerken",
+    "Note posted!":                                     "Notitie geplaatst!",
+    "Note updated!":                                    "Notitie bijgewerkt!",
+    "Couldn't post note.":                              "Kon notitie niet plaatsen.",
+    "Couldn't update note.":                            "Kon notitie niet bijwerken.",
+    "Add video link":                                   "Videolink toevoegen",
+    "YouTube, TikTok or Facebook":                      "YouTube, TikTok of Facebook",
+    "Please enter a valid video link.":                 "Voer een geldige videolink in.",
+    "What's on your mind, %1?":                         "Waar denk je aan, %1?",
+    "What's on your mind?":                             "Waar denk je aan?",
+    "Post":                                             "Plaatsen",
+    "Video added":                                      "Video toegevoegd",
+    "Upload a clip up to 1 minute, or paste a YouTube, TikTok or Facebook link.": "Upload een clip van maximaal 1 minuut, of plak een YouTube-, TikTok- of Facebook-link.",
+    "Upload from device":                             "Uploaden vanaf apparaat",
+    "Uploading… %1%":                                 "Uploaden… %1%",
+    "Video must be 1 minute or shorter.":             "Video mag maximaal 1 minuut duren."
 };
 
 function tr(str, lang) {

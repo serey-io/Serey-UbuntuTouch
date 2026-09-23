@@ -169,7 +169,7 @@ Page {
                     spacing: units.dp(3)
                     Label {
                         width: parent.width
-                        text: modelData.title || ""
+                        text: modelData.title || modelData.noteText || ""
                         font.pixelSize: Style.fontRegular
                         font.weight: Font.DemiBold
                         font.family: Style.fontFor(text)

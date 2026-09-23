@@ -25,8 +25,6 @@ Page {
     property bool uploadingVideo: false
     property int uploadPercent: 0      // chunked-upload progress (0-100)
     property bool grabbingThumb: false
-    // "Post on the blockchain": on = broadcast on-chain (default), off = save to the Serey DB only (no voting/rewards).
-    property bool postToBlockchain: true
     // Publishing scope: the highest community this video may surface under (its
     // ceiling). 0 = no ceiling, i.e. everywhere including the Global feed.
     property int publishCeilingId: 0
@@ -178,7 +176,6 @@ Page {
             body: descField.text.trim(),
             videoUrl: page.videoUrl,
             thumbUrl: page.thumbUrl,
-            postToBlockchain: page.postToBlockchain,
             publishCeilingId: page.targetIsGlobal ? 0 : page.publishCeilingId,
             communityId: page.postCommunityId,
             communityName: page.postCommunityName
@@ -452,42 +449,6 @@ Page {
                     anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
                     height: descField.activeFocus ? units.dp(2) : units.dp(1)
                     color: descField.activeFocus ? Style.brand : Style.divider
-                }
-            }
-
-            Row {
-                width: parent.width
-                spacing: Style.spacingM
-
-                Column {
-                    width: parent.width - vidChainSwitch.width - Style.spacingM
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: units.dp(2)
-
-                    Label {
-                        text: Lang.tr("Post on the blockchain")
-                        font.pixelSize: Style.fontRegular
-                        font.weight: Font.DemiBold
-                        font.family: Style.fontFor(text)
-                        color: Style.textPrimary
-                    }
-                    Label {
-                        width: parent.width
-                        text: page.postToBlockchain
-                            ? Lang.tr("The title and the link are permanently recorded on the blockchain. This allows you to prove that you are the creator and receive SRY rewards. The video itself simply remains on a server.")
-                            : Lang.tr("Serey only, no votes or rewards.")
-                        font.pixelSize: Style.fontXSmall
-                        font.family: Style.fontFor(text)
-                        color: Style.textSecondary
-                        wrapMode: Text.WordWrap
-                    }
-                }
-
-                Switch {
-                    id: vidChainSwitch
-                    anchors.verticalCenter: parent.verticalCenter
-                    checked: page.postToBlockchain
-                    onClicked: page.postToBlockchain = !page.postToBlockchain
                 }
             }
 
