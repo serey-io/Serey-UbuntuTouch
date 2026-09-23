@@ -123,6 +123,7 @@ Page {
         } else {
             items.push({ icon: "close", label: Lang.tr("Hide this post"), action: "hide" });
             items.push({ icon: "dialog-warning-symbolic", label: Lang.tr("Report post"), action: "report" });
+            items.push({ icon: "edit-copy", label: Lang.tr("Report copyright"), action: "copyright" });
         }
         return items;
     }
@@ -134,6 +135,7 @@ Page {
         else if (action === "delete") PostActions.open(page.post, "blog", 2);
         else if (action === "hide") page.hidePost();
         else if (action === "report") PostActions.open(page.post, "blog", 1);
+        else if (action === "copyright") Nav.reportCopyright(page.post, "blog");
     }
 
     // Delete/Block reach us only as signals; content is gone, so pop back to feed
@@ -1675,6 +1677,8 @@ Page {
                     permlink: page.permlink
                     voteType: "post"
                     onChain: page.post ? (page.post.postToBlockchain !== false) : true
+                    // Owner-only AI mark
+                    showAi: (Config.ownedCommunityIdSet, Config.showAiBadge(page.post))
                     createdAt: page.post ? (page.post.date || "") : ""
                     showComments: false
                     showVotersLabel: false

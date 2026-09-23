@@ -6,6 +6,7 @@ import "../components"
 import Lomiri.Components.Popups 1.3 as Popups
 import "../services/PlatformService.js" as PlatformService
 import "../services/AccountService.js" as AccountService
+import "../services/CopyrightService.js" as CopyrightService
 
 // "Platform Setting" card from the CMS hub: subscription, banned users, delete platform
 Page {
@@ -86,7 +87,17 @@ Page {
         ]
     }
 
-    Component.onCompleted: { page.loadSubscription(); page.loadName() }
+    Component.onCompleted: { page.loadSubscription(); page.loadName(); page.loadOpenReports() }
+    // Recount after returning from the reports page
+    onVisibleChanged: if (visible) page.loadOpenReports()
+
+    // Open copyright reports -> red badge on the row
+    property int openReports: 0
+    function loadOpenReports() {
+        CopyrightService.adminList(Config.baseUrl, Session.token, "open",
+            function (rows) { page.openReports = rows.length },
+            function () { page.openReports = 0 })
+    }
 
     KeyboardAwareFlickable {
         anchors { top: page.header.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
@@ -121,6 +132,14 @@ Page {
                 label: Lang.tr("Banned Users")
                 showChevron: true
                 onClicked: page.pageStack.push(bannedUsersPage)
+            }
+            SettingsRow {
+                width: parent.width
+                iconName: "edit-copy"
+                label: Lang.tr("Copyright Reports")
+                unreadBadge: page.openReports
+                showChevron: true
+                onClicked: page.pageStack.push(Qt.resolvedUrl("CopyrightReportsPage.qml"))
             }
 
             SettingsSectionHeader { text: Lang.tr("Danger zone") }

@@ -123,7 +123,8 @@ if not msg and count:
 if not msg:
     msg = "New activity on Serey"
 
-summary = actor if actor else "Serey"
+# "system" = backend alerts (e.g. copyright report)
+summary = actor if actor and actor != "system" else "Serey"
 tag = "serey-{}".format(notif_id) if notif_id else "serey-{}-{}".format(ntype, actor)
 
 action_url = "appid://serey.serey-io/serey/current-user-version"

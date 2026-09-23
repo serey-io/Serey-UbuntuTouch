@@ -93,6 +93,21 @@ Page {
         page.loadPage()
     }
 
+    // Date bucket for section headers
+    function dateGroup(dateStr) {
+        var d = new Date(dateStr || "");
+        if (isNaN(d.getTime())) return Lang.tr("Earlier");
+        var now = new Date();
+        var today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        var day = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+        var diffDays = Math.round((today - day) / 86400000);
+        if (diffDays <= 0) return Lang.tr("Today");
+        if (diffDays === 1) return Lang.tr("Yesterday");
+        if (diffDays < 7) return Lang.tr("This week");
+        if (diffDays < 30) return Lang.tr("This month");
+        return Lang.tr("Earlier");
+    }
+
     function loadPage() {
         if (page.loading || page.endReached) return
         page.loading = true
@@ -113,13 +128,16 @@ Page {
                                         ? (info.commented_on_permlink || "")
                                         : ""
                     var isRead = !!(n.is_read || n.read || false)
+                    // System actor reads as "Serey"
+                    var actor = (n.actor === "system") ? "Serey" : (n.actor || n.actor_name || n.from_user || "")
                     if (!isRead) page.unreadCount++
                     notifModel.append({
                         nid:            String(n.id || n._id || ""),
-                        message:        n.actor + " " + (info.description || n.message || n.content || ""),
-                        actorName:      n.actor || n.actor_name || n.from_user || "",
+                        message:        actor + " " + (info.description || n.message || n.content || ""),
+                        actorName:      actor,
                         actorIcon:      n.actor_image_url || n.actor_image || "",
                         timeAgo:        Style.formatTimeAgo(n.created_at || n.createdAt || ""),
+                        dateGroup:      page.dateGroup(n.created_at || n.createdAt || ""),
                         isRead:         isRead,
                         ntype:          ntype,
                         postAuthor:     postAuthor,
@@ -190,6 +208,27 @@ Page {
         clip: true
         spacing: 0
 
+        // Today / Yesterday / ... headers
+        section.property: "dateGroup"
+        section.criteria: ViewSection.FullString
+        section.delegate: Rectangle {
+            width: list.width
+            height: units.gu(4.5)
+            color: Style.surface
+            Label {
+                anchors { left: parent.left; leftMargin: Style.spacingM; bottom: parent.bottom; bottomMargin: Style.spacingS }
+                text: section
+                font.pixelSize: Style.fontSmall
+                font.weight: Font.DemiBold
+                font.family: Style.fontFor(text)
+                color: Style.textPrimary
+            }
+            Rectangle {
+                anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
+                height: units.dp(1); color: Style.divider
+            }
+        }
+
         delegate: Item {
             width: list.width
             height: contentRow.height + units.gu(2)
@@ -214,6 +253,9 @@ Page {
                     if (model.ntype === "FOLLOW") {
                         page.pageStack.push(Qt.resolvedUrl("ProfileViewPage.qml"),
                             { username: model.actorName })
+                    } else if (model.ntype === "COPYRIGHT_REPORT_SUBMITTED") {
+                        // Owner: straight to open reports
+                        page.pageStack.push(Qt.resolvedUrl("CopyrightReportsPage.qml"), { filterIndex: 1 })
                     } else if (model.postAuthor !== "" && model.postPermlink !== "") {
                         var capturedAuthor   = model.postAuthor
                         var capturedPermlink = model.postPermlink
@@ -292,6 +334,7 @@ Page {
                                  : model.ntype === "VOTE" ? Style.success
                                  : model.ntype === "REPLY" || model.ntype === "COMMENT" ? "#6C63FF"
                                  : model.ntype === "BAN" || model.ntype === "BANNED" ? Style.danger
+                                 : model.ntype === "COPYRIGHT_REPORT_SUBMITTED" ? Style.danger
                                  : Style.brand
                             Icon {
                                 anchors.centerIn: parent
@@ -301,6 +344,7 @@ Page {
                                     : model.ntype === "VOTE" ? "like"
                                     : model.ntype === "REPLY" || model.ntype === "COMMENT" ? "message"
                                     : model.ntype === "BAN" || model.ntype === "BANNED" ? "dialog-warning-symbolic"
+                                    : model.ntype === "COPYRIGHT_REPORT_SUBMITTED" ? "edit-copy"
                                     : "notification"
                             }
                         }

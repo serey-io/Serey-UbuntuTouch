@@ -69,6 +69,12 @@ QtObject {
     readonly property string storageCreateUploadUrl: "https://serey.io/api/storage/create-upload"
     readonly property string storageDeleteUploadUrl: "https://serey.io/api/storage/delete-upload"
 
+    // Winston AI check via web's server routes (key stays server-side)
+    readonly property string aiDetectUrl: "https://serey.io/api/ai/detect-content"
+    readonly property string aiCreditReportUrl: "https://serey.io/api/ai/report-credit-failure"
+    // AI scan scope: Netherlands + everything under it
+    readonly property int netherlandsCommunityId: 99
+
     // Homepage mini-app: a single fixed site, filtered client-side via a `community_id` query param rather than switching domains.
     readonly property string homeLandingPageUrl: "https://khmer.serey.io"
 
@@ -265,6 +271,23 @@ QtObject {
             idStr = parentStr;
         }
         return out;
+    }
+
+    // "Made with AI" badge: flagged + NL scope + viewer owns post's community (web rule)
+    function showAiBadge(post) {
+        if (!post || !post.isAiGenerated) return false;
+        var cid = Number(post.communityId || 0);
+        return cid > 0 && !!ownedCommunityIdSet[cid] && isUnderCommunity(cid, netherlandsCommunityId);
+    }
+
+    // True if `id` is `ancestorId` or nested under it
+    function isUnderCommunity(id, ancestorId) {
+        if (!(Number(id) > 0) || !(Number(ancestorId) > 0)) return false;
+        var chain = scopeChainFor(id);
+        if (chain.length === 0) return Number(id) === Number(ancestorId);
+        for (var i = 0; i < chain.length; i++)
+            if (chain[i].id === Number(ancestorId)) return true;
+        return false;
     }
 
     // Looks up a community's {title, icon, dns, ...} by id from the cached tree, or null if unknown

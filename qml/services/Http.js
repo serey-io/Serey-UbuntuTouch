@@ -135,7 +135,34 @@ function del(baseUrl, path, token, onOk, onErr) {
     return send("DELETE", baseUrl + path, token, null, onOk, onErr);
 }
 
+// Native sender (Serey.FileUtils JsonRequest); Qt's XHR drops DELETE bodies
+var _jsonSender = null;
+function setJsonSender(sender) { _jsonSender = sender; }
+
 // Some admin endpoints need a DELETE with a JSON body; `del()` sends none
 function delWithBody(baseUrl, path, bodyObj, token, onOk, onErr) {
-    return send("DELETE", baseUrl + path, token, bodyObj || {}, onOk, onErr);
+    if (!_jsonSender)
+        return send("DELETE", baseUrl + path, token, bodyObj || {}, onOk, onErr);
+    _pendingDelta(1);
+    _jsonSender.send("DELETE", baseUrl + path, token || "", JSON.stringify(bodyObj || {}),
+        function (status, text) {
+            _pendingDelta(-1);
+            if (status === 0) {
+                _reportNet(false);
+                onErr({ status: 0, message: "Network error. Check your connection." });
+                return;
+            }
+            _reportNet(true);
+            var data = null;
+            try { data = text ? JSON.parse(text) : null; }
+            catch (e) { onErr({ status: status, message: "Invalid response from server." }); return; }
+            if (status >= 200 && status < 300 && !(data && data.status === false)) {
+                onOk(data);
+            } else {
+                if (status === 401 && token && _onUnauthorized) _onUnauthorized(token);
+                onErr({ status: status, data: data,
+                        message: (data && data.message) ? data.message : ("Request failed (" + status + ").") });
+            }
+        });
+    return null;
 }
