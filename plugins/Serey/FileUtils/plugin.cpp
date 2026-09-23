@@ -2,6 +2,7 @@
 #include <qqml.h>
 
 #include "filechunkreader.h"
+#include "jsonrequest.h"
 
 class SereyFileUtilsPlugin : public QQmlExtensionPlugin
 {
@@ -13,6 +14,7 @@ public:
     {
         // import Serey.FileUtils 1.0
         qmlRegisterType<FileChunkReader>(uri, 1, 0, "FileChunkReader");
+        qmlRegisterType<JsonRequest>(uri, 1, 0, "JsonRequest");
     }
 };
 

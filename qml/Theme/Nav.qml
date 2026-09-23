@@ -45,6 +45,8 @@ QtObject {
     // Edit a video's caption: emitted from feed cards, the reel menu and the action sheet, none of
     // which know their own stack. Main pushes the editor onto whichever tab is active.
     signal editCaption(var post)
+    // Copyright report form for a post ("blog"|"gallery"|"video")
+    signal reportCopyright(var post, string kind)
 
     // Nav tab show/hide was just changed; Main reloads its cache
     signal navMenuChanged()

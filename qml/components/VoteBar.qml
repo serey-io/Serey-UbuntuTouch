@@ -32,6 +32,8 @@ RowLayout {
     property bool showComments: true
     property bool showShare: true
     property bool showVotersLabel: false
+    // "Made with AI" mark before upvote
+    property bool showAi: false
     // Narrow host (detail side rail): shortens the coin pill (icon only, no unit word) so
     // the row still fits. Alignment is unchanged, the pill stays on the bar's right edge.
     property bool compact: false
@@ -280,6 +282,26 @@ RowLayout {
             VoteService.flag(Config.baseUrl, author, permlink, voteType, Session.token,
                 function (r) { if (bar._stale(key)) return; _apply(r); bar._cache(); },
                 function (e) { if (bar._stale(key)) return; bar._failFlag(e, snap); });
+        }
+    }
+
+    // AI mark, like web
+    Row {
+        visible: bar.showAi
+        Layout.alignment: Qt.AlignVCenter
+        spacing: units.dp(2)
+        Label {
+            anchors.verticalCenter: parent.verticalCenter
+            text: "✨"
+            font.pixelSize: Style.fontMedium
+            color: Style.brand
+        }
+        Label {
+            anchors.verticalCenter: parent.verticalCenter
+            text: "AI"
+            font.pixelSize: Style.fontSmall
+            font.weight: Font.DemiBold
+            color: Style.brand
         }
     }
 

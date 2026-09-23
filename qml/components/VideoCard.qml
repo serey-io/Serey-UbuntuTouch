@@ -83,6 +83,7 @@ AbstractButton {
         } else {
             items.push({ icon: "close", label: Lang.tr("Hide this video"), action: "hide" });
             items.push({ icon: "dialog-warning-symbolic", label: Lang.tr("Report video"), action: "report" });
+            items.push({ icon: "edit-copy", label: Lang.tr("Report copyright"), action: "copyright" });
         }
         return items;
     }
@@ -96,6 +97,7 @@ AbstractButton {
             PostActions.hideRequested(v.author || "", v.permlink || "");
         }
         else if (action === "report") PostActions.open(root.v, "video", 1);
+        else if (action === "copyright") Nav.reportCopyright(root.v, "video");
     }
 
     // Reparent onto the window while open so the menu isn't clipped by the list row (see PostCard)

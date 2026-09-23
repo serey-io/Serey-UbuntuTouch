@@ -7,6 +7,8 @@ AbstractButton {
 
     property string text: ""
     property bool busy: false
+    // Red fill for destructive actions
+    property bool danger: false
 
     width: parent ? parent.width : units.gu(40)
     height: units.gu(5)
@@ -16,7 +18,8 @@ AbstractButton {
     Rectangle {
         anchors.fill: parent
         radius: Style.cardRadius
-        color: root.pressed ? Style.brandDark : Style.brand
+        color: root.danger ? (root.pressed ? Qt.darker(Style.danger, 1.15) : Style.danger)
+                           : (root.pressed ? Style.brandDark : Style.brand)
         Behavior on color { ColorAnimation { duration: 120 } }
 
         Row {
