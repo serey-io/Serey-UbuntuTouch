@@ -113,6 +113,7 @@ Page {
         } else {
             items.push({ icon: "close", label: Lang.tr("Hide this video"), action: "hide" });
             items.push({ icon: "dialog-warning-symbolic", label: Lang.tr("Report video"), action: "report" });
+            items.push({ icon: "edit-copy", label: Lang.tr("Report copyright"), action: "copyright" });
         }
         return items;
     }
@@ -128,6 +129,7 @@ Page {
             page.pageStack.pop();
         }
         else if (action === "report") PostActions.open(page.video, "video", 1);
+        else if (action === "copyright") Nav.reportCopyright(page.video, "video");
     }
     // Flattened, keyboard-navigable rows for headerMenu, Block appended last.
     // No divider: Block belongs with Hide/Report in the negative group.

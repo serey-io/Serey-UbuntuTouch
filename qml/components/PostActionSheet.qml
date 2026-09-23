@@ -51,7 +51,7 @@ Item {
         var rows = [];
         if (step === 0) {
             var candidates = [saveOfflineBtn, saveVideoBtn, editPostBtn, editCaptionBtn, deletePostBtn,
-                              hidePostBtn, reportPostBtn, blockUserBtn];
+                              hidePostBtn, reportPostBtn, reportCopyrightBtn, blockUserBtn];
             for (var i = 0; i < candidates.length; i++)
                 if (candidates[i].visible) rows.push(candidates[i]);
         } else if (step === 1) {
@@ -610,6 +610,33 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter; spacing: units.dp(2)
                         Label { text: Lang.tr("Report Post"); font.pixelSize: Style.fontMedium; font.weight: Font.DemiBold; color: Style.textPrimary }
                         Label { text: Lang.tr("I'm concerned about this post"); font.pixelSize: Style.fontSmall; color: Style.textSecondary }
+                    }
+                }
+            }
+
+            AbstractButton {
+                id: reportCopyrightBtn
+                width: parent.width; height: units.gu(8)
+                visible: !sheet.isOwn
+                onClicked: {
+                    var p = PostActions.post;
+                    var k = PostActions.kind;
+                    sheet.closeSheet();
+                    if (p) Nav.reportCopyright(p, k);
+                }
+                Row {
+                    anchors { fill: parent; leftMargin: Style.spacingM; rightMargin: Style.spacingM }
+                    spacing: Style.spacingM
+                    Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: units.gu(4.5); height: width; radius: width / 2
+                        color: Style.iconBackground
+                        Label { anchors.centerIn: parent; text: "©"; font.pixelSize: Style.fontLarge; font.weight: Font.DemiBold; color: Style.textPrimary }
+                    }
+                    Column {
+                        anchors.verticalCenter: parent.verticalCenter; spacing: units.dp(2)
+                        Label { text: Lang.tr("Report copyright"); font.pixelSize: Style.fontMedium; font.weight: Font.DemiBold; color: Style.textPrimary }
+                        Label { text: Lang.tr("This copies my work"); font.pixelSize: Style.fontSmall; color: Style.textSecondary }
                     }
                 }
             }
