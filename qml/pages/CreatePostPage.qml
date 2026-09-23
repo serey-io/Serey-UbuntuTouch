@@ -43,8 +43,6 @@ Page {
     // Set right before a fresh text segment is created (e.g. after inserting an image) so its
     // Loader can focus it once instantiated; Loader.onLoaded fires only once per delegate creation.
     property int _pendingFocusIndex: -1
-    // "Post on the blockchain": on = broadcast on-chain (default), off = save to the Serey DB only (no voting/rewards).
-    property bool postToBlockchain: true
     // Publishing scope: the highest community this post may surface under (its
     // ceiling). 0 = no ceiling, i.e. everywhere including the Global feed.
     property int publishCeilingId: 0
@@ -222,6 +220,8 @@ Page {
     // When set, this page edits an existing post (sends its permlink to update in place) instead of creating a new one.
     property var editPost: null
     readonly property bool isEdit: !!editPost
+    // Note vs article; edit locks to post's kind
+    property bool noteMode: !!(editPost && editPost.isNote)
 
     // isNew: feed jumps to Latest only when there's actually a new post to show
     signal saved(bool isNew)
@@ -301,8 +301,6 @@ Page {
                 if (eSubs && eSubs.length) eSub = (typeof eSubs[0] === "string") ? eSubs[0] : (eSubs[0] && eSubs[0].name) || "";
             }
             page.selectedSubCategory = eSub || "";
-            // Prefill the toggle from the saved post (default on if absent).
-            page.postToBlockchain = (page.editPost.postToBlockchain !== false);
             page.publishCeilingId = Number(page.editPost.publishCeilingId || 0);
             // Always re-read the post from its own detail endpoint. Feed rows carry a
             // SHORTENED body (and often no community_id/community_title), so editing from a
@@ -366,7 +364,8 @@ Page {
 
         Label {
             anchors.centerIn: parent
-            text: page.isEdit ? Lang.tr("Edit Post") : Lang.tr("Create Post")
+            text: page.isEdit ? (page.noteMode ? Lang.tr("Edit Note") : Lang.tr("Edit Post"))
+                              : Lang.tr("Create Post")
             font.pixelSize: Style.fontMedium
             font.weight: Font.DemiBold
             color: Style.textPrimary
@@ -375,6 +374,34 @@ Page {
         Rectangle {
             anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
             height: units.dp(1); color: Style.divider
+        }
+    }
+
+    // Article / Note switch, new posts only
+    SectionTabs {
+        id: modeTabs
+        anchors { left: parent.left; right: parent.right; top: hdr.bottom }
+        visible: !page.isEdit
+        height: visible ? implicitHeight : 0
+        z: 10
+        model: [Lang.tr("Article"), Lang.tr("Note")]
+        currentIndex: page.noteMode ? 1 : 0
+        onSelected: { page.dismissKeyboard(); page.noteMode = (index === 1); }
+    }
+
+    Loader {
+        id: noteLoader
+        anchors { top: modeTabs.bottom; bottom: parent.bottom; left: parent.left; right: parent.right }
+        active: page.noteMode
+        visible: active
+        sourceComponent: NoteComposer {
+            editPost: page.editPost
+            communityId: page.postCommunityId
+            communityName: page.isEdit ? (page.editPost.community || Config.communityName) : page.postCommunityName
+            publishCeilingId: page.targetIsGlobal ? 0 : page.publishCeilingId
+            kbHeight: page.kbHeight
+            maxContentWidth: page.maxContentWidth
+            onSaved: page._finishSave(data, page.isEdit ? Lang.tr("Note updated!") : Lang.tr("Note posted!"))
         }
     }
 
@@ -709,7 +736,6 @@ Page {
                                        : page.postCommunityName,
             categories: page.selectedCategory || "general",
             subcategories: page.selectedSubCategory.length > 0 ? [page.selectedSubCategory] : [],
-            postToBlockchain: page.postToBlockchain,
             // Never cap a post whose target IS Global: it would hide the post from
             // the only feed it was published to.
             publishCeilingId: page.targetIsGlobal ? 0 : page.publishCeilingId,
@@ -719,30 +745,7 @@ Page {
         }, Session.token,
         function (data) {
             page.submitting = false;
-            // Remember the scope for this community so the next post here starts there.
-            if (!page.targetIsGlobal)
-                Session.savePostScope(page.postCommunityId, page.publishCeilingId);
-            Toast.success(page.isEdit ? Lang.tr("Post updated!") : Lang.tr("Post published!"));
-
-            // The API answers with the stored row; it carries the permlink the article
-            // now lives at, which is what the detail page needs.
-            var created = (data && (data.post || (data.data && data.data.db_data))) || null;
-            var fresh = (!page.isEdit && created && created.permlink) ? Mappers.toPost(created) : null;
-
-            // Browse where the post landed, so the feed behind the article is the one
-            // holding it (Main also flips News to Latest off this signal).
-            if (fresh && page.postCommunityId > 0)
-                Config.selectCommunityById(page.postCommunityId);
-
-            // pageStack goes stale for the popped page, so keep our own handle.
-            var stack = page.pageStack;
-            page.saved(!page.isEdit);
-            stack.pop();
-            // Straight into the published article; Back then lands on that feed.
-            if (fresh)
-                stack.push(Qt.resolvedUrl("PostDetailPage.qml"),
-                           { author: fresh.author, permlink: fresh.permlink,
-                             title: fresh.title, seedPost: fresh });
+            page._finishSave(data, page.isEdit ? Lang.tr("Post updated!") : Lang.tr("Post published!"));
         },
         function (err) {
             page.submitting = false;
@@ -750,6 +753,34 @@ Page {
                                              : (page.isEdit ? Lang.tr("Couldn't update post.")
                                                             : Lang.tr("Couldn't publish post.")));
         });
+    }
+
+    // Shared by article + note
+    function _finishSave(data, okMsg) {
+        // Remember the scope for this community so the next post here starts there.
+        if (!page.targetIsGlobal)
+            Session.savePostScope(page.postCommunityId, page.publishCeilingId);
+        Toast.success(okMsg);
+
+        // The API answers with the stored row; it carries the permlink the article
+        // now lives at, which is what the detail page needs.
+        var created = (data && (data.post || (data.data && data.data.db_data))) || null;
+        var fresh = (!page.isEdit && created && created.permlink) ? Mappers.toPost(created) : null;
+
+        // Browse where the post landed, so the feed behind the article is the one
+        // holding it (Main also flips News to Latest off this signal).
+        if (fresh && page.postCommunityId > 0)
+            Config.selectCommunityById(page.postCommunityId);
+
+        // pageStack goes stale for the popped page, so keep our own handle.
+        var stack = page.pageStack;
+        page.saved(!page.isEdit);
+        stack.pop();
+        // Straight into the published article; Back then lands on that feed.
+        if (fresh)
+            stack.push(Qt.resolvedUrl("PostDetailPage.qml"),
+                       { author: fresh.author, permlink: fresh.permlink,
+                         title: fresh.title, seedPost: fresh });
     }
 
     // The Loader delegate for the focused text segment; .item is the actual TextArea.
@@ -917,7 +948,8 @@ Page {
 
     Flickable {
         id: scroll
-        anchors { top: hdr.bottom; bottom: Config.wideMode ? parent.bottom : toolbar.top; horizontalCenter: parent.horizontalCenter }
+        anchors { top: modeTabs.bottom; bottom: Config.wideMode ? parent.bottom : toolbar.top; horizontalCenter: parent.horizontalCenter }
+        visible: !page.noteMode
         width: Math.min(parent.width, page.maxContentWidth)
         contentHeight: col.height + Style.spacingL
         clip: true
@@ -1479,48 +1511,6 @@ Page {
                 }
             }
 
-            // Bare row, no card: the toggle reads as a form setting rather than a section.
-            Item {
-                width: parent.width
-                height: chainRow.implicitHeight
-
-                Row {
-                    id: chainRow
-                    anchors { left: parent.left; right: parent.right }
-                    spacing: Style.spacingM
-
-                    Column {
-                        width: parent.width - chainSwitch.width - Style.spacingM
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: units.dp(2)
-
-                        Label {
-                            text: Lang.tr("Post on the blockchain")
-                            font.pixelSize: Style.fontRegular
-                            font.weight: Font.DemiBold
-                            font.family: Style.fontFor(text)
-                            color: Style.textPrimary
-                        }
-                        Label {
-                            width: parent.width
-                            text: page.postToBlockchain ? Lang.tr("Can earn votes and rewards.")
-                                                        : Lang.tr("Serey only, no votes or rewards.")
-                            font.pixelSize: Style.fontXSmall
-                            font.family: Style.fontFor(text)
-                            color: Style.textSecondary
-                            wrapMode: Text.WordWrap
-                        }
-                    }
-
-                    Switch {
-                        id: chainSwitch
-                        anchors.verticalCenter: parent.verticalCenter
-                        checked: page.postToBlockchain
-                        onClicked: page.postToBlockchain = !page.postToBlockchain
-                    }
-                }
-            }
-
             // Publishing scope. Hidden on Global: that IS the combined feed, so
             // there is nothing to narrow the post down to. A dropdown rather than
             // a switch because the tree has more than two levels.
@@ -1719,7 +1709,7 @@ Page {
     // Phone: docked above the OSK. Desktop has no OSK; an inline copy sits under the body field
     Rectangle {
         id: toolbar
-        visible: !Config.wideMode
+        visible: !Config.wideMode && !page.noteMode
         anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
         anchors.bottomMargin: page.kbHeight
         Behavior on anchors.bottomMargin { NumberAnimation { duration: 150; easing.type: Easing.OutQuad } }
