@@ -82,6 +82,7 @@ Page {
     property int autoFetches: 0
 
     property bool refreshing: false
+    property bool _quietRefresh: false
     // True while the rows on screen came from FeedCache rather than the network.
     property bool showingCached: false
 
@@ -489,8 +490,12 @@ Page {
         });
     }
 
-    function refresh() {
+    // quiet: no pull-to-refresh indicator. Flipping PullToRefresh.refreshing from code
+    // makes Lomiri's style animate contentY to the last drag's (stale) position and back,
+    // which scrolled the feed after a Subscribe.
+    function refresh(quiet) {
         if (page.refreshing) return;
+        page._quietRefresh = !!quiet;
         page.refreshing = true;
         page.reqEpoch++;
         page._abortInflight();
@@ -569,8 +574,10 @@ Page {
         // Uses Lomiri ListItem's own key-nav frame; custom highlight double-ringed (see NewsPage).
 
         PullToRefresh {
-            refreshing: page.refreshing
-            onRefresh: page.refresh()
+            refreshing: page.refreshing && !page._quietRefresh
+            // A pull during a quiet refresh adopts it, so this binding still ends
+            // true -> false and the style leaves its refreshing state.
+            onRefresh: if (page.refreshing) page._quietRefresh = false; else page.refresh()
             content: Label {
                 text: Lang.tr("Pull to refresh")
                 opacity: list.dragging ? 1 : 0
@@ -723,6 +730,45 @@ Page {
             }
         }
 
+        // Readers with a feed get suggestions too, like the web: platforms they haven't
+        // joined, country first. Collapses to nothing when there are none to offer.
+        header: Item {
+            width: list.width
+            readonly property bool active: Session.isLoggedIn && feedModel.count > 0
+            onActiveChanged: if (active) feedPlatforms.load()
+            Component.onCompleted: if (active) feedPlatforms.load()
+            id: suggestHeader
+            height: active && (feedPlatforms.loading || feedPlatforms.suggested.length > 0)
+                    ? headCol.height : 0
+            clip: true
+            // Skeleton -> rows is the same height. Only shrinking animates (fewer picks
+            // than placeholders, or none): growing would slide the posts down.
+            Behavior on height {
+                enabled: suggestHeader.height > 0
+                NumberAnimation { duration: 200; easing.type: Easing.OutQuad }
+            }
+            // Lands after the first posts, and ListView keeps item 0 pinned while a header
+            // grows, so it opened scrolled off the top. Reveal it unless the reader moved.
+            onHeightChanged: if (height > 0 && !list.moving
+                                 && list.contentY - list.originY <= height + units.gu(1))
+                                 list.positionViewAtBeginning()
+
+            // Lomiri section: small grey header, then flat rows; the last row's divider
+            // separates it from the feed.
+            Column {
+                id: headCol
+                width: parent.width
+
+                ListSectionHeader { text: Lang.tr("Suggested platforms") }
+                PlatformSuggestions {
+                    id: feedPlatforms
+                    width: parent.width
+                    onSubscribed: emptyStateRefetch.restart()
+                    onCommunityRequested: page.openCommunity(community)
+                }
+            }
+        }
+
         footer: Item {
             width: list.width
             height: units.gu(6)
@@ -805,15 +851,17 @@ Page {
             { author: post.author, permlink: post.permlink, title: post.title, seedPost: post })
         onVideoRequested: page.openDetail(Qt.resolvedUrl("VideoDetailPage.qml"), { video: video })
         onLoginRequested: page.pageStack.push(Qt.resolvedUrl("LoginPage.qml"))
-        // Same as picking the platform from the community pill.
-        onCommunityRequested: {
-            if (!Config.selectCommunityById(community.id)) {
-                Toast.show(Lang.tr("That platform isn't available right now."));
-                return;
-            }
-            if (page.pageStack && page.pageStack.depth > 1) page.closeFeed();
-            Nav.goToTab(0);
+        onCommunityRequested: page.openCommunity(community)
+    }
+
+    // Same as picking the platform from the community pill.
+    function openCommunity(community) {
+        if (!Config.selectCommunityById(community.id)) {
+            Toast.show(Lang.tr("That platform isn't available right now."));
+            return;
         }
+        if (page.pageStack && page.pageStack.depth > 1) page.closeFeed();
+        Nav.goToTab(0);
     }
     // Own instance: the shell's picker is an id in Main.qml, which a pushed page can't reach.
     PostCommunityPicker { id: feedPostPicker }
@@ -822,7 +870,7 @@ Page {
         id: emptyStateRefetch
         interval: 700
         repeat: false
-        onTriggered: page.refresh()
+        onTriggered: page.refresh(true)
     }
     EmptyState {
         anchors.fill: list

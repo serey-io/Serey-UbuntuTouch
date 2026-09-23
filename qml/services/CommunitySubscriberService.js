@@ -38,29 +38,6 @@ function subscriberCount(baseUrl, communityId, onOk, onErr) {
     }, onErr);
 }
 
-// Leaf communities ranked by subscriber count; replaces old get-communities + N-fan-out
-function suggestedCommunities(baseUrl, limit, onOk, onErr) {
-    Http.get(baseUrl, "/community-subscriber/suggested-communities",
-             { limit: limit }, null, function (data) {
-        var d = data && data.data
-        var rows = (d && d.communities) || []
-        if (!Array.isArray(rows)) rows = []
-        var out = [];
-        for (var i = 0; i < rows.length; i++) {
-            var r = rows[i] || {};
-            out.push({
-                id: r.id,
-                title: r.title || "",
-                dns: r.dns || "",
-                icon: r.icon_url || r.logo_url || "",
-                description: r.meta_description || "",   // owner-set blurb, often empty
-                subscribers: parseInt(r.total_subscribers, 10) || 0
-            });
-        }
-        onOk(out);
-    }, onErr);
-}
-
 function listSubscribers(baseUrl, communityId, limit, offset, onOk, onErr) {
     Http.get(baseUrl, "/community-subscriber/pagination/" + encodeURIComponent(communityId),
              { limit: limit, offset: offset }, null, function (data) {
