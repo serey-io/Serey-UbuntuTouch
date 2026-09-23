@@ -149,6 +149,8 @@ function toPost(raw) {
         communityId: toInt(raw.community_id),
         checkmark: raw.checkmark_icon || "",
         postToBlockchain: onChainFlag(raw),
+        // Winston flag; badge is owner-only
+        isAiGenerated: raw.is_ai_generated === true || raw.is_ai_generated === "true",
         // Edit prefill: without this an edit would send the ceiling back as 0 and
         // quietly widen a capped post's audience.
         publishCeilingId: publishCeiling(raw)

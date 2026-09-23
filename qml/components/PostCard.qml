@@ -82,6 +82,7 @@ Item {
         } else {
             items.push({ icon: "close", label: Lang.tr("Hide this post"), action: "hide" });
             items.push({ icon: "dialog-warning-symbolic", label: Lang.tr("Report post"), action: "report" });
+            items.push({ icon: "edit-copy", label: Lang.tr("Report copyright"), action: "copyright" });
         }
         return items;
     }
@@ -97,6 +98,7 @@ Item {
             PostActions.hideRequested(root.p.author || "", root.p.permlink || "");
         }
         else if (action === "report") PostActions.open(root.p, "blog", 1);
+        else if (action === "copyright") Nav.reportCopyright(root.p, "blog");
     }
 
     // cardMenu reparents onto the window while open, so force-close it before recycling
@@ -400,6 +402,8 @@ Item {
             permlink: p.permlink || ""
             voteType: "post"
             onChain: p.postToBlockchain !== false
+            // Owner-only AI mark
+            showAi: (Config.ownedCommunityIdSet, Config.showAiBadge(root.p))
             createdAt: p.date || ""
             votes: p.votes || 0
             // Rebuilt from voterStr scalar: dynamicRoles ListModel stringifies string arrays as garbage

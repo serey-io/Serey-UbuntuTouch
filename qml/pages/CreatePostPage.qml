@@ -8,6 +8,7 @@ import "../components"
 import "../services/PostService.js" as PostService
 import "../services/CategoryService.js" as CategoryService
 import "../services/Mappers.js" as Mappers
+import "../services/AiDetection.js" as AiDetection
 
 Page {
     id: page
@@ -701,6 +702,25 @@ Page {
         // into the body too just duplicated it inline above the article text.
         var coverUrl = page.effectiveCoverUrl;
         page.submitting = true;
+
+        // Netherlands scope: Winston scan first, never blocks publish
+        if (!Config.isUnderCommunity(page.postCommunityId, Config.netherlandsCommunityId)) {
+            page._sendPost(body, coverUrl, false);
+            return;
+        }
+        var text = AiDetection.plainText(body);
+        if (text.length === 0) { page._sendPost(body, coverUrl, false); return; }
+        AiDetection.detect(Config.aiDetectUrl, Session.token, text, "nl",
+            function (res) { page._sendPost(body, coverUrl, !!res.is_ai_generated); },
+            function (err) {
+                // Out of credits: auto-report as bot
+                if (err && err.reason === "insufficient_credit")
+                    AiDetection.reportCreditFailure(Config.aiCreditReportUrl, page.postCommunityId);
+                page._sendPost(body, coverUrl, false);
+            });
+    }
+
+    function _sendPost(body, coverUrl, isAiGenerated) {
         PostService.createPost(Config.baseUrl, {
             title: titleField.text.trim(),
             body: body,
@@ -715,7 +735,8 @@ Page {
             publishCeilingId: page.targetIsGlobal ? 0 : page.publishCeilingId,
             permlink: page.isEdit ? (page.editPost.permlink || "") : "",
             // Also send in `images` (json_meta.image) since the web derives the card thumbnail from that field, not from the body <img>.
-            images: coverUrl.length > 0 ? [coverUrl] : []
+            images: coverUrl.length > 0 ? [coverUrl] : [],
+            isAiGenerated: isAiGenerated
         }, Session.token,
         function (data) {
             page.submitting = false;

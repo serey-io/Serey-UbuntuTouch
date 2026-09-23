@@ -9,6 +9,7 @@ import "services/CommunityService.js" as CommunityService
 import "services/Flags.js" as Flags
 import "services/GeoService.js" as GeoService
 import "services/AccountService.js" as AccountService
+import Serey.FileUtils 1.0 as FileUtils
 import "services/Http.js" as Http
 import "services/NotificationService.js" as NotificationService
 import "services/BlockedUsers.js" as BlockedUsers
@@ -207,6 +208,8 @@ MainView {
         // Lets Net probe while a request is still hanging, instead of learning about a dead
         // network only when that request times out 15s later.
         Http.setPendingHandler(function (count) { Net.pending = count; });
+        // DELETE with JSON body (Qt XHR drops it)
+        Http.setJsonSender(jsonSender);
 
         // Needed immediately: the header pill icons and can-post gates read it.
         _loadCommunities();
@@ -264,6 +267,11 @@ MainView {
                 root._ensureTab(0);
                 if (n.type === "FOLLOW") {
                     homeStack.push(Qt.resolvedUrl("pages/ProfileViewPage.qml"), { username: n.actor });
+                    return;
+                }
+                // Copyright report push -> open reports
+                if (n.type === "COPYRIGHT_REPORT_SUBMITTED") {
+                    homeStack.push(Qt.resolvedUrl("pages/CopyrightReportsPage.qml"), { filterIndex: 1 });
                     return;
                 }
                 var info = n.information || {};
@@ -709,6 +717,10 @@ MainView {
             var stack = root.activeStack;
             if (stack) stack.push(Qt.resolvedUrl("pages/EditCaptionPage.qml"), { post: post });
         }
+        function onReportCopyright(post, kind) {
+            var stack = root.activeStack;
+            if (stack) stack.push(Qt.resolvedUrl("pages/ReportCopyrightPage.qml"), { post: post, kind: kind });
+        }
         // Invite link opened in-app: redeem it natively on the Homepage tab.
         function onRedeemInvite(code) {
             root.currentTab = 0;
@@ -1116,6 +1128,7 @@ MainView {
 
     CommunityPicker { id: communityPicker; anchorItem: appHeader.communityButton }
     PostCommunityPicker { id: postCommunityPicker }
+    FileUtils.JsonRequest { id: jsonSender }
     PostActionSheet { }
     ShareSheet { }
     PaymentSheet { }
