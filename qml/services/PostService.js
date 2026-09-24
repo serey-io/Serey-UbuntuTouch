@@ -109,6 +109,9 @@ function createPost(baseUrl, params, token, onOk, onErr) {
         body.permlink = params.permlink;
     // Always on-chain
     body.post_to_blockchain = true;
+    // Winston result (Netherlands scope only)
+    if (params.isAiGenerated !== undefined)
+        body.is_ai_generated = !!params.isAiGenerated;
     // Publishing scope: the ceiling community, null for everywhere. Only sent for
     // a real community - Global is the combined feed, so capping there would just
     // hide the post from the one feed it was posted to.
