@@ -13,6 +13,8 @@ News, Video, and Settings are native QML screens built directly on the API.
 
 - Community feeds for news and video, with a regional platform switcher (Global,
   countries, and their sub-communities)
+- My Feed from followed accounts and subscribed platforms, with platform
+  suggestions based on your country
 - Search and category filtering within News
 - Gallery and Reels browsing
 - Saved posts, offline article reading, and offline video downloads
@@ -25,6 +27,8 @@ News, Video, and Settings are native QML screens built directly on the API.
 - Following accounts and subscribing to platforms
 - Publishing blog posts, videos, and gallery posts, with a per-platform publish
   scope, a category step at publish time, and a reader-style preview
+- Notes: short posts with no title and one photo or one video, either an uploaded
+  clip of up to a minute or a YouTube, TikTok, or Facebook link
 
 **Accounts**
 
@@ -36,19 +40,21 @@ News, Video, and Settings are native QML screens built directly on the API.
 **Moderation and safety**
 
 - Blocking and unblocking accounts, hiding posts, and reporting content
+- Copyright reports that point to your own original post or video
+- AI-generated text detection for articles in Netherlands communities
 - In-app bug reporting
 
 **Running your own platform**
 
 - A subscription-gated wizard to create your own community platform
 - Platform administration: profile and information, settings, custom menu,
-  blog and video management, and homepage management
+  blog and video management, homepage management, and a copyright report queue
 - Platforms with no homepage of their own hide the Homepage tab automatically
   and open on News, with the owner able to switch it back on
 
 **Platform integration**
 
-- Notifications over push and a background poll
+- Notifications over push and a background poll, grouped by date
 - In-app subscription payments by crypto and Stripe
 - English and Dutch, via gettext catalogues and in-app translation
 - A convergent layout that adapts from phone to tablet and desktop
@@ -61,6 +67,11 @@ News, Video, and Settings are native QML screens built directly on the API.
 
 Clickable does not run natively on Windows. On Windows, build from WSL with Docker
 available inside the WSL distribution.
+
+On Apple Silicon Macs, `clickable build --arch arm64` works with
+[colima](https://github.com/abiosoft/colima) as the Docker runtime
+(`brew install colima docker`, then `colima start --arch aarch64`).
+`clickable desktop` needs a Linux host, such as an Ubuntu 24.04 arm64 VM.
 
 ```bash
 pipx install clickable-ut    # or: pip install --user clickable-ut
