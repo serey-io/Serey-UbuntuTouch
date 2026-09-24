@@ -480,7 +480,7 @@ Item {
             }
             AbstractButton {
                 width: units.gu(5); height: width
-                enabled: root.imageUrl.length === 0 && !root.busy
+                enabled: root.imageUrl.length === 0 && root.videoUrl.length === 0 && !root.busy
                 opacity: enabled ? 1 : 0.35
                 onClicked: Popups.PopupUtils.open(videoDialog)
                 Icon {

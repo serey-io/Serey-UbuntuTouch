@@ -2,16 +2,11 @@
 .import "Http.js" as Http
 .import "Mappers.js" as M
 
-// Notes hidden for now (app has no note UI yet)
-function _notNote(raw) {
-    return !(raw && (raw.is_note === true || raw.is_note === "true"));
-}
-
 // onOk receives (posts, rawCount); rawCount is the pre-filter server count so callers paginate against the true offset, not a filtered length.
 function _list(baseUrl, path, params, token, onOk, onErr) {
     return Http.get(baseUrl, path, params, token, function (data) {
         var raw = data.posts || [];
-        onOk(raw.filter(_notNote).map(M.toPost), raw.length);
+        onOk(raw.map(M.toPost), raw.length);
     }, onErr);
 }
 
@@ -225,7 +220,7 @@ function adminBulkDeletePosts(baseUrl, ids, token, onOk, onErr) {
 function searchAdvanced(baseUrl, params, token, onOk, onErr) {
     return Http.get(baseUrl, "/serey-web/search-advanced", params, token, function (data) {
         var buckets = (data.new_posts || []).concat(data.trending_posts || [], data.feed_posts || []);
-        onOk(buckets.filter(_notNote).map(M.toPost));
+        onOk(buckets.map(M.toPost));
     }, onErr);
 }
 

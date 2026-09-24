@@ -845,7 +845,7 @@ var nl = {
     "This month":                                     "Deze maand",
     "Earlier":                                        "Eerder",
     "Reported by %1":                                 "Gemeld door %1",
-    "Reported anonymously":                           "Anoniem gemeld"
+    "Reported anonymously":                           "Anoniem gemeld",
     // Notes
     "Article":                                          "Artikel",
     "Note":                                             "Notitie",
