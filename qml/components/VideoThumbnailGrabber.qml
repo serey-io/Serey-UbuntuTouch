@@ -13,9 +13,12 @@ Item {
     signal failed()
 
     property bool _done: false
+    // Seconds; 0 = unknown
+    property real duration: 0
 
     function grab(fileUrl) {
         root._done = false;
+        root.duration = 0;
         var src = String(fileUrl);
         // Base the wrapper document at the file's directory so the <video src> is same-origin and the canvas isn't tainted.
         var i = src.lastIndexOf("/");
@@ -40,6 +43,7 @@ Item {
                'c.getContext("2d").drawImage(v,0,0,c.width,c.height);window.__t=c.toDataURL("image/jpeg",0.82);}' +
                'catch(e){window.__t="ERR";}}' +
                'v.muted=true;' +
+               'v.addEventListener("loadedmetadata",function(){if(isFinite(v.duration))window.__d=v.duration;});' +
                'v.addEventListener("loadeddata",function(){try{v.currentTime=Math.min(1,(isFinite(v.duration)&&v.duration>0?v.duration:2)*0.1);}catch(e){cap();}});' +
                'v.addEventListener("seeked",function(){cap();});' +
                'v.addEventListener("error",function(){window.__t="ERR";});' +
@@ -50,7 +54,9 @@ Item {
     Timer {
         id: poll
         interval: 250; repeat: true
-        onTriggered: wv.runJavaScript("window.__t||''", function (s) {
+        onTriggered: wv.runJavaScript("[window.__t||'', window.__d||0]", function (r) {
+            var s = r ? r[0] : "";
+            if (r && r[1] > 0) root.duration = r[1];
             if (s === "ERR") root._finishErr();
             else if (s && s.indexOf("data:") === 0) root._finishOk(s);
         })

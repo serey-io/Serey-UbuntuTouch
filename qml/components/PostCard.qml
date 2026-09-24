@@ -7,6 +7,7 @@ import "../Session"
 import "../services/VoteService.js" as VoteService
 import "../services/PostService.js" as PostService
 import "../services/HiddenPosts.js" as HiddenPosts
+import "../services/Notes.js" as Notes
 
 Item {
     id: root
@@ -14,6 +15,18 @@ Item {
     property var post: ({})
     // Guard: the delegate may rebind `post` to undefined while the model is cleared/recycled; `p` is always a safe object to read from.
     readonly property var p: post ? post : ({})
+    readonly property bool isNote: !!p.isNote
+    // Attached video, else YouTube link in text
+    readonly property string noteVideoUrl: {
+        if (!isNote) return "";
+        if (p.noteVideo) return p.noteVideo;
+        var hit = Notes.findYouTube(p.noteText || "");
+        return hit ? hit.url : "";
+    }
+    // Note photo, else YouTube thumb
+    readonly property string noteMedia: isNote ? (p.thumbnail || Notes.videoThumb(noteVideoUrl)) : ""
+    // Note content starts under name, like web
+    readonly property real noteIndent: Style.spacingM + units.gu(4.25) + Style.spacingS
 
     readonly property bool isOwnPost: Session.isLoggedIn && (p.author || "") !== "" && p.author === Session.username
     readonly property bool isSaved: (SavedPosts.rev, SavedPosts.isSaved(p.permlink || ""))
@@ -230,6 +243,18 @@ Item {
                         font.pixelSize: Style.fontXSmall
                         color: Style.textSecondary
                     }
+                    // Notes: platform here, no cover tag
+                    Label {
+                        visible: root.isNote && (p.community || "") !== ""
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "· " + (p.community || "")
+                        width: Math.min(implicitWidth, units.gu(20))
+                        elide: Text.ElideRight
+                        font.pixelSize: Style.fontXSmall
+                        font.family: Style.fontFor(text)
+                        color: Style.textSecondary
+                        MouseArea { anchors.fill: parent; onClicked: root.openPlatform() }
+                    }
                 }
             }
 
@@ -250,6 +275,28 @@ Item {
                     font.pixelSize: Style.fontXSmall
                     font.weight: Font.DemiBold
                     color: Style.textSecondary
+                }
+            }
+
+            // Note tag
+            Rectangle {
+                visible: root.isNote
+                Layout.preferredWidth: noteTagLabel.width + Style.spacingM
+                Layout.preferredHeight: units.gu(2.6)
+                Layout.alignment: Qt.AlignVCenter
+                radius: Style.pillRadius
+                color: "transparent"
+                border.width: units.dp(1)
+                border.color: Style.brand
+
+                Label {
+                    id: noteTagLabel
+                    anchors.centerIn: parent
+                    text: Lang.tr("Note")
+                    font.pixelSize: Style.fontXSmall
+                    font.weight: Font.DemiBold
+                    font.family: Style.fontFor(text)
+                    color: Style.brand
                 }
             }
 
@@ -292,28 +339,77 @@ Item {
             MouseArea { anchors.fill: parent; onClicked: root.clicked(); onPressAndHold: root.moreClicked() }
         }
 
+        // Note body
+        Label {
+            visible: root.isNote
+            width: parent.width - root.noteIndent - Style.spacingM
+            x: root.noteIndent
+            // URLs tappable
+            text: Notes.linkifyPlain(p.noteText || "", Style.brand)
+            textFormat: Text.StyledText
+            font.pixelSize: Style.fontMedium
+            font.family: Style.fontFor(p.noteText || "")
+            color: Style.textPrimary
+            wrapMode: Text.Wrap
+            maximumLineCount: 10
+            elide: Text.ElideRight
+            onLinkActivated: Qt.openUrlExternally(link)
+            // Behind text: link taps win
+            MouseArea { z: -1; anchors.fill: parent; onClicked: root.clicked(); onPressAndHold: root.moreClicked() }
+        }
+
         Item { width: 1; height: Style.spacingS }
 
         Item {
             id: cover
             readonly property bool isPlaceholder: (p.thumbnail || "") === ""
-            width: parent.width - Style.spacingM * 2
-            x: Style.spacingM
-            height: width * 0.56
+            // Text-only note: no cover
+            visible: !root.isNote || root.noteMedia !== "" || Notes.isDirectVideo(root.noteVideoUrl)
+            // Note: smaller, square photo / 16:9 video
+            width: root.isNote ? Math.min(parent.width - root.noteIndent - Style.spacingM, units.gu(40))
+                               : parent.width - Style.spacingM * 2
+            x: root.isNote ? root.noteIndent : Style.spacingM
+            height: !visible ? 0 : (root.isNote && (p.thumbnail || "") !== "") ? width : width * 0.56
+
+            // Uploaded clip, no poster
+            Rectangle {
+                anchors.fill: parent
+                visible: root.isNote && root.noteMedia === ""
+                radius: Style.thumbRadius
+                color: "black"
+            }
 
             RoundedThumb {
                 anchors.fill: parent
+                visible: !root.isNote || root.noteMedia !== ""
                 // A post with no picture falls back to the same Serey banner the web
                 // serves (public/thumbnails/thumbnail.png), so a card is never blank.
-                source: cover.isPlaceholder ? Qt.resolvedUrl("../../assets/thumbnail-fallback.png")
-                                            : p.thumbnail
+                source: root.isNote ? root.noteMedia
+                        : cover.isPlaceholder ? Qt.resolvedUrl("../../assets/thumbnail-fallback.png")
+                                              : p.thumbnail
                 autoTransform: true
                 decodeWidth: root.width > units.gu(70) ? units.gu(90) : units.gu(45)
+            }
+
+            // Note video marker
+            Rectangle {
+                visible: root.isNote && !p.thumbnail && root.noteVideoUrl !== ""
+                anchors.centerIn: parent
+                width: units.gu(6); height: width
+                radius: width / 2
+                color: Qt.rgba(0, 0, 0, 0.55)
+                Icon {
+                    anchors.centerIn: parent
+                    width: units.gu(3); height: width
+                    name: "media-playback-start"
+                    color: "white"
+                }
             }
 
             // Category + platform tags, top-right
             Row {
                 id: cornerTags
+                visible: !root.isNote
                 // Above the thumbnail's MouseArea
                 z: 1
                 anchors { top: parent.top; right: parent.right; topMargin: Style.spacingS; rightMargin: Style.spacingS }

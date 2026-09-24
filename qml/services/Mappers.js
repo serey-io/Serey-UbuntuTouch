@@ -112,17 +112,43 @@ function voterNames(arr) {
     return out;
 }
 
+// Note flag; older rows fall back to web's shape check
+function isNote(raw) {
+    if (raw.is_note === true || raw.is_note === "true") return true;
+    if (raw.is_note === false || raw.is_note === "false") return false;
+    return String(raw.title || "").trim() === "" && parseList(raw.image_url).length === 0;
+}
+
+// Note HTML -> plain text, line breaks kept
+function noteText(html) {
+    if (!html || html === "##no-text##") return "";
+    return String(html)
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<\/(?:p|div|li)>/gi, "\n")
+        .replace(/<[^>]+>/g, "")
+        .replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+        .replace(/&quot;/g, "\"").replace(/&#39;/g, "'").replace(/&amp;/g, "&")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+}
+
 function toPost(raw) {
     raw = raw || {};
     // Built once instead of recomputed per field below (was parsed/walked multiple times)
     var cats = parseList(raw.categories);
     var voters = voterNames(raw.voters);
     var flaggers = voterNames(raw.flaggers);
+    var note = isNote(raw);
     return {
         id: raw.id,
         author: raw.author || "",
         permlink: raw.permlink || "",
-        title: raw.title || "(untitled)",
+        title: raw.title || (note ? "" : "(untitled)"),
+        // Note fields
+        isNote: note,
+        noteText: note ? noteText(raw.description || raw.short_desc || "") : "",
+        noteVideo: parseList(raw.videos)[0] || "",
+        mediaAlign: raw.media_alignment || "left",
         body: raw.description || "",
         excerpt: stripHtml(raw.short_desc || raw.description || "", 180),
         thumbnail: firstImage(raw),

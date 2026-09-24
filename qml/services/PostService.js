@@ -112,11 +112,8 @@ function createPost(baseUrl, params, token, onOk, onErr) {
     // Sending permlink makes the backend update in place instead of creating new
     if (params.permlink)
         body.permlink = params.permlink;
-    // Explicit bool so an edit can flip it either way; omitting it defaults true
-    body.post_to_blockchain = (params.postToBlockchain !== false);
-    // Winston result (Netherlands scope only)
-    if (params.isAiGenerated !== undefined)
-        body.is_ai_generated = !!params.isAiGenerated;
+    // Always on-chain
+    body.post_to_blockchain = true;
     // Publishing scope: the ceiling community, null for everywhere. Only sent for
     // a real community - Global is the combined feed, so capping there would just
     // hide the post from the one feed it was posted to.
@@ -128,6 +125,35 @@ function createPost(baseUrl, params, token, onOk, onErr) {
     // id - only as a fallback when id is unknown (0/missing) - since sending both together was
     // getting rejected as "Invalid community".
     if (params.communityId) {
+        body.community_id = Number(params.communityId);
+    } else if (params.communityName) {
+        body.country_name = params.communityName;
+    }
+    Http.post(baseUrl, "/serey-web/create-or-update-post", body,
+              token, function (data) { onOk(data || {}); }, onErr);
+}
+
+// Note: same endpoint, is_note true, no title, body <= 280 raw chars, one image OR one video.
+function createNote(baseUrl, params, token, onOk, onErr) {
+    var body = {
+        title: "",
+        desc: "",
+        body: params.body || "",
+        categories: "general",
+        subcategories: [],
+        images: params.imageUrl ? [params.imageUrl] : [],
+        videos: params.videoUrl ? [params.videoUrl] : [],
+        media_alignment: params.mediaAlign || "left",
+        is_note: true,
+        is_ai_generated: false,
+        post_to_blockchain: true
+    };
+    if (params.permlink)
+        body.permlink = params.permlink;
+    // Scope + community, same as createPost
+    if (params.communityId) {
+        body.publish_scope_community_id = Number(params.publishCeilingId) > 0
+                                          ? Number(params.publishCeilingId) : null;
         body.community_id = Number(params.communityId);
     } else if (params.communityName) {
         body.country_name = params.communityName;
@@ -152,8 +178,8 @@ function createVideoPost(baseUrl, params, token, onOk, onErr) {
         is_ai_generated: false,
         site_credit: '<p>This was posted using <a href="https://serey.io" rel="nofollow noopener">Serey.io</a></p>'
     };
-    // "Post on the blockchain" toggle (see createPost): explicit bool, false = DB-only.
-    body.post_to_blockchain = (params.postToBlockchain !== false);
+    // Always on-chain
+    body.post_to_blockchain = true;
     // Publishing scope, same contract as createPost.
     if (params.communityId)
         body.publish_scope_community_id = Number(params.publishCeilingId) > 0

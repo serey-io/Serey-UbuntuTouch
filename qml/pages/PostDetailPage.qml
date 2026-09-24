@@ -5,6 +5,7 @@ import Lomiri.Components 1.3
 import "../Theme"
 import "../Session"
 import "../components"
+import "../services/Notes.js" as Notes
 import "../services/PostService.js" as PostService
 import "../services/CommentService.js" as CommentService
 import "../services/VoteService.js" as VoteService
@@ -177,7 +178,8 @@ Page {
 
         Label {
             anchors { left: backBtn.right; leftMargin: Style.spacingS; right: headerActions.left; rightMargin: Style.spacingS; verticalCenter: parent.verticalCenter }
-            text: page.postReady ? (page.post.title || (page.isVideoPost() ? Lang.tr("Video") : Lang.tr("Blog"))) : ""
+            text: page.postReady ? (page.post.title || (page.isVideoPost() ? Lang.tr("Video")
+                                                        : page.post.isNote ? Lang.tr("Note") : Lang.tr("Blog"))) : ""
             font.pixelSize: Style.fontLarge
             font.weight: Font.Light
             color: Style.textPrimary
@@ -445,6 +447,8 @@ Page {
     function _loadSummary(force) {
         if (page.summarySkipped) return;
         if (!page.post || !page.post.body) return;
+        // Too short to summarize
+        if (page.post.isNote) return;
         if (page.summaryLoading || (page.summaryRequested && !force)) return;
         page.summaryRequested = true;
         page.summaryMinutes = page._localReadMinutes(page.post.body);
@@ -769,6 +773,8 @@ Page {
 
     // --- Body HTML -> {type: "text"|"image", content} blocks -----------------
     ListModel { id: bodyModel }
+    // Body has own picture -> hide cover
+    property bool bodyHasImage: false
 
     // YouTube only
     function _isEmbeddableVideoUrl(url) {
@@ -803,6 +809,7 @@ Page {
 
     function _parseBody() {
         bodyModel.clear();
+        page.bodyHasImage = false;
         if (!page.post)
             return;
         var html = page.post.body || "";
@@ -851,6 +858,7 @@ Page {
             if (piece.type === "image") {
                 if (seenImages[piece.content]) continue;   // container tag + inner <img> = same src twice
                 seenImages[piece.content] = true;
+                page.bodyHasImage = true;
                 bodyModel.append({ type: "image", content: piece.content, links: "[]" });
             } else if (piece.type === "embed") {
                 bodyModel.append({ type: "embed", content: piece.content, links: "[]" });
@@ -890,6 +898,8 @@ Page {
                 text = text.replace(/(?:<br\/>\s*){3,}/gi, "<br/><br/>");
                 text = text.replace(/^(?:\s|<br\/>)+/i, "");
                 text = text.replace(/(?:\s|<br\/>)+$/i, "");
+                // Note: bare URLs -> links
+                if (page.post.isNote) text = Notes.linkify(text);
                 // No linkAt() API: capture href + visible text so taps can be hit-tested
                 var links = [];
                 var reA = /<a\s+[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi;
@@ -906,6 +916,36 @@ Page {
                     bodyModel.append({ type: "text", content: text, links: JSON.stringify(links) });
             }
         }
+        page._appendNoteMedia();
+    }
+
+    // Note attachment lives outside body
+    function _appendNoteMedia() {
+        var p = page.post;
+        if (!p || !p.isNote) return;
+        var media = [];
+        // Same rule as articles: body image wins
+        var img = page.bodyHasImage ? "" : (p.coverImage || p.thumbnail || "");
+        if (img) media.push({ type: "noteImage", content: img, links: "[]" });
+        var vid = p.noteVideo || "";
+        // Fallback: YouTube link in text
+        if (!vid) {
+            var hit = Notes.findYouTube(p.noteText || "");
+            vid = hit ? hit.url : "";
+        }
+        if (vid) {
+            if (page._isEmbeddableVideoUrl(vid) || Notes.isDirectVideo(vid)) {
+                media.push({ type: "embed", content: vid, links: "[]" });
+            } else {
+                var safe = vid.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+                media.push({ type: "text", content: '<a href="' + safe + '">' + safe + '</a>',
+                             links: JSON.stringify([{ href: vid, text: vid }]) });
+            }
+        }
+        // Gap under note text
+        if (media.length > 0 && bodyModel.count > 0)
+            bodyModel.append({ type: "gap", content: "", links: "[]" });
+        for (var i = 0; i < media.length; i++) bodyModel.append(media[i]);
     }
 
     Component.onCompleted: {
@@ -1065,7 +1105,7 @@ Page {
             Item { width: 1; height: Style.spacingS }
 
             Row {
-                visible: page.post && page.post.categories && page.post.categories.length > 0
+                visible: page.post && !page.post.isNote && page.post.categories && page.post.categories.length > 0
                 x: Style.spacingM
                 spacing: Style.spacingXs
 
@@ -1113,6 +1153,7 @@ Page {
             }
 
             Label {
+                visible: !!page.post && !page.post.isNote
                 width: parent.width - Style.spacingM * 2 - Style.wrapSafeMargin
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: page.post ? page.post.title : ""
@@ -1124,6 +1165,7 @@ Page {
             }
 
             ArticleSummary {
+                visible: !!page.post && !page.post.isNote
                 width: parent.width - Style.spacingM * 2
                 anchors.horizontalCenter: parent.horizontalCenter
                 bullets: page.summaryBullets
@@ -1199,6 +1241,19 @@ Page {
 
             Rectangle { width: parent.width; height: units.dp(1); color: Style.divider }
 
+            // Cover only when body has no image
+            RoundedThumb {
+                readonly property string coverUrl: !page.post || page.post.isNote ? ""
+                    : (page.post.coverImage !== undefined ? page.post.coverImage : (page.post.thumbnail || ""))
+                visible: coverUrl.length > 0 && !page.bodyHasImage
+                width: parent.width - Style.spacingM * 2
+                anchors.horizontalCenter: parent.horizontalCenter
+                height: visible ? width * 0.56 : 0
+                source: coverUrl
+                autoTransform: true
+                decodeWidth: units.gu(90)
+            }
+
             // Body is parsed into text blocks and rounded images; inset once here so every block shares the same left/right padding as the title/author row.
             Column {
                 width: parent.width - Style.spacingM * 2
@@ -1210,7 +1265,8 @@ Page {
 
                     delegate: Loader {
                         width: parent.width
-                        sourceComponent: model.type === "image" ? bodyImageComp
+                        sourceComponent: model.type === "gap" ? bodyGapComp
+                                        : (model.type === "image" || model.type === "noteImage") ? bodyImageComp
                                         : model.type === "embed" ? bodyEmbedComp
                                         : bodyTextComp
 
@@ -1228,7 +1284,9 @@ Page {
                                 VideoWebView {
                                     id: embedPlayer
                                     anchors.fill: parent
-                                    wrap: true
+                                    // Uploaded clip: HTML5 <video>
+                                    directVideo: Notes.isDirectVideo(model.content)
+                                    wrap: !directVideo
                                     embedUrl: model.content
                                     // Reparent only; anchors.fill: parent follows automatically
                                     onFullscreenToggled: {
@@ -1241,38 +1299,56 @@ Page {
                         }
 
                         Component {
+                            id: bodyGapComp
+                            Item { width: parent.width; height: Style.spacingS }
+                        }
+
+                        Component {
                             id: bodyImageComp
                             Item {
                                 width: parent.width
                                 height: bImg.height
 
-                                Rectangle {
-                                    anchors.fill: parent
-                                    radius: Style.thumbRadius
-                                    color: Style.iconBackground
-                                }
-                                Image {
-                                    id: bImg
-                                    width: parent.width
-                                    fillMode: Image.PreserveAspectFit
-                                    source: model.content
-                                    asynchronous: true
-                                    autoTransform: true     // honour EXIF orientation
-                                    visible: false
-                                    Behavior on opacity { NumberAnimation { duration: 200 } }
-                                    opacity: status === Image.Ready ? 1.0 : 0.0
-                                }
-                                Rectangle {
-                                    id: bImgMask
-                                    anchors.fill: parent
-                                    radius: Style.thumbRadius
-                                    visible: false
-                                }
-                                OpacityMask {
-                                    anchors.fill: parent
-                                    source: bImg
-                                    maskSource: bImgMask
-                                    opacity: bImg.opacity
+                                // Note photo: smaller, aligned
+                                readonly property bool small: model.type === "noteImage"
+                                readonly property string align: page.post ? (page.post.mediaAlign || "left") : "left"
+
+                                Item {
+                                    id: bFrame
+                                    width: parent.small ? Math.min(parent.width * 0.65, units.gu(40)) : parent.width
+                                    height: bImg.height
+                                    x: !parent.small ? 0
+                                       : parent.align === "center" ? (parent.width - width) / 2
+                                       : parent.align === "right" ? parent.width - width : 0
+
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        radius: Style.thumbRadius
+                                        color: Style.iconBackground
+                                    }
+                                    Image {
+                                        id: bImg
+                                        width: parent.width
+                                        fillMode: Image.PreserveAspectFit
+                                        source: model.content
+                                        asynchronous: true
+                                        autoTransform: true     // honour EXIF orientation
+                                        visible: false
+                                        Behavior on opacity { NumberAnimation { duration: 200 } }
+                                        opacity: status === Image.Ready ? 1.0 : 0.0
+                                    }
+                                    Rectangle {
+                                        id: bImgMask
+                                        anchors.fill: parent
+                                        radius: Style.thumbRadius
+                                        visible: false
+                                    }
+                                    OpacityMask {
+                                        anchors.fill: parent
+                                        source: bImg
+                                        maskSource: bImgMask
+                                        opacity: bImg.opacity
+                                    }
                                 }
                             }
                         }
@@ -1651,7 +1727,7 @@ Page {
                                 // guards against negative width
                                 width: Math.max(units.gu(4), parent.width - units.gu(6.5) - Style.spacingS)
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: modelData.title || ""
+                                text: modelData.title || modelData.noteText || ""
                                 font.pixelSize: Style.fontSmall
                                 font.weight: Font.DemiBold
                                 font.family: Style.fontFor(text)
