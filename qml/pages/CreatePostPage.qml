@@ -130,18 +130,44 @@ Page {
         page._bodyRev++;
     }
 
-    // Body -> alternating text/image blocks, one real Image item per <img>.
+    // Web editor's nested-div video embed -> <p><a> shape
+    function _stripWebVideoContainers(html) {
+        var re = /<div\b[^>]*data-video-url="([^"]*)"[^>]*>/gi;
+        var tagRe = /<div\b[^>]*>|<\/div>/gi;
+        var out = "";
+        var lastIndex = 0;
+        var m;
+        while ((m = re.exec(html)) !== null) {
+            out += html.substring(lastIndex, m.index);
+            var depth = 1;
+            var end = html.length;
+            tagRe.lastIndex = re.lastIndex;
+            var tm;
+            while ((tm = tagRe.exec(html)) !== null) {
+                depth += tm[0].charAt(1) === "/" ? -1 : 1;
+                if (depth === 0) { end = tm.index + tm[0].length; break; }
+            }
+            out += m[1].length > 0 ? ('<p><a href="' + m[1] + '">' + m[1] + '</a></p>') : "";
+            lastIndex = end;
+            re.lastIndex = end;
+        }
+        return out + html.substring(lastIndex);
+    }
+
+    // Body -> text/image/embed blocks
     function _prefillBody(post) {
-        var b = (post && post.body) || "";
+        var b = page._stripWebVideoContainers((post && post.body) || "");
         page._prefilling = true;
         var parts = [];
         var lastIndex = 0;
-        var imgRe = /<img[^>]*src=["']([^"']*)["'][^>]*\/?>/gi;
+        // Image, or isolated video link
+        var blockRe = /<img[^>]*src=["']([^"']*)["'][^>]*\/?>|<p[^>]*>\s*<a\s+[^>]*href="([^"]*)"[^>]*>[^<]*<\/a>\s*<\/p>/gi;
         var m;
-        while ((m = imgRe.exec(b)) !== null) {
+        while ((m = blockRe.exec(b)) !== null) {
+            if (m[1] === undefined && !page._isEmbeddableVideoUrl(m[2])) continue;
             parts.push({ type: "text", html: b.substring(lastIndex, m.index) });
-            parts.push({ type: "image", url: m[1] });
-            lastIndex = imgRe.lastIndex;
+            parts.push(m[1] !== undefined ? { type: "image", url: m[1] } : { type: "embed", url: m[2] });
+            lastIndex = blockRe.lastIndex;
         }
         parts.push({ type: "text", html: b.substring(lastIndex) });
         page.bodyParts = parts;
@@ -400,6 +426,10 @@ Page {
             communityId: page.postCommunityId
             communityName: page.isEdit ? (page.editPost.community || Config.communityName) : page.postCommunityName
             publishCeilingId: page.targetIsGlobal ? 0 : page.publishCeilingId
+            showScope: !page.targetIsGlobal
+            scopeLabel: page.scopeLabel
+            scopeHint: page.scopeHint
+            onScopeClicked: scopeSheet.show(page._scopeSheetItems(), anchorItem)
             kbHeight: page.kbHeight
             maxContentWidth: page.maxContentWidth
             onSaved: page._finishSave(data, page.isEdit ? Lang.tr("Note updated!") : Lang.tr("Note posted!"))

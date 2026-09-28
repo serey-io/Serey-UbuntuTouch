@@ -1,6 +1,6 @@
 .pragma library
 
-// Backend cap on raw body HTML
+// Web's DRUM_MAX_TEXT
 var MAX_BODY = 280;
 
 // Links web's note composer accepts
@@ -15,7 +15,8 @@ var MAX_VIDEO_SECONDS = 60;
 
 // Uploaded file (Serey storage), not a platform link
 function isDirectVideo(url) {
-    return /^https?:\/\//i.test(url || "") && !isVideoLink(url);
+    // file:// = offline copy
+    return /^(?:https?|file):\/\//i.test(url || "") && !isVideoLink(url);
 }
 
 function _escape(s) {
@@ -33,9 +34,10 @@ function toBody(text) {
     return out;
 }
 
-// Chars left under backend cap
+// Chars left; visible text only, like web
 function remaining(text) {
-    return MAX_BODY - toBody(text).length;
+    var t = String(text || "").replace(/\r/g, "").trim().replace(/\n/g, "");
+    return MAX_BODY - t.length;
 }
 
 var URL_RE = /((?:https?:\/\/|www\.)[^\s<>"]+[^\s<>".,;:!?)\]'])/gi;

@@ -1133,5 +1133,7 @@ MainView {
     ShareSheet { }
     PaymentSheet { }
     StripeCheckoutSheet { }
+    NoCookieNotice { }
+    RateUsNotice { }
     Toaster { }
 }

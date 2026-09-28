@@ -25,8 +25,10 @@ Item {
     }
     // Note photo, else YouTube thumb
     readonly property string noteMedia: isNote ? (p.thumbnail || Notes.videoThumb(noteVideoUrl)) : ""
-    // Note content starts under name, like web
-    readonly property real noteIndent: Style.spacingM + units.gu(4.25) + Style.spacingS
+    // Note content aligned with title
+    readonly property real noteIndent: Style.spacingM
+    // Note text + media alignment
+    readonly property string noteAlign: isNote ? (p.mediaAlign || "left") : "left"
 
     readonly property bool isOwnPost: Session.isLoggedIn && (p.author || "") !== "" && p.author === Session.username
     readonly property bool isSaved: (SavedPosts.rev, SavedPosts.isSaved(p.permlink || ""))
@@ -287,7 +289,7 @@ Item {
                 radius: Style.pillRadius
                 color: "transparent"
                 border.width: units.dp(1)
-                border.color: Style.brand
+                border.color: Style.positive
 
                 Label {
                     id: noteTagLabel
@@ -296,7 +298,7 @@ Item {
                     font.pixelSize: Style.fontXSmall
                     font.weight: Font.DemiBold
                     font.family: Style.fontFor(text)
-                    color: Style.brand
+                    color: Style.positive
                 }
             }
 
@@ -350,6 +352,8 @@ Item {
             font.pixelSize: Style.fontMedium
             font.family: Style.fontFor(p.noteText || "")
             color: Style.textPrimary
+            horizontalAlignment: root.noteAlign === "center" ? Text.AlignHCenter
+                               : root.noteAlign === "right" ? Text.AlignRight : Text.AlignLeft
             wrapMode: Text.Wrap
             maximumLineCount: 10
             elide: Text.ElideRight
@@ -365,11 +369,17 @@ Item {
             readonly property bool isPlaceholder: (p.thumbnail || "") === ""
             // Text-only note: no cover
             visible: !root.isNote || root.noteMedia !== "" || Notes.isDirectVideo(root.noteVideoUrl)
-            // Note: smaller, square photo / 16:9 video
-            width: root.isNote ? Math.min(parent.width - root.noteIndent - Style.spacingM, units.gu(40))
-                               : parent.width - Style.spacingM * 2
-            x: root.isNote ? root.noteIndent : Style.spacingM
-            height: !visible ? 0 : (root.isNote && (p.thumbnail || "") !== "") ? width : width * 0.56
+            // Note: capped like web (360px), aligned
+            readonly property real fullWidth: parent.width - Style.spacingM * 2
+            width: root.isNote ? Math.min(fullWidth, units.gu(45)) : fullWidth
+            x: Style.spacingM + (!root.isNote ? 0
+                : root.noteAlign === "center" ? (fullWidth - width) / 2
+                : root.noteAlign === "right" ? fullWidth - width : 0)
+            // Note photo: own aspect, clamped
+            height: !visible ? 0
+                : (root.isNote && (p.thumbnail || "") !== "")
+                    ? width * (coverThumb.sourceAspect > 0 ? Math.max(0.56, Math.min(coverThumb.sourceAspect, 0.75)) : 0.75)
+                    : width * 0.56
 
             // Uploaded clip, no poster
             Rectangle {
@@ -380,6 +390,7 @@ Item {
             }
 
             RoundedThumb {
+                id: coverThumb
                 anchors.fill: parent
                 visible: !root.isNote || root.noteMedia !== ""
                 // A post with no picture falls back to the same Serey banner the web

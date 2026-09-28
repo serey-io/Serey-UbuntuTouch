@@ -13,6 +13,9 @@ Item {
     property real radius: Style.thumbRadius
     property int decodeWidth: units.gu(45)
     property bool autoTransform: false      // honour EXIF orientation
+    // Height/width of loaded image, 0 until ready
+    readonly property real sourceAspect: loader.status === Image.Ready && loader.implicitWidth > 0
+        ? loader.implicitHeight / loader.implicitWidth : 0
 
     readonly property int _maxRetries: 3
     property int _attempt: 0

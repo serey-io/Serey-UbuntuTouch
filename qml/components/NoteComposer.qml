@@ -19,6 +19,11 @@ Item {
     property int communityId: 0
     property string communityName: ""
     property int publishCeilingId: 0
+    // Publish-to row, driven by host
+    property bool showScope: false
+    property string scopeLabel: ""
+    property string scopeHint: ""
+    signal scopeClicked(var anchorItem)
     property real kbHeight: 0
     property real maxContentWidth: units.gu(72)
 
@@ -28,7 +33,8 @@ Item {
     property bool uploading: false
     property bool submitting: false
 
-    readonly property int charsLeft: Notes.remaining(noteField.text)
+    // displayText: includes uncommitted OSK word
+    readonly property int charsLeft: Notes.remaining(noteField.displayText)
     // Video upload state
     property bool videoUploading: false
     property int videoPercent: 0
@@ -271,6 +277,20 @@ Item {
                     placeholderText: Session.username
                                      ? Lang.tr("What's on your mind, %1?").arg(Session.username)
                                      : Lang.tr("What's on your mind?")
+                    // Grey placeholder; Lomiri hint has no color prop
+                    function _findHint(item) {
+                        for (var i = 0; i < item.children.length; i++) {
+                            var c = item.children[i];
+                            if (c.text === placeholderText && c.color !== undefined) return c;
+                            var hit = _findHint(c);
+                            if (hit) return hit;
+                        }
+                        return null;
+                    }
+                    Component.onCompleted: {
+                        var hint = _findHint(noteField);
+                        if (hint) hint.color = Qt.binding(function () { return Style.textSecondary; });
+                    }
                 }
 
                 // Counter, bottom-right inside box
@@ -442,6 +462,71 @@ Item {
                     Icon { anchors.centerIn: parent; width: units.gu(1.8); height: width; name: "close"; color: "white" }
                 }
             }
+
+            // Publish scope, same as blog
+            Column {
+                width: parent.width
+                visible: root.showScope
+                spacing: units.dp(2)
+
+                Label {
+                    text: Lang.tr("Publish to")
+                    font.pixelSize: Style.fontRegular
+                    font.weight: Font.DemiBold
+                    font.family: Style.fontFor(text)
+                    color: Style.textPrimary
+                }
+
+                MouseArea {
+                    id: scopeRow
+                    width: parent.width
+                    height: units.gu(5)
+                    onClicked: { Qt.inputMethod.commit(); Qt.inputMethod.hide(); root.scopeClicked(scopeRow); }
+
+                    Rectangle {
+                        anchors.fill: parent
+                        color: "transparent"
+                        border.width: units.dp(1)
+                        border.color: Style.divider
+                        radius: Style.thumbRadius
+
+                        Row {
+                            anchors {
+                                left: parent.left; right: parent.right
+                                verticalCenter: parent.verticalCenter
+                                leftMargin: Style.spacingM; rightMargin: Style.spacingM
+                            }
+                            spacing: Style.spacingS
+
+                            Label {
+                                width: parent.width - scopeChevron.width - Style.spacingS
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: root.scopeLabel
+                                elide: Text.ElideRight
+                                font.pixelSize: Style.fontRegular
+                                font.family: Style.fontFor(text)
+                                color: Style.textPrimary
+                            }
+                            Icon {
+                                id: scopeChevron
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: units.gu(2); height: width
+                                name: "down"
+                                color: Style.textSecondary
+                            }
+                        }
+                    }
+                }
+
+                Label {
+                    width: parent.width
+                    text: root.scopeHint
+                    font.pixelSize: Style.fontXSmall
+                    font.family: Style.fontFor(text)
+                    color: Style.textSecondary
+                    wrapMode: Text.WordWrap
+                }
+            }
         }
     }
 
@@ -504,7 +589,7 @@ Item {
         PrimaryButton {
             id: postBtn
             anchors { right: parent.right; rightMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
-            width: units.gu(12)
+            width: Math.max(units.gu(12), implicitWidth)
             enabled: root.canPost
             busy: root.submitting
             text: root.submitting ? (root.isEdit ? Lang.tr("Saving…") : Lang.tr("Posting…"))

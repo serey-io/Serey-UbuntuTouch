@@ -2,6 +2,7 @@ pragma Singleton
 import QtQuick 2.7
 import QtQuick.LocalStorage 2.0
 import "../Theme"
+import "../services/Notes.js" as Notes
 
 QtObject {
     id: store
@@ -101,6 +102,9 @@ QtObject {
         var urls = [];
         function add(u) { if (u && u.indexOf("http") === 0 && urls.indexOf(u) < 0) urls.push(u); }
         add(post.thumbnail || "");
+        // Note media
+        add(post.coverImage || "");
+        if (post.isNote && Notes.isDirectVideo(post.noteVideo || "")) add(post.noteVideo);
         var body = post.body || "";
         var re = /(?:src|data-image-url)=["']([^"']+)["']/g;
         var m;
@@ -138,13 +142,19 @@ QtObject {
         if (!post) return;
         var body = post.body || "";
         var thumb = post.thumbnail || "";
+        var cover = post.coverImage || "";
+        var video = post.noteVideo || "";
         for (var remote in map) {
             var local = map[remote];
             body = body.split(remote).join(local);     // string (not regex) replace-all
             if (thumb === remote) thumb = local;
+            if (cover === remote) cover = local;
+            if (video === remote) video = local;
         }
         post.body = body;
         post.thumbnail = thumb;
+        post.coverImage = cover;
+        post.noteVideo = video;
         _persist(post);
         store._load();
     }

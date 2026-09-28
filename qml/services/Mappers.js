@@ -132,6 +132,15 @@ function noteText(html) {
         .trim();
 }
 
+// Note align from body text-align, like web getNoteMediaAlign
+function noteAlign(html, fallback) {
+    var s = String(html || "");
+    var m = /text-align\s*:\s*(left|center|right|justify)/i.exec(s)
+         || /\bql-align-(left|center|right|justify)\b/i.exec(s);
+    var v = m ? m[1].toLowerCase() : String(fallback || "left").toLowerCase();
+    return (v === "center" || v === "right") ? v : "left";
+}
+
 function toPost(raw) {
     raw = raw || {};
     // Built once instead of recomputed per field below (was parsed/walked multiple times)
@@ -148,7 +157,8 @@ function toPost(raw) {
         isNote: note,
         noteText: note ? noteText(raw.description || raw.short_desc || "") : "",
         noteVideo: parseList(raw.videos)[0] || "",
-        mediaAlign: raw.media_alignment || "left",
+        mediaAlign: note ? noteAlign(raw.description || raw.short_desc, raw.media_alignment)
+                         : (raw.media_alignment || "left"),
         body: raw.description || "",
         excerpt: stripHtml(raw.short_desc || raw.description || "", 180),
         thumbnail: firstImage(raw),

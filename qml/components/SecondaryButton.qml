@@ -11,6 +11,8 @@ AbstractButton {
     width: parent ? parent.width : units.gu(40)
     height: units.gu(5)
     enabled: !busy
+    // Content-fit width
+    implicitWidth: content.width + units.gu(3)
 
     Rectangle {
         anchors.fill: parent
@@ -21,6 +23,7 @@ AbstractButton {
         Behavior on color { ColorAnimation { duration: 120 } }
 
         Row {
+            id: content
             anchors.centerIn: parent
             spacing: Style.spacingS
 

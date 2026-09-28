@@ -12,7 +12,8 @@ Rectangle {
     readonly property int length: input.text.length
 
     width: parent ? parent.width : units.gu(40)
-    height: Math.max(units.gu(10), input.contentHeight + Style.spacingM * 2)
+    // Grows for text or wrapped placeholder
+    height: Math.max(units.gu(10), Math.max(input.contentHeight, hint.visible ? hint.implicitHeight : 0) + Style.spacingM * 2)
     radius: Style.cardRadius
     color: Style.surface
     border.width: units.dp(1)
@@ -38,7 +39,8 @@ Rectangle {
         }
 
         Label {
-            anchors.fill: parent
+            id: hint
+            anchors { left: parent.left; right: parent.right; top: parent.top }
             text: root.placeholder
             // Per-field only, not Qt.inputMethod.visible, which would blank every other field's placeholder while any one is focused.
             // Stays up while focused, like Suru's own field; it only clears once there's text.

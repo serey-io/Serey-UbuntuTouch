@@ -593,7 +593,7 @@ Page {
             width: list.width
             height: contentLoader.height
             property var postData: feedModel.get(index)
-            readonly property bool isVideo: postData && postData._kind === "video"
+            readonly property bool isVideo: !!postData && postData._kind === "video"
             // Dark-greys the row whose article is currently open in the detail pane (wide layout only).
             color: (page.splitOpen && page.openPermlink !== "" && postData && postData.permlink === page.openPermlink)
                 ? Style.iconBackground : Style.surface

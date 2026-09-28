@@ -285,23 +285,35 @@ RowLayout {
         }
     }
 
-    // AI mark, like web
-    Row {
+    // AI mark, light blue pill
+    Rectangle {
         visible: bar.showAi
         Layout.alignment: Qt.AlignVCenter
-        spacing: units.dp(2)
-        Label {
-            anchors.verticalCenter: parent.verticalCenter
-            text: "✨"
-            font.pixelSize: Style.fontMedium
-            color: Style.brand
-        }
-        Label {
-            anchors.verticalCenter: parent.verticalCenter
-            text: "AI"
-            font.pixelSize: Style.fontSmall
-            font.weight: Font.DemiBold
-            color: Style.brand
+        Layout.preferredWidth: aiRow.width + Style.spacingM
+        Layout.preferredHeight: units.gu(3.25)
+        radius: Style.pillRadius
+        color: Qt.rgba(0x38 / 255, 0xb6 / 255, 0xff / 255, 0.15)
+
+        Row {
+            id: aiRow
+            anchors.centerIn: parent
+            spacing: units.dp(2)
+            Label {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "AI"
+                // Matches AI icon
+                font.pixelSize: Style.fontMedium
+                font.weight: Font.DemiBold
+                color: "#38b6ff"
+            }
+            Image {
+                anchors.verticalCenter: parent.verticalCenter
+                source: Qt.resolvedUrl("../../assets/serey-ai.png")
+                width: units.gu(2.5); height: width
+                sourceSize.width: width * 2
+                fillMode: Image.PreserveAspectFit
+                smooth: true
+            }
         }
     }
 

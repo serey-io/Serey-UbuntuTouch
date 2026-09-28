@@ -12,6 +12,8 @@ AbstractButton {
 
     width: parent ? parent.width : units.gu(40)
     height: units.gu(5)
+    // Content-fit width
+    implicitWidth: content.width + units.gu(3)
     enabled: !busy
     opacity: enabled ? 1.0 : 0.5    // Suru dims the whole control rather than washing the fill
 
@@ -23,6 +25,7 @@ AbstractButton {
         Behavior on color { ColorAnimation { duration: 120 } }
 
         Row {
+            id: content
             anchors.centerIn: parent
             spacing: Style.spacingS
 

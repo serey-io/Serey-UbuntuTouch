@@ -1241,19 +1241,6 @@ Page {
 
             Rectangle { width: parent.width; height: units.dp(1); color: Style.divider }
 
-            // Cover only when body has no image
-            RoundedThumb {
-                readonly property string coverUrl: !page.post || page.post.isNote ? ""
-                    : (page.post.coverImage !== undefined ? page.post.coverImage : (page.post.thumbnail || ""))
-                visible: coverUrl.length > 0 && !page.bodyHasImage
-                width: parent.width - Style.spacingM * 2
-                anchors.horizontalCenter: parent.horizontalCenter
-                height: visible ? width * 0.56 : 0
-                source: coverUrl
-                autoTransform: true
-                decodeWidth: units.gu(90)
-            }
-
             // Body is parsed into text blocks and rounded images; inset once here so every block shares the same left/right padding as the title/author row.
             Column {
                 width: parent.width - Style.spacingM * 2
@@ -1386,6 +1373,10 @@ Page {
                                     font.pixelSize: Config.wideMode ? Style.fontMedium * 1.2 : Style.fontMedium
                                     font.family: Style.fontFor(text)
                                     color: Style.textPrimary
+                                    // Note text follows its alignment
+                                    horizontalAlignment: !page.post || !page.post.isNote ? TextEdit.AlignLeft
+                                        : page.post.mediaAlign === "center" ? TextEdit.AlignHCenter
+                                        : page.post.mediaAlign === "right" ? TextEdit.AlignRight : TextEdit.AlignLeft
                                     // Flat look, not a text field
                                     StyleHints {
                                         backgroundColor: "transparent"
@@ -2013,6 +2004,17 @@ Page {
 
         // composerArea (reply banner + pill composer) reparents in here; declared under sidePanel.
     }
+    }
+
+    // Tap outside hides keyboard
+    MouseArea {
+        anchors.fill: scroll
+        enabled: composer.activeFocus
+        onPressed: {
+            Qt.inputMethod.hide();
+            scroll.forceActiveFocus();
+            mouse.accepted = false;
+        }
     }
 
     // Fullscreen host for body embeds (mirrors VideoDetailPage's fsHost)

@@ -373,7 +373,8 @@ Item {
             spacing: 0
             visible: sheet.step === 0
 
-            Item { width: 1; height: Style.spacingS }
+            // Title gaps: owner only
+            Item { width: 1; height: Style.spacingS; visible: sheet.isOwn }
             Label {
                 width: parent.width
                 horizontalAlignment: Text.AlignHCenter
@@ -383,7 +384,7 @@ Item {
                 font.weight: Font.DemiBold
                 color: Style.textPrimary
             }
-            Item { width: 1; height: Style.spacingL }
+            Item { width: 1; height: Style.spacingL; visible: sheet.isOwn }
 
             // Save for offline (blog only) fetches the full article first since the feed view-model only carries an excerpt, then persists it; toggles to "Remove from saved" when already saved.
             AbstractButton {
