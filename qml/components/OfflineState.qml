@@ -16,10 +16,11 @@ Item {
     // A failed retry changes nothing on screen, so the tap needs an answer of its own:
     // spin while the probe runs, with a floor so it registers as a check that happened.
     property bool checking: false
+    readonly property bool busy: checking || Net._probing
     function _retry() {
         root.checking = true;
         checkFloor.restart();
-        Net.probe();          // confirms reachability even if the caller's reload is silent
+        Net.probe(true);      // confirms reachability even if the caller's reload is silent
         root.retry();
     }
     Timer {
@@ -84,8 +85,8 @@ Item {
 
         SecondaryButton {
             width: parent.width
-            busy: root.checking
-            text: root.checking ? Lang.tr("Checking…") : Lang.tr("Try again")
+            busy: root.busy
+            text: root.busy ? Lang.tr("Checking…") : Lang.tr("Try again")
             onClicked: root._retry()
         }
     }

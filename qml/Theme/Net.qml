@@ -31,8 +31,17 @@ Item {
 
     // Any HTTP answer proves connectivity, so the status code itself doesn't matter.
     property var _probeXhr: null
-    function probe() {
-        if (net.forceOffline || net._probing) return;
+    // manual = user tapped Try again: restart a probe that is stuck on a dead pre-reconnect
+    // socket instead of ignoring the tap, and give the fresh handshake longer.
+    function probe(manual) {
+        if (net.forceOffline) return;
+        if (net._probing) {
+            if (!manual) return;
+            var old = net._probeXhr;
+            net._probeXhr = null;   // mutes abort callback
+            if (old) { try { old.abort(); } catch (e) { } }
+            probeTimeout.stop();
+        }
         net._probing = true;
         net._probeStartedAt = Date.now();
         var xhr = new XMLHttpRequest();
@@ -46,7 +55,7 @@ Item {
             xhr.open("HEAD", Config.baseUrl);
             xhr.send();
             // Longer wait at launch: cold DNS/TLS, queued behind startup requests
-            probeTimeout.interval = Date.now() - net._startedAt < 15000 ? 8000 : 3000;
+            probeTimeout.interval = manual || Date.now() - net._startedAt < 15000 ? 8000 : 3000;
             probeTimeout.restart();
         } catch (e) {
             net._finishProbe(false);
