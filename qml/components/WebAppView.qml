@@ -432,6 +432,7 @@ FocusScope {
     function reload() {
         navTimer.stop(); navVerify.stop(); hopSettle.stop(); hopWatchdog.stop();
         _hopping = false; _deferredNav = false;
+        loading = true;   // now, not after loadTimer: the offline panel's button keys off it
         webView.url = "";
         loadTimer.restart();
     }

@@ -887,7 +887,7 @@ Page {
         // The backdrop cuts in hard: cross-fading it let the feed show through the panel for
         // the whole animation, which looked like a rendering fault. Only the panel's own
         // content fades, so the feed is gone the instant we know we're offline.
-        visible: !Net.online
+        visible: !Net.online || Net.justReconnected
         color: Style.surface
         z: 2
         // Swallow taps so the list can't be scrolled or opened behind the panel.

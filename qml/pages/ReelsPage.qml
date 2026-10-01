@@ -202,6 +202,9 @@ Page {
     function load() {
         page.loading = true;
         page.errorMsg = "";
+        // Offline the request just stalls, leaving the spinner up forever.
+        offlineGrace.restart();
+        if (!Net.online) Net.probe();
         var params = { limit: 50, offset: 0 };
         if (Config.communityId > 0)
             params.community_id = Config.communityId;
@@ -210,6 +213,8 @@ Page {
         VideoService.listVideos(Config.baseUrl, params, Session.token,
             function (result) {
                 if (!page) return;          // popped mid-load, page destroyed
+                offlineGrace.stop();
+                page.errorMsg = "";         // a stalled request can still land after we gave up
                 // Same filters as the shelf that launched us (VideoPage._applyRows), so the
                 // startIndex we were handed still points at the reel the reader tapped.
                 var hidden = HiddenPosts.loadAll();
@@ -231,7 +236,8 @@ Page {
                 page.syncDockedPanel();
             },
             function (err) {
-                if (!page) return;
+                if (!page || !page.loading) return;   // already gave up on it
+                offlineGrace.stop();
                 page.loading = false;
                 page.errorMsg = (err && err.message) ? err.message : Lang.tr("Couldn't load Serey Shorts.");
             });
@@ -1001,11 +1007,31 @@ Page {
         visible: running
     }
 
+    // Give the fetch a few seconds; offline by then (or Net flipping mid-load) means stop waiting.
+    function _giveUpOffline() {
+        if (!page.loading || page.reels.length > 0 || Net.online) return;
+        page.loading = false;
+        page.errorMsg = Lang.tr("There is currently no network connection.");
+    }
+    Timer { id: offlineGrace; interval: 3000; onTriggered: page._giveUpOffline() }
+    Connections {
+        target: Net
+        function onOnlineChanged() { page._giveUpOffline(); }
+    }
+
     EmptyState {
         anchors { top: parent.top; bottom: parent.bottom; left: parent.left }
         width: page.stageArea
-        visible: !page.loading && page.reels.length === 0
+        visible: !page.loading && page.reels.length === 0 && page.errorMsg === ""
         iconName: "camcorder"
-        message: page.errorMsg !== "" ? page.errorMsg : Lang.tr("No Serey Shorts yet")
+        message: Lang.tr("No Serey Shorts yet")
+    }
+    // Offline this is the shared offline panel; it reloads itself once we're back.
+    ErrorState {
+        anchors { top: parent.top; bottom: parent.bottom; left: parent.left }
+        width: page.stageArea
+        visible: !page.loading && page.reels.length === 0 && page.errorMsg !== ""
+        message: page.errorMsg
+        onRetry: page.load()
     }
 }

@@ -9,7 +9,7 @@ import "../Session"
 Item {
     id: root
     property string message: Lang.tr("Something went wrong")
-    readonly property bool offline: !Net.online
+    readonly property bool offline: !Net.online || Net.justReconnected
     signal retry()
 
     // Coming back online only swapped the offline copy for the stale server message and then

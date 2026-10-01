@@ -13,10 +13,17 @@ Item {
 
     signal retry()
 
+    readonly property bool _shownOffline: root.visible && !Net.online
+    on_ShownOfflineChanged: if (_shownOffline) Net.offlineSeen = true
+
     // A failed retry changes nothing on screen, so the tap needs an answer of its own:
     // spin while the probe runs, with a floor so it registers as a check that happened.
     property bool checking: false
-    readonly property bool busy: checking || Net._probing
+    // Only a tap shows "Checking…"; the silent 15s background probe never touches the button.
+    // Host sets this while its content reloads behind the panel, so the button spins
+    // instead of falling back to "Try again" mid-load.
+    property bool reloading: false
+    readonly property bool busy: checking || Net._burstUntil > 0 || (reloading && Net.online)
     function _retry() {
         root.checking = true;
         checkFloor.restart();
@@ -84,10 +91,17 @@ Item {
         }
 
         SecondaryButton {
+            // A site load failure with the network up keeps "Try again", which reloads it.
+            readonly property bool connected: Net.justReconnected
             width: parent.width
-            busy: root.busy
-            text: root.busy ? Lang.tr("Checking…") : Lang.tr("Try again")
-            onClicked: root._retry()
+            busy: root.busy && !connected
+            enabled: !busy
+            accent: connected ? Style.positive : Style.brand
+            dotColor: connected ? "transparent" : Style.danger
+            iconName: connected ? "tick" : ""
+            text: connected ? Lang.tr("Press to connect")
+                : root.busy ? Lang.tr("Checking…") : Lang.tr("Try again")
+            onClicked: connected ? Net.acknowledgeReconnect() : root._retry()
         }
     }
 }

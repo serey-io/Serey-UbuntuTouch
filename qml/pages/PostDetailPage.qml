@@ -558,10 +558,16 @@ Page {
         if (page.offlineMode) return;   // offline
         page.loading = true;
         page.errorMsg = "";
+        // Offline the request just stalls (QML XHR ignores its timeout), leaving the skeleton forever.
+        offlineGrace.restart();
+        if (!Net.online) Net.probe();
         PostService.detail(Config.baseUrl, author, permlink, Session.token,
             function (result) {
                 if (!page) return;   // page closed while the fetch was in flight
+                if (page.offlineMode) return;   // already showing the saved copy
+                offlineGrace.stop();
                 page.loading = false;
+                page.errorMsg = "";   // a stalled request can still land after we gave up
                 page.post = result.post;
                 page.comments = result.replies || [];
                 page.commentCount = page._countAll(page.comments);
@@ -591,22 +597,44 @@ Page {
                 }
             },
             function (err) {
-                page.loading = false;
-                // Offline/failed fetch: fall back to a saved copy if we have one
-                if (page.post === null) {
-                    var saved = SavedPosts.get(page.permlink);
-                    if (saved) {
-                        page.post = saved;
-                        page.commentCount = saved.comments || 0;
-                        page._parseBody();
-                        page.errorMsg = "";
-                        // Reading the stored copy IS offline mode: no comments, no related rail
-                        page.offlineMode = true;
-                    } else {
-                        page.errorMsg = err.message;
-                    }
-                }
+                if (!page || !page.loading) return;   // already gave up on it
+                page._loadFailed(err.message);
             });
+    }
+
+    // Offline/failed fetch: fall back to a saved copy if we have one, else the error
+    // (ErrorState turns that into the offline panel while Net is down).
+    function _loadFailed(msg) {
+        offlineGrace.stop();
+        page.loading = false;
+        if (page.post !== null) return;
+        var saved = SavedPosts.get(page.permlink);
+        if (saved) {
+            page.post = saved;
+            page.commentCount = saved.comments || 0;
+            page._parseBody();
+            page.errorMsg = "";
+            // Reading the stored copy IS offline mode: no comments, no related rail
+            page.offlineMode = true;
+        } else {
+            page.errorMsg = msg;
+        }
+    }
+
+    // Give the fetch a few seconds; if we're (still) offline by then, stop waiting on it.
+    Timer {
+        id: offlineGrace
+        interval: 3000
+        onTriggered: if (page.loading && page.post === null && !Net.online)
+                         page._loadFailed(Lang.tr("There is currently no network connection."))
+    }
+    // Net deciding we're offline mid-load is just as final.
+    Connections {
+        target: Net
+        function onOnlineChanged() {
+            if (!Net.online && page.loading && page.post === null)
+                page._loadFailed(Lang.tr("There is currently no network connection."));
+        }
     }
 
     function pushLogin() {

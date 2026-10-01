@@ -42,14 +42,16 @@ Item {
     Timer {
         id: retryTimer
         interval: 3000 * (root._attempt + 1)
-        onTriggered: root._attempt++
+        // Offline it would only fail again, and burning the retries left cards blank for good.
+        onTriggered: if (Net.online) root._attempt++
     }
 
     // Back online is the likeliest reason a retry will now succeed; don't wait out the timer.
+    // Not capped by _maxRetries: a long outage may have used them up.
     Connections {
         target: Net
         function onOnlineChanged() {
-            if (Net.online && loader.status === Image.Error && root._attempt < root._maxRetries) {
+            if (Net.online && loader.status === Image.Error) {
                 retryTimer.stop();
                 root._attempt++;
             }

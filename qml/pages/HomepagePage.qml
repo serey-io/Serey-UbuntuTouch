@@ -74,14 +74,28 @@ Page {
         id: offlineCover
         anchors.fill: parent
         // Backdrop cuts in, content fades: same as the News/Video covers.
-        visible: webApp.loadFailed || !Net.online
+        visible: webApp.loadFailed || !Net.online || Net.justReconnected
         color: Style.surface
 
         OfflineState {
             anchors.fill: parent
             opacity: offlineCover.visible ? 1 : 0
             Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.OutQuad } }
+            reloading: webApp.loading
             onRetry: webApp.reload()
+        }
+    }
+
+    // The first reload after a reconnect often fails on the cold connection; tapping
+    // "Press to connect" retries it right away instead of leaving the user on "Try again".
+    Connections {
+        target: Net
+        function onJustReconnectedChanged() {
+            // Via the deferred path: reloading the frozen (hidden-tab) view crashes Chromium.
+            if (!Net.justReconnected && Net.online && webApp.loadFailed && !webApp.loading) {
+                webApp._deferredNav = true;
+                webApp._applyDeferredNav();
+            }
         }
     }
 

@@ -289,6 +289,12 @@ Page {
     function startPlay() {
         var v = page.video;
         var direct = page.directUrl();
+        // Offline only a downloaded copy can play; a remote player would just sit black.
+        if (!Net.online && direct.indexOf("file://") !== 0) {
+            Toast.error(Lang.tr("No network right now. Downloaded videos still play offline."));
+            Net.probe();
+            return;
+        }
         if (direct.length > 0) {
             var isLocal = direct.indexOf("file://") === 0;
             if (!isLocal && /\.mov(\?|$)/i.test(direct)) {

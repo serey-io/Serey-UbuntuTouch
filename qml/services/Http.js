@@ -20,6 +20,8 @@ function _pendingDelta(d) {
     if (_onPending) _onPending(_pending);
 }
 function pendingCount() { return _pending; }
+// Late settles of the dropped requests clamp at 0 above.
+function resetPending() { _pending = 0; if (_onPending) _onPending(0); }
 
 function buildQuery(params) {
     if (!params)

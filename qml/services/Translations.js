@@ -73,6 +73,8 @@ var nl = {
     "Voting closed: this post paid out after %1 days.": "Stemmen gesloten: dit bericht is na %1 dagen uitbetaald.",
     "You're offline. Tap to try again.":                "Je bent offline. Tik om het opnieuw te proberen.",
     "Checking…":                                        "Controleren…",
+    "No network right now. Downloaded videos still play offline.": "Geen netwerk. Gedownloade video's spelen nog offline af.",
+    "Press to connect":                                 "Tik om te verbinden",
     "Choose a new password":                            "Kies een nieuw wachtwoord",
     "Choose a username":                                "Kies een gebruikersnaam",
     "Choose platform":                                  "Kies platform",
