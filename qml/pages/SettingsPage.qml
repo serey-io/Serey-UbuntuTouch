@@ -1,4 +1,5 @@
 import QtQuick 2.7
+import Qt.labs.settings 1.0
 import Lomiri.Components 1.3
 import Lomiri.Components.Popups 1.3
 import QtGraphicalEffects 1.0
@@ -37,51 +38,134 @@ Page {
 
     ListModel { id: searchModel }
 
+    // Normalized query of the shown rows
+    property string searchQuery: ""
+    property bool searchFailed: false
+    // Empty query lists recents
+    readonly property bool showingRecent: page.searchQuery === "" && searchModel.count > 0
+    property var _searchXhr: null
+    // username -> profile bits, per session
+    property var _profileCache: ({})
+
+    Settings {
+        id: searchStore
+        category: "UserSearch"
+        property string recent: "[]"
+    }
+
+    function _recentList() {
+        try { var a = JSON.parse(searchStore.recent); return Array.isArray(a) ? a : [] }
+        catch (e) { return [] }
+    }
+    function _rememberUser(row) {
+        var list = page._recentList().filter(function (r) { return r.username !== row.username })
+        list.unshift({ username: row.username, fullName: row.fullName || "",
+                       profileUrl: row.profileUrl || "", followers: row.followers || 0 })
+        searchStore.recent = JSON.stringify(list.slice(0, 8))
+    }
+    function clearRecent() {
+        searchStore.recent = "[]"
+        if (page.searchQuery === "") searchModel.clear()
+    }
+    function _showRecent() {
+        searchModel.clear()
+        var list = page._recentList()
+        for (var i = 0; i < list.length; i++)
+            searchModel.append({ username: list[i].username, fullName: list[i].fullName || "",
+                                 profileUrl: list[i].profileUrl || "", followers: list[i].followers || 0 })
+    }
+
+    function _abortSearch() {
+        if (page._searchXhr) { try { page._searchXhr.abort() } catch (e) { } }
+        page._searchXhr = null
+    }
+
     function closeSearch() {
+        searchDebounce.stop()
+        searchField.text = ""   // first: text change reopens recents
+        page._abortSearch()
         searchModel.clear()
         page.searchOpen = false
+        page.searching = false
         page.searchGeneration++
-        searchField.text = ""
+    }
+
+    function openUser(row) {
+        page._rememberUser(row)
+        var uname = row.username
+        page.closeSearch()
+        page.searchActive = false
+        page.pageStack.push(Qt.resolvedUrl("ProfileViewPage.qml"), { username: uname })
+    }
+
+    // Fill name/avatar/followers, cached
+    function _fillProfile(gen, uname) {
+        var hit = page._profileCache[uname]
+        if (hit) { page._applyProfile(uname, hit); return }
+        AccountService.profile(Config.baseUrl, uname, Session.token,
+            function (user) {
+                var info = { fullName: user.fullName !== uname ? user.fullName : "",
+                             profileUrl: user.profileUrl || "", followers: user.followers || 0 }
+                page._profileCache[uname] = info
+                if (gen === page.searchGeneration) page._applyProfile(uname, info)
+            },
+            function () { /* optional */ })
+    }
+    function _applyProfile(uname, info) {
+        for (var k = 0; k < searchModel.count; k++) {
+            if (searchModel.get(k).username !== uname) continue
+            searchModel.setProperty(k, "fullName", info.fullName)
+            searchModel.setProperty(k, "profileUrl", info.profileUrl)
+            searchModel.setProperty(k, "followers", info.followers)
+            break
+        }
     }
 
     function doSearch(query) {
-        var q = query.trim()
-        if (q.length < 2) {
-            searchModel.clear()
+        var q = AccountService.normalizeUserQuery(query)
+        var gen = ++page.searchGeneration
+        page._abortSearch()
+        page.searchFailed = false
+        page.searchOpen = true
+        page.searchQuery = q
+        if (q === "") {
+            page.searching = false
+            page._showRecent()
             return
         }
         page.searching = true
-        page.searchOpen = true
-        var gen = ++page.searchGeneration
-        AccountService.searchUser(Config.baseUrl, Session.token, q,
+        page._searchXhr = AccountService.searchUser(Config.baseUrl, Session.token, q,
             function (users) {
                 if (gen !== page.searchGeneration) return
+                page._searchXhr = null
                 page.searching = false
                 searchModel.clear()
-                for (var i = 0; i < users.length; i++)
-                    searchModel.append({ username: users[i].username, profileUrl: "" })
-                page.searchOpen = true
-                for (var j = 0; j < users.length; j++) {
-                    (function(capturedGen, uname) {
-                        AccountService.profile(Config.baseUrl, uname, Session.token,
-                            function(user) {
-                                if (capturedGen !== page.searchGeneration) return
-                                for (var k = 0; k < searchModel.count; k++) {
-                                    if (searchModel.get(k).username === uname) {
-                                        searchModel.setProperty(k, "profileUrl", user.profileUrl || "")
-                                        break
-                                    }
-                                }
-                            },
-                            function() { /* avatar optional */ })
-                    })(gen, users[j].username)
+                // Exact match first
+                users.sort(function (a, b) { return (b.username === q) - (a.username === q) })
+                for (var i = 0; i < users.length; i++) {
+                    var c = page._profileCache[users[i].username]
+                    searchModel.append({ username: users[i].username,
+                                         fullName: c ? c.fullName : "",
+                                         profileUrl: c ? c.profileUrl : "",
+                                         followers: c ? c.followers : 0 })
                 }
+                for (var j = 0; j < users.length; j++)
+                    page._fillProfile(gen, users[j].username)
             },
             function (err) {
                 if (gen !== page.searchGeneration) return
+                page._searchXhr = null
                 page.searching = false
+                page.searchFailed = true
                 searchModel.clear()
             })
+    }
+
+    // "@<b>lay</b>heng"
+    function _highlight(uname) {
+        var q = page.searchQuery
+        if (!q || uname.indexOf(q) !== 0) return "@" + uname
+        return "@<b>" + uname.substr(0, q.length) + "</b>" + uname.substr(q.length)
     }
 
     // Suppress the default header and draw our own, since Page.header didn't render the right-side search action icon reliably.
@@ -153,7 +237,7 @@ Page {
                 anchors { right: parent.right; rightMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
                 width: units.gu(4); height: width
                 // searchOpen right away so tapping search shows the empty state, not nothing
-                onClicked: { page.searchActive = true; page.searchOpen = true; searchField.forceActiveFocus(); }
+                onClicked: { page.searchActive = true; page.doSearch(""); searchField.forceActiveFocus(); }
                 Icon {
                     anchors.centerIn: parent
                     width: units.gu(2.6); height: width
@@ -190,10 +274,8 @@ Page {
                 width: units.gu(4); height: width
                 onClicked: {
                     page.searchActive = false;
-                    searchField.text = "";
                     searchField.focus = false;
-                    searchModel.clear();
-                    page.searchOpen = false;
+                    page.closeSearch();
                 }
                 Icon {
                     anchors.centerIn: parent
@@ -233,22 +315,34 @@ Page {
                             color: Style.textPrimary
                             clip: true
                             inputMethodHints: Qt.ImhNoPredictiveText
+                            // Refocus reopens results
+                            onActiveFocusChanged: if (activeFocus && !page.searchOpen) page.doSearch(text)
                             onTextChanged: {
-                                // Panel stays up (empty state) while the field is open.
-                                if (searchField.text.trim().length < 2)
-                                    searchModel.clear()
-                                searchDebounce.restart()
+                                // Recents show at once
+                                if (AccountService.normalizeUserQuery(searchField.text) === "") {
+                                    searchDebounce.stop()
+                                    page.doSearch("")
+                                } else {
+                                    searchDebounce.restart()
+                                }
                             }
                             Keys.onReturnPressed: {
                                 searchDebounce.stop()
-                                page.doSearch(searchField.text.trim())
+                                var q = AccountService.normalizeUserQuery(searchField.text)
+                                // Exact hit opens directly
+                                if (q !== "" && q === page.searchQuery && searchModel.count > 0
+                                        && searchModel.get(0).username === q) {
+                                    page.openUser(searchModel.get(0))
+                                    return
+                                }
+                                page.doSearch(searchField.text)
                                 searchField.focus = false
                             }
                         }
                         Label {
                             anchors.fill: parent
                             verticalAlignment: Text.AlignVCenter
-                            text: Lang.tr("Search users...")
+                            text: Lang.tr("Search by username")
                             font.pixelSize: Style.fontRegular
                             font.family: Style.fontFor(text)
                             color: Style.textSecondary
@@ -261,8 +355,8 @@ Page {
 
         Timer {
             id: searchDebounce
-            interval: 200
-            onTriggered: page.doSearch(searchField.text.trim())
+            interval: 250
+            onTriggered: page.doSearch(searchField.text)
         }
 
         Rectangle {
@@ -990,7 +1084,9 @@ Page {
             horizontalCenter: parent.horizontalCenter
         }
         width: Math.min(parent.width, page.maxContentWidth) - Style.spacingM * 2
-        height: searchModel.count > 0 ? Math.min(searchModel.count * units.gu(7.5), units.gu(40))
+        readonly property real rowH: units.gu(7.5)
+        readonly property real headH: page.showingRecent ? units.gu(4.5) : 0
+        height: searchModel.count > 0 ? Math.min(headH + searchModel.count * rowH, units.gu(48))
                                       : units.gu(14)
         radius: units.gu(1)
         color: Style.surface
@@ -1012,24 +1108,37 @@ Page {
             visible: running
         }
 
+        // Empty / error / hint
         Column {
             anchors.centerIn: parent
+            width: parent.width - Style.spacingL * 2
             spacing: Style.spacingS
             visible: !page.searching && searchModel.count === 0
 
             Icon {
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: units.gu(4); height: width
-                name: "find"
+                name: page.searchFailed ? "reload" : "find"
                 color: Style.textSecondary
             }
             Label {
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: Lang.tr("No results found")
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+                text: page.searchFailed
+                      ? (Net.online ? Lang.tr("Couldn't load. Tap to try again.")
+                                    : Lang.tr("You're offline. Tap to try again."))
+                      : page.searchQuery === "" ? Lang.tr("Search by username")
+                      : Lang.tr("No results found")
                 font.pixelSize: Style.fontSmall
                 font.family: Style.fontFor(text)
                 color: Style.textSecondary
             }
+        }
+        MouseArea {
+            anchors.fill: parent
+            enabled: page.searchFailed && searchModel.count === 0
+            onClicked: page.doSearch(searchField.text)
         }
 
         ListView {
@@ -1039,9 +1148,37 @@ Page {
             clip: true
             boundsBehavior: Flickable.StopAtBounds
 
+            header: Item {
+                width: searchListView.width
+                height: searchOverlay.headH
+                visible: page.showingRecent
+
+                Label {
+                    anchors { left: parent.left; leftMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
+                    text: Lang.tr("Recent")
+                    font.pixelSize: Style.fontSmall
+                    font.weight: Font.DemiBold
+                    font.family: Style.fontFor(text)
+                    color: Style.textSecondary
+                }
+                AbstractButton {
+                    anchors { right: parent.right; top: parent.top; bottom: parent.bottom }
+                    width: clearLabel.width + Style.spacingM * 2
+                    onClicked: page.clearRecent()
+                    Label {
+                        id: clearLabel
+                        anchors.centerIn: parent
+                        text: Lang.tr("Clear")
+                        font.pixelSize: Style.fontSmall
+                        font.family: Style.fontFor(text)
+                        color: Style.brand
+                    }
+                }
+            }
+
             delegate: Item {
                 width: searchListView.width
-                height: units.gu(7.5)
+                height: searchOverlay.rowH
 
                 Rectangle {
                     anchors.fill: parent
@@ -1049,10 +1186,12 @@ Page {
                 }
 
                 Row {
+                    id: resultRow
                     anchors { fill: parent; leftMargin: Style.spacingM; rightMargin: Style.spacingM }
                     spacing: Style.spacingM
 
                     Rectangle {
+                        id: avatarBox
                         anchors.verticalCenter: parent.verticalCenter
                         width: units.gu(5); height: width; radius: width / 2
                         color: Style.iconBackground
@@ -1074,17 +1213,25 @@ Page {
 
                     Column {
                         anchors.verticalCenter: parent.verticalCenter
+                        width: resultRow.width - avatarBox.width - resultRow.spacing
                         spacing: units.dp(2)
 
                         Label {
-                            text: model.username || ""
+                            width: parent.width
+                            elide: Text.ElideRight
+                            text: model.fullName || model.username || ""
                             font.pixelSize: Style.fontRegular
                             font.weight: Font.DemiBold
                             font.family: Style.fontFor(text)
                             color: Style.textPrimary
                         }
                         Label {
-                            text: "@" + (model.username || "")
+                            width: parent.width
+                            elide: Text.ElideRight
+                            textFormat: Text.StyledText
+                            text: page._highlight(model.username || "")
+                                  + (model.followers > 0
+                                     ? "  ·  " + model.followers + " " + Lang.tr("followers") : "")
                             font.pixelSize: Style.fontSmall
                             font.family: Style.fontFor(text)
                             color: Style.textSecondary
@@ -1101,12 +1248,8 @@ Page {
                 MouseArea {
                     id: rowMouse
                     anchors.fill: parent
-                    onClicked: {
-                        var uname = model.username || ""
-                        page.closeSearch()
-                        page.pageStack.push(Qt.resolvedUrl("ProfileViewPage.qml"),
-                                            { username: uname })
-                    }
+                    onClicked: page.openUser({ username: model.username, fullName: model.fullName,
+                                               profileUrl: model.profileUrl, followers: model.followers })
                 }
             }
         }

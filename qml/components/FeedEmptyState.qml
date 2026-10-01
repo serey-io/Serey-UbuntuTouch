@@ -161,15 +161,15 @@ Item {
                     anchors.horizontalCenter: parent.horizontalCenter
                     spacing: Style.spacingL
 
-                    Image {
+                    // Web's no-history Lottie, as WebP (no Lottie in QML)
+                    AnimatedImage {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        width: Math.min(col.width * (root.split ? 0.7 : 0.5), units.gu(16))
-                        height: width * (434 / 398)
-                        source: Qt.resolvedUrl("../../assets/onboarding.svg")
-                        sourceSize.width: width
-                        sourceSize.height: height
+                        width: Math.min(col.width * (root.split ? 0.8 : 0.6), units.gu(20))
+                        height: width
+                        source: Qt.resolvedUrl("../../assets/no-history.webp")
                         fillMode: Image.PreserveAspectFit
                         asynchronous: true
+                        playing: root.visible
                     }
 
                     Column {
@@ -320,7 +320,7 @@ Item {
             spacing: 0
             visible: root.suggestions.length > 0
 
-            ListSectionHeader { text: Lang.tr("Trending now") }
+            ListSectionHeader { text: Lang.tr("Suggested posts") }
 
             // Rows sit flush like the feed's list: a gap between them would show the page
             // behind each card as soon as one is swiped.

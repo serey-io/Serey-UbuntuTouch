@@ -308,11 +308,23 @@ Item {
 
         function _sortCats(cats) {
             // Move any category named "OTHERS" (case-insensitive) to the bottom
-            var others = [], rest = []
+            var others = [], rest = [], anon = []
             for (var i = 0; i < cats.length; i++) {
+                // Anonymous platforms split out
+                var keep = []
+                for (var j = 0; j < cats[i].communities.length; j++) {
+                    var c = cats[i].communities[j]
+                    if (/^anonymous\b/i.test(c.title || c.name || "")) anon.push(c)
+                    else keep.push(c)
+                }
+                if (keep.length === 0) continue
+                cats[i].communities = keep
                 if (cats[i].name.toUpperCase() === "OTHERS") others.push(cats[i])
                 else rest.push(cats[i])
             }
+            // Own section, last, black tag
+            if (anon.length > 0)
+                others.push({ name: Lang.tr("Anonymous"), icon: "", color: "#000000", dark: true, communities: anon })
             return rest.concat(others)
         }
 
@@ -765,8 +777,8 @@ Item {
                                                 height: units.gu(3.2)
                                                 width: pillContent.width + units.gu(2)
                                                 radius: Style.pillRadius
-                                                color: Qt.rgba(
-                                                    Style.brand.r, Style.brand.g, Style.brand.b, 0.15)
+                                                color: catData.dark ? "#000000"
+                                                       : Qt.rgba(Style.brand.r, Style.brand.g, Style.brand.b, 0.15)
 
                                                 Row {
                                                     id: pillContent
@@ -788,14 +800,14 @@ Item {
                                                         ColorOverlay {
                                                             anchors.fill: catIconImg
                                                             source: catIconImg
-                                                            color: Style.brand
+                                                            color: catData.dark ? "#FFFFFF" : Style.brand
                                                             visible: catIconImg.status === Image.Ready
                                                         }
 
                                                         Icon {
                                                             anchors.fill: parent
                                                             name: "view-grid-symbolic"
-                                                            color: Style.brand
+                                                            color: catData.dark ? "#FFFFFF" : Style.brand
                                                             visible: catIconImg.status !== Image.Ready
                                                         }
                                                     }
@@ -807,7 +819,7 @@ Item {
                                                         font.weight: Font.Bold
                                                         font.family: Style.fontFor(text)
                                                         font.letterSpacing: units.dp(0.6)
-                                                        color: Style.brand
+                                                        color: catData.dark ? "#FFFFFF" : Style.brand
                                                     }
                                                 }
                                             }

@@ -14,12 +14,17 @@ Item {
     readonly property bool online: !net.forceOffline && net._reachable
     property bool _reachable: true
     property bool _probing: false
+    // Launch time, for cold-start grace
+    property double _startedAt: Date.now()
+    // Last real request success
+    property double _lastOkAt: 0
+    property double _probeStartedAt: 0
 
     // status 0 from Http.js is "no response at all", but that also covers our own abort()
     // of a stale feed request, so a failure is confirmed with a probe before flipping.
     function report(reachable) {
         if (net.forceOffline) return;
-        if (reachable) { net._reachable = true; return; }
+        if (reachable) { net._lastOkAt = Date.now(); net._reachable = true; return; }
         if (!net._reachable || net._probing) return;
         net.probe();
     }
@@ -29,24 +34,31 @@ Item {
     function probe() {
         if (net.forceOffline || net._probing) return;
         net._probing = true;
+        net._probeStartedAt = Date.now();
         var xhr = new XMLHttpRequest();
         net._probeXhr = xhr;
         xhr.onreadystatechange = function () {
             if (xhr.readyState !== XMLHttpRequest.DONE) return;
-            probeTimeout.stop();
-            net._probing = false;
-            net._probeXhr = null;
-            net._reachable = xhr.status !== 0;
+            if (net._probeXhr !== xhr) return;   // timed out already
+            net._finishProbe(xhr.status !== 0);
         };
         try {
             xhr.open("HEAD", Config.baseUrl);
             xhr.send();
+            // Longer wait at launch: cold DNS/TLS, queued behind startup requests
+            probeTimeout.interval = Date.now() - net._startedAt < 15000 ? 8000 : 3000;
             probeTimeout.restart();
         } catch (e) {
-            net._probing = false;
-            net._probeXhr = null;
-            net._reachable = false;
+            net._finishProbe(false);
         }
+    }
+
+    function _finishProbe(ok) {
+        probeTimeout.stop();
+        net._probing = false;
+        net._probeXhr = null;
+        // Real success during probe wins
+        net._reachable = ok || net._lastOkAt >= net._probeStartedAt;
     }
 
     // QML's XMLHttpRequest ignores its own `timeout` when the connection stalls rather than
@@ -60,12 +72,10 @@ Item {
         repeat: false
         onTriggered: {
             if (!net._probing) return;
-            if (net._probeXhr) {
-                try { net._probeXhr.abort(); } catch (e) { }
-                net._probeXhr = null;
-            }
-            net._probing = false;
-            net._reachable = false;
+            var x = net._probeXhr;
+            net._probeXhr = null;   // mutes abort callback
+            if (x) { try { x.abort(); } catch (e) { } }
+            net._finishProbe(false);
         }
     }
 

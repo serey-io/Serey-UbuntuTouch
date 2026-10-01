@@ -177,10 +177,24 @@ function setCoverPhoto(baseUrl, token, imageUrl, onOk, onErr) {
     Http.post(baseUrl, "/user-cover-photo/add", { image_url: imageUrl }, token, onOk, onErr);
 }
 
-function searchUser(baseUrl, token, query, onOk, onErr) {
-    Http.get(baseUrl, "/accounts/search-user", { search_text: query }, token, function (data) {
+// "@Lay " -> "lay"; usernames are lowercase
+function normalizeUserQuery(query) {
+    return String(query || "").trim().replace(/^@+/, "").toLowerCase().replace(/[^a-z0-9.-]/g, "");
+}
+
+// API returns 100 names from the query on, alphabetically; keep prefix hits only
+function searchUser(baseUrl, token, query, onOk, onErr, limit) {
+    var q = normalizeUserQuery(query);
+    if (!q) { onOk([]); return null; }
+    return Http.get(baseUrl, "/accounts/search-user", { search_text: q }, token, function (data) {
         var arr = Array.isArray(data) ? data : [];
-        onOk(arr.map(function(u) { return { username: u, name: u }; }));
+        var max = limit || 20;
+        var out = [];
+        for (var i = 0; i < arr.length && out.length < max; i++) {
+            var u = String(arr[i]);
+            if (u.indexOf(q) === 0) out.push({ username: u, name: u });
+        }
+        onOk(out);
     }, onErr);
 }
 

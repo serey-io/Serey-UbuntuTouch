@@ -299,7 +299,9 @@ Page {
         id: endRecheck
         interval: 120
         repeat: false
-        onTriggered: if (!page.loading && !page._allEnded() && page.errorMsg === "" && list.atYEnd) {
+        // Empty list is always atYEnd; would reset the cap forever
+        onTriggered: if (!page.loading && !page._allEnded() && page.errorMsg === ""
+                         && feedModel.count > 0 && list.atYEnd) {
                          page.autoFetches = 0;   // a user-position continue is a fresh burst
                          page.loadMore();
                      }
