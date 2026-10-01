@@ -18,12 +18,17 @@ Item {
     property bool autoRetry: true
     property bool _retryPending: false
     onVisibleChanged: if (visible && root._retryPending) { root._retryPending = false; root.retry(); }
+    // If the user saw the offline panel, wait for their "Press to connect" tap: retrying
+    // right away cleared the error and the panel vanished on its own.
+    function _autoRetry() {
+        if (!Net.online || Net.justReconnected || !root.autoRetry) return;
+        if (root.visible) root.retry(); else root._retryPending = true;
+    }
     Connections {
         target: Net
-        function onOnlineChanged() {
-            if (!Net.online || !root.autoRetry) return;
-            if (root.visible) root.retry(); else root._retryPending = true;
-        }
+        // Deferred so Net has set justReconnected for this flip first.
+        function onOnlineChanged() { Qt.callLater(root._autoRetry); }
+        function onJustReconnectedChanged() { root._autoRetry(); }
     }
 
     // The one offline surface, inherited by every page that already shows an error.

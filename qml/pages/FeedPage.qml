@@ -823,13 +823,31 @@ Page {
         }
     }
 
-    // ErrorState carries the offline panel itself, so this covers both cases.
     ErrorState {
         anchors.fill: list
         autoRetry: false   // the Net handler above already reloads and resumes paging
-        visible: page.errorMsg !== "" && feedModel.count === 0
+        // Offline is the cover below; this stays the online-error panel only.
+        visible: Net.online && page.errorMsg !== "" && feedModel.count === 0
         message: page.errorMsg
         onRetry: page.reload()
+    }
+
+    // Same offline cover as News/Video: it outlives the reload that clears errorMsg, so the
+    // panel waits for "Press to connect" instead of vanishing the moment we're back.
+    Rectangle {
+        id: offlineCover
+        anchors.fill: list
+        visible: !Net.online || Net.justReconnected
+        color: Style.surface
+        z: 2
+        // Swallow taps so the list can't be scrolled or opened behind the panel.
+        MouseArea { anchors.fill: parent }
+        OfflineState {
+            anchors.fill: parent
+            opacity: offlineCover.visible ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.OutQuad } }
+            onRetry: page.reload()
+        }
     }
     // Empty + logged in = follows nobody; offer the fix instead of a dead end.
     FeedEmptyState {
