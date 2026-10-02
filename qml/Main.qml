@@ -11,6 +11,7 @@ import "services/GeoService.js" as GeoService
 import "services/AccountService.js" as AccountService
 import Serey.FileUtils 1.0 as FileUtils
 import "services/Http.js" as Http
+import "services/ErrorReporter.js" as ErrorReporter
 import "services/NotificationService.js" as NotificationService
 import "services/BlockedUsers.js" as BlockedUsers
 import "services/PaymentService.js" as PaymentService
@@ -210,6 +211,11 @@ MainView {
         Http.setPendingHandler(function (count) { Net.pending = count; });
         // DELETE with JSON body (Qt XHR drops it)
         Http.setJsonSender(jsonSender);
+        // 5xx / broken replies -> Delta Chat alert group (deduped server-side). Off for local dev.
+        Http.setServerErrorHandler(function (err) {
+            if (Config.useLocalDev) return;
+            ErrorReporter.report(Config.baseUrl, Session.token, err, Config.appVersion);
+        });
 
         // Needed immediately: the header pill icons and can-post gates read it.
         _loadCommunities();

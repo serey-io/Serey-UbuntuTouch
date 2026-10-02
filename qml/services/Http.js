@@ -9,6 +9,16 @@ var _onNetworkStatus = null;
 function setNetworkStatusHandler(fn) { _onNetworkStatus = fn; }
 function _reportNet(reachable) { if (_onNetworkStatus) _onNetworkStatus(reachable); }
 
+// Server-side failures (5xx, non-JSON reply). Main.qml pipes these to ErrorReporter -> Delta Chat.
+var _onServerError = null;
+function setServerErrorHandler(fn) { _onServerError = fn; }
+// `url` is a full URL or an already-relative label like "/upload/image" (Uploads.js).
+function reportServerError(method, url, status, message) {
+    if (!_onServerError) return;
+    try { _onServerError({ method: method, url: url, status: status, message: message || "" }); }
+    catch (e) { }
+}
+
 // How many requests are waiting for an answer. A dropped connection is only reported when a
 // request finally times out, so Net watches this instead and probes while one is still hanging.
 var _pending = 0;
@@ -74,6 +84,7 @@ function send(method, url, token, bodyObj, onOk, onErr, timeoutMs) {
         try {
             data = xhr.responseText ? JSON.parse(xhr.responseText) : null;
         } catch (e) {
+            reportServerError(method, url, xhr.status, "");
             onErr({ status: xhr.status, message: "Invalid response from server." });
             return;
         }
@@ -87,6 +98,8 @@ function send(method, url, token, bodyObj, onOk, onErr, timeoutMs) {
                 _onUnauthorized(token);
             var msg = (data && data.message) ? data.message
                                              : ("Request failed (" + xhr.status + ").");
+            if (xhr.status >= 500)
+                reportServerError(method, url, xhr.status, data && data.message);
             onErr({ status: xhr.status, message: msg, data: data });
         }
     };
@@ -117,6 +130,7 @@ function postForm(baseUrl, path, formBody, token, onOk, onErr) {
         if (xhr.status === 0) { onErr({ status: 0, message: "Network error." }); return; }
         var data = null;
         try { data = xhr.responseText ? JSON.parse(xhr.responseText) : null; } catch (e) { }
+        if (xhr.status >= 500) reportServerError("POST", baseUrl + path, xhr.status, data && data.message);
         if (xhr.status >= 200 && xhr.status < 300) onOk(data);
         else onErr({ status: xhr.status, message: (data && data.message) || "Request failed.", data: data });
     };
@@ -157,11 +171,17 @@ function delWithBody(baseUrl, path, bodyObj, token, onOk, onErr) {
             _reportNet(true);
             var data = null;
             try { data = text ? JSON.parse(text) : null; }
-            catch (e) { onErr({ status: status, message: "Invalid response from server." }); return; }
+            catch (e) {
+                reportServerError("DELETE", baseUrl + path, status, "");
+                onErr({ status: status, message: "Invalid response from server." });
+                return;
+            }
             if (status >= 200 && status < 300 && !(data && data.status === false)) {
                 onOk(data);
             } else {
                 if (status === 401 && token && _onUnauthorized) _onUnauthorized(token);
+                if (status >= 500)
+                    reportServerError("DELETE", baseUrl + path, status, data && data.message);
                 onErr({ status: status, data: data,
                         message: (data && data.message) ? data.message : ("Request failed (" + status + ").") });
             }

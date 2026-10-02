@@ -1,4 +1,5 @@
 .pragma library
+.import "Http.js" as Http
 
 function _ascii(str) {
     // Latin-1 bytes for the multipart envelope (header text is ASCII only).
@@ -264,6 +265,7 @@ function _tusStart(createUploadUrl, sessionToken, type, source, fingerprint, gen
         } else if (xhr.status === 0) {
             onErr({ message: "Network error starting the upload." });
         } else {
+            if (xhr.status >= 500) Http.reportServerError("POST", "/upload/video-start", xhr.status, "");
             onErr({ message: "Couldn't start the upload (" + xhr.status + ")." });
         }
     };
@@ -309,6 +311,7 @@ function _tusPatch(session, source, offset, attempt, gen, onOk, onErr, onProgres
         } else if (xhr.status === 0) {
             onErr({ message: "Network error during upload." });
         } else {
+            if (xhr.status >= 500) Http.reportServerError("PATCH", "/upload/video-chunk", xhr.status, "");
             onErr({ message: "Upload failed (" + xhr.status + ")." });
         }
     };
@@ -424,12 +427,17 @@ function _post(uploadUrl, secret, type, fileBytes, onOk, onErr) {
         }
         var data = null;
         try { data = xhr.responseText ? JSON.parse(xhr.responseText) : null; }
-        catch (e) { onErr({ message: "Upload server returned an invalid response." }); return; }
+        catch (e) {
+            Http.reportServerError("POST", "/upload/image", xhr.status, "");
+            onErr({ message: "Upload server returned an invalid response." });
+            return;
+        }
         var url = data && data.url;
         if (xhr.status >= 200 && xhr.status < 300 && url) {
             onOk(url);
         } else {
             var msg = (data && data.message) ? data.message : "Upload failed (" + xhr.status + ").";
+            if (xhr.status >= 500) Http.reportServerError("POST", "/upload/image", xhr.status, data && data.message);
             onErr({ message: msg });
         }
     };
