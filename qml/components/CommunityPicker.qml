@@ -308,23 +308,20 @@ Item {
 
         function _sortCats(cats) {
             // Move any category named "OTHERS" (case-insensitive) to the bottom
-            var others = [], rest = [], anon = []
+            var others = [], rest = []
             for (var i = 0; i < cats.length; i++) {
-                // Anonymous platforms split out
+                // Hide anonymous
+                if (/^anonymous\b/i.test(cats[i].name || "")) continue
                 var keep = []
                 for (var j = 0; j < cats[i].communities.length; j++) {
                     var c = cats[i].communities[j]
-                    if (/^anonymous\b/i.test(c.title || c.name || "")) anon.push(c)
-                    else keep.push(c)
+                    if (!/^anonymous\b/i.test(c.title || c.name || "")) keep.push(c)
                 }
                 if (keep.length === 0) continue
                 cats[i].communities = keep
                 if (cats[i].name.toUpperCase() === "OTHERS") others.push(cats[i])
                 else rest.push(cats[i])
             }
-            // Own section, last, black tag
-            if (anon.length > 0)
-                others.push({ name: Lang.tr("Anonymous"), icon: "", color: "#000000", dark: true, communities: anon })
             return rest.concat(others)
         }
 
