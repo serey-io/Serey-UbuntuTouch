@@ -12,6 +12,8 @@ add_library(${PLUGIN} MODULE
     filechunkreader.h
     jsonrequest.cpp
     jsonrequest.h
+    netpool.cpp
+    netpool.h
 )
 
 target_link_libraries(${PLUGIN} Qt5::Core Qt5::Qml Qt5::Network)

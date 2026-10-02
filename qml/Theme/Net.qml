@@ -24,11 +24,6 @@ Item {
     // status 0 from Http.js is "no response at all", but that also covers our own abort()
     // of a stale feed request, so a failure is confirmed with a probe before flipping.
     onOnlineChanged: {
-        // Requests that stalled offline never settle (QML XHR ignores its timeout), so they'd
-        // count as pending forever and keep the 1.2s probe running nonstop. Forget them.
-        // Real offline->online only: this handler also fires once at startup.
-        if (net.online && !net._wasOnline) Http.resetPending();
-        net._wasOnline = net.online;
         // Only hold the cover if the user actually saw it; a silent blip (e.g. at launch)
         // must not leave a "Press to connect" panel waiting on a tab they never looked at.
         net.justReconnected = net.online && net.offlineSeen;
@@ -37,7 +32,6 @@ Item {
     // Back online but the offline cover stays until the user taps "Press to connect"
     // (pages reload behind it meanwhile). Cleared by acknowledgeReconnect().
     property bool justReconnected: false
-    property bool _wasOnline: true
     // Set by OfflineState while it is on screen during an outage.
     property bool offlineSeen: false
     function acknowledgeReconnect() { net.justReconnected = false; }
@@ -53,7 +47,14 @@ Item {
     // manual = user tapped Try again: keep probing for a while instead of one shot.
     function probe(manual, again) {
         if (net.forceOffline) return;
-        if (manual && !again) { net._burstUntil = Date.now() + 20000; burstTimer.stop(); }
+        // Woke from a freeze: the pool was just reset, so a probe still "in flight" is dead.
+        if (Http.heartbeat()) net._forgetProbe();
+        if (manual && !again) {
+            net._burstUntil = Date.now() + 20000;
+            burstTimer.stop();
+            // A wedged pool would queue Try again behind dead requests forever; start clean.
+            if (!net._reachable) net._dropPool();
+        }
         // Never abort a running probe: the first one after a reconnect is mid-handshake,
         // and restarting it just pays the cold DNS/TLS cost again.
         if (net._probing) return;
@@ -67,7 +68,8 @@ Item {
             net._finishProbe(xhr.status !== 0);
         };
         try {
-            // Cache-bust so a retry never rides a failed pooled connection / cached error
+            // Cache-bust so a retry never gets a cached error. It does NOT force a new
+            // connection (measured); Http.resetConnections() is what does that.
             xhr.open("HEAD", Config.baseUrl + (manual ? "?_=" + Date.now() : ""));
             xhr.send();
             // Offline: the first answer after a reconnect took ~6s on device, and cutting it at
@@ -78,6 +80,17 @@ Item {
         } catch (e) {
             net._finishProbe(false);
         }
+    }
+
+    // Fresh connection pool; any probe in flight rode the old one and will never answer.
+    function _dropPool() {
+        Http.resetConnections();
+        net._forgetProbe();
+    }
+    function _forgetProbe() {
+        probeTimeout.stop();
+        net._probing = false;
+        net._probeXhr = null;
     }
 
     function _finishProbe(ok) {
@@ -120,10 +133,30 @@ Item {
         onTriggered: {
             if (!net._probing) return;
             // Just mute it, don't abort(): aborting a stalled request froze the UI for ~4s
-            // on device. It settles on its own later and the callback ignores it.
+            // on device, and abort() doesn't free its connection slot anyway.
             net._probeXhr = null;
+            // A hang (not a fast failure) on a dead pooled socket: drop the pool once it's
+            // confirmed, so stuck requests can't fill all 6 slots and wedge us offline.
+            if (!net._reachable || net._confirming) Http.resetConnections();
             net._finishProbe(false);
         }
+    }
+
+    // Times out hung requests (Qt's XHR timeout never fires); see Http.sweep().
+    Timer {
+        interval: 1000
+        repeat: true
+        running: net.pending > 0
+        onTriggered: Http.sweep()
+    }
+
+    // Wake detector: keeps Http's heartbeat fresh, and re-checks reachability right after a
+    // freeze (phone asleep). The pool reset itself happens inside Http.heartbeat().
+    Timer {
+        interval: 5000
+        repeat: true
+        running: true
+        onTriggered: if (Http.heartbeat()) { net._forgetProbe(); net.probe(); }
     }
 
     // Offline probes now run up to 15s themselves, so poll again soon after one ends.

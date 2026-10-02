@@ -211,6 +211,8 @@ MainView {
         Http.setPendingHandler(function (count) { Net.pending = count; });
         // DELETE with JSON body (Qt XHR drops it)
         Http.setJsonSender(jsonSender);
+        // Drops dead pooled sockets after sleep; see Http.resetConnections().
+        Http.setConnectionResetter(function () { jsonSender.resetConnections(); });
         // 5xx / broken replies -> Delta Chat alert group (deduped server-side). Off for local dev.
         Http.setServerErrorHandler(function (err) {
             if (Config.useLocalDev) return;

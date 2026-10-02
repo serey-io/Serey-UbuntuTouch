@@ -30,8 +30,37 @@ function _pendingDelta(d) {
     if (_onPending) _onPending(_pending);
 }
 function pendingCount() { return _pending; }
-// Late settles of the dropped requests clamp at 0 above.
-function resetPending() { _pending = 0; if (_onPending) _onPending(0); }
+
+// Qt's XHR never fires its own `timeout` here (measured), so sweep() does it, driven by a
+// 1s Timer in Net.qml. Each entry: { deadline, expire }.
+var _live = [];
+function sweep() {
+    var now = Date.now();
+    var due = _live.filter(function (r) { return now >= r.deadline; });
+    for (var i = 0; i < due.length; i++) due[i].expire();
+}
+
+// After a long sleep the connection pool holds dead sockets: requests on them hang forever,
+// and once all 6 per-host slots hang nothing goes out (Try again included). XHR abort() does
+// not free a slot; only dropping the pool does. Main.qml wires this to the C++ JsonRequest.
+var _resetConnections = null;
+function setConnectionResetter(fn) { _resetConnections = fn; }
+function resetConnections() {
+    if (!_resetConnections) return;
+    try { _resetConnections(); } catch (e) { }
+}
+
+// Net.qml beats every 5s; timers don't run while the phone sleeps, so a big gap means we were
+// frozen and every pooled socket is suspect. Checked before each send, so the first request
+// after waking already goes out on a fresh pool. Returns true when it reset.
+var _lastBeat = Date.now();
+function heartbeat() {
+    var now = Date.now();
+    var slept = now - _lastBeat > 60000;
+    _lastBeat = now;
+    if (slept) resetConnections();
+    return slept;
+}
 
 function buildQuery(params) {
     if (!params)
@@ -47,6 +76,7 @@ function buildQuery(params) {
 }
 
 function send(method, url, token, bodyObj, onOk, onErr, timeoutMs) {
+    heartbeat();
     var xhr = new XMLHttpRequest();
     xhr.open(method, url);
     xhr.setRequestHeader("Accept", "application/json");
@@ -57,21 +87,33 @@ function send(method, url, token, bodyObj, onOk, onErr, timeoutMs) {
 
     // Without a timeout a stalled mobile request never resolves, leaving the caller's `loading` flag stuck true and permanently blocking pagination.
     // Callers doing an on-chain write pass a longer one: a broadcast outlives the default wait.
-    xhr.timeout = timeoutMs || 15000;
+    var wait = timeoutMs || 15000;
+    xhr.timeout = wait;
     // One settle per request, whichever way it ends (abort() fires readystatechange too).
     var settled = false;
-    function _settle() { if (settled) return; settled = true; _pendingDelta(-1); }
-    xhr.ontimeout = function () {
-        _settle();
+    var entry = null;
+    function _settle() {
+        if (settled) return false;
+        settled = true;
+        _pendingDelta(-1);
+        var i = _live.indexOf(entry);
+        if (i >= 0) _live.splice(i, 1);
+        return true;
+    }
+    function _timedOut() {
+        if (!_settle()) return;
         _reportNet(false);
         // `timeout: true` lets a caller tell "we stopped waiting" apart from "it failed".
         onErr({ status: 0, timeout: true, message: "Request timed out. Check your connection." });
-    };
+    }
+    xhr.ontimeout = _timedOut;
+    entry = { deadline: Date.now() + wait, expire: _timedOut };
+    _live.push(entry);
 
     xhr.onreadystatechange = function () {
         if (xhr.readyState !== XMLHttpRequest.DONE)
             return;
-        _settle();
+        if (!_settle()) return;   // sweep() already timed it out
 
         if (xhr.status === 0) {
             _reportNet(false);
@@ -159,6 +201,7 @@ function setJsonSender(sender) { _jsonSender = sender; }
 function delWithBody(baseUrl, path, bodyObj, token, onOk, onErr) {
     if (!_jsonSender)
         return send("DELETE", baseUrl + path, token, bodyObj || {}, onOk, onErr);
+    heartbeat();
     _pendingDelta(1);
     _jsonSender.send("DELETE", baseUrl + path, token || "", JSON.stringify(bodyObj || {}),
         function (status, text) {

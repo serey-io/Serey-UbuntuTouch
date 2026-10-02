@@ -233,6 +233,7 @@ function _tusCreate(createUploadUrl, sessionToken, type, source, fingerprint, ge
 
 // Asks the Serey web backend (logged-in users only) to create the upload on the storage API and hand back { uploadUrl, token, statusUrl }.
 function _tusStart(createUploadUrl, sessionToken, type, source, fingerprint, gen, onOk, onErr, onProgress) {
+    Http.heartbeat();   // fresh pool if we just woke up
     var xhr = new XMLHttpRequest();
     _active = xhr;
     xhr.open("POST", createUploadUrl);
@@ -410,6 +411,7 @@ function _post(uploadUrl, secret, type, fileBytes, onOk, onErr) {
     body.set(fileBytes, preamble.length);
     body.set(trailer, preamble.length + fileBytes.length);
 
+    Http.heartbeat();   // fresh pool if we just woke up
     var xhr = new XMLHttpRequest();
     _active = xhr;
     xhr.open("POST", uploadUrl);
