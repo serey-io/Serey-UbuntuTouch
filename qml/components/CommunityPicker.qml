@@ -5,6 +5,7 @@ import QtGraphicalEffects 1.0
 import "../Theme"
 import "../Session"
 import "../services/CommunitySubscriberService.js" as SubscriberService
+import "../services/Mappers.js" as M
 
 Item {
     id: picker
@@ -306,19 +307,19 @@ Item {
             }
         }
 
+        // Anonymous communities are hidden. Filtered where each list arrives, so the
+        // "no category matched" fallbacks below can't bring them back.
+        function _realOnly(comms) {
+            return comms.filter(function (c) { return !M.isAnonymousCommunity(c) })
+        }
+
         function _sortCats(cats) {
             // Move any category named "OTHERS" (case-insensitive) to the bottom
             var others = [], rest = []
             for (var i = 0; i < cats.length; i++) {
-                // Hide anonymous
+                // An "Anonymous" category only ever holds anonymous communities
                 if (/^anonymous\b/i.test(cats[i].name || "")) continue
-                var keep = []
-                for (var j = 0; j < cats[i].communities.length; j++) {
-                    var c = cats[i].communities[j]
-                    if (!/^anonymous\b/i.test(c.title || c.name || "")) keep.push(c)
-                }
-                if (keep.length === 0) continue
-                cats[i].communities = keep
+                if (cats[i].communities.length === 0) continue
                 if (cats[i].name.toUpperCase() === "OTHERS") others.push(cats[i])
                 else rest.push(cats[i])
             }
@@ -421,7 +422,7 @@ Item {
                         if (!_ok(xhr)) { anyRegionalFailed = true }
                         else try {
                             var d = JSON.parse(xhr.responseText)
-                            var comms = d.data || d.communities || d.results || []
+                            var comms = _realOnly(d.data || d.communities || d.results || [])
                             for (var c = 0; c < comms.length; c++) allComms.push(comms[c])
                         } catch (e) { }
                         _onRegionalDone()
@@ -442,7 +443,7 @@ Item {
                 var sourceComms = []
                 try {
                     var d = JSON.parse(xhrP.responseText)
-                    sourceComms = d.data || d.communities || d.results || []
+                    sourceComms = _realOnly(d.data || d.communities || d.results || [])
                 } catch (e) { }
 
                 if (sourceComms.length === 0) { _store(srcIndex, []); return }

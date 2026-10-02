@@ -371,7 +371,8 @@ MainView {
                     var c = list[i];
                     if (!c.dns || baseDns[c.dns]) continue;
                     if ((c.country || "").toLowerCase() === "cambodia") continue;
-                    if (c.childCount <= 0) continue;   // hide countries with no communities yet
+                    // No real community yet (only its own anonymous one): not worth a row
+                    if (c.childCount <= 0) continue;
                     var flag = Flags.flagUrl(c.title);
                     if (flag) icons[c.dns] = flag;   // override generic logo with the flag
                     extra.push({ name: c.title, id: c.id, dns: c.dns, icon: flag || c.icon || "" });

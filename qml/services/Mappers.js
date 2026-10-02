@@ -286,6 +286,24 @@ function toVideo(raw) {
     };
 }
 
+// Each country has one "Anonymous <Country>" community (serey-api's
+// create-anonymous-communities script names them so). Pickers hide them. List
+// endpoints don't send is_anonymous, so the name is the signal; the flag wins if sent.
+function isAnonymousCommunity(raw) {
+    if (!raw) return false;
+    if (raw.is_anonymous === true) return true;
+    return /^anonymous\s/i.test(raw.title || raw.name || "");
+}
+
+// Children that are real communities (not the country's own anonymous one).
+function realChildCount(raw) {
+    var kids = (raw && Array.isArray(raw.child_communities)) ? raw.child_communities : [];
+    var n = 0;
+    for (var i = 0; i < kids.length; i++)
+        if (!isAnonymousCommunity(kids[i])) n++;
+    return n;
+}
+
 function toCommunity(raw) {
     raw = raw || {};
     return {
@@ -300,8 +318,9 @@ function toCommunity(raw) {
         allowPost: !!raw.is_allow_post,
         // Gates the Video upload FAB independently of the blog flag
         videoAllowPost: !!raw.video_is_allow_post,
-        // Used to hide empty countries from the picker
-        childCount: Array.isArray(raw.child_communities) ? raw.child_communities.length : 0
+        // Used to hide empty countries from the pickers. A country holding only its
+        // anonymous community (e.g. Singapore) has no real community yet: counts 0.
+        childCount: realChildCount(raw)
     };
 }
 

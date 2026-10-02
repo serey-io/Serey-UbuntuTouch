@@ -3,6 +3,7 @@ import QtGraphicalEffects 1.0
 import Lomiri.Components 1.3
 import "../Theme"
 import "../Session"
+import "../services/Mappers.js" as M
 
 // Bottom sheet asking which community a new post goes into; pre-selects the active one
 Item {
@@ -155,7 +156,8 @@ Item {
         var out = [];
         for (var i = 0; i < comms.length; i++) {
             var m = comms[i];
-            if (picker._isDeleted(m)) continue;
+            // Anonymous communities aren't post targets here (same rule as the browse picker).
+            if (picker._isDeleted(m) || M.isAnonymousCommunity(m)) continue;
             var id = String(m.id || m._id || "");
             // list-by-parent-id doesn't reliably carry is_allow_post/video_is_allow_post for every
             // row; Config.communityById (built from the full community tree) is the source of truth
