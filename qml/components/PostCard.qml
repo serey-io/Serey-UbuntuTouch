@@ -168,6 +168,13 @@ Item {
         }
     }
 
+    // Note tint
+    Rectangle {
+        anchors.fill: parent
+        visible: root.isNote
+        color: Style.noteCard
+    }
+
     Column {
         id: col
         width: parent.width

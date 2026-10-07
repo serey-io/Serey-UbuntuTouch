@@ -558,7 +558,7 @@ Rectangle {
                                 radius: units.gu(1)
                                 color: Style.noteCard
                                 border.width: units.dp(1)
-                                border.color: noteMouse.containsMouse ? Style.brand : Style.noteCardBorder
+                                border.color: noteMouse.containsMouse ? Style.noteAccent : Style.noteCardBorder
                                 readonly property bool isBreaking: !!post && /breaking/i.test(post.primaryCategory || "")
 
                                 // Breaking ribbon: top-right, fold past card edge
@@ -610,17 +610,17 @@ Rectangle {
                                             anchors.verticalCenter: parent.verticalCenter
                                             width: noteHead.width - units.gu(3.5) - Style.spacingS
                                             Label {
-                                                text: Style.formatTimeAgo((noteCard.post && noteCard.post.date) || "")
-                                                font.pixelSize: Style.fontXSmall
-                                                color: Style.textSecondary
-                                            }
-                                            Label {
                                                 width: parent.width
                                                 elide: Text.ElideRight
                                                 text: (noteCard.post && noteCard.post.author) || ""
                                                 font.pixelSize: Style.fontSmall
                                                 font.weight: Font.DemiBold
                                                 color: Style.textTitle
+                                            }
+                                            Label {
+                                                text: Style.formatTimeAgo((noteCard.post && noteCard.post.date) || "")
+                                                font.pixelSize: Style.fontXSmall
+                                                color: Style.textSecondary
                                             }
                                         }
                                     }
