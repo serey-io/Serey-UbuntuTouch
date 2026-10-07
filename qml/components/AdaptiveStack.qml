@@ -110,6 +110,8 @@ Item {
                                          ? rootStack.currentPage.emptyDetailIconName : emptyDetailIconName
     readonly property string _emptyMessage: (rootStack.currentPage && rootStack.currentPage.emptyDetailMessage)
                                             ? rootStack.currentPage.emptyDetailMessage : emptyDetailMessage
+    // Page-supplied empty pane
+    readonly property var _emptyComponent: (rootStack.currentPage && rootStack.currentPage.emptyDetailComponent) || null
 
     Item {
         id: listPane
@@ -160,6 +162,7 @@ Item {
                 anchors.centerIn: parent
                 spacing: units.gu(1)
                 visible: root.split && root._detailCount === 0 && root._emptyMessage !== ""
+                         && !root._emptyComponent
                 Icon {
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: units.gu(6); height: width
@@ -172,6 +175,19 @@ Item {
                     text: root._emptyMessage
                     color: Style.textSecondary
                 }
+            }
+
+            Loader {
+                id: emptyLoader
+                // Latched: survives opening a post
+                property bool _seen: false
+                readonly property bool _showing: root.split && root._detailCount === 0 && !!root._emptyComponent
+                on_ShowingChanged: if (_showing) _seen = true
+                Component.onCompleted: if (_showing) _seen = true
+                anchors.fill: parent
+                active: _seen && !!root._emptyComponent
+                visible: _showing
+                sourceComponent: root._emptyComponent
             }
         }
 

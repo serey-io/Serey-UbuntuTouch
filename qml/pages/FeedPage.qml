@@ -25,6 +25,13 @@ Page {
     // leading column and its own pushes go to the tab's detail column. No private split.
     readonly property string emptyDetailIconName: "stock_note"
     readonly property string emptyDetailMessage: Lang.tr("Select a post to read")
+    // Suggested posts, not the placeholder
+    readonly property Component emptyDetailComponent: Component {
+        SuggestedPostsPanel {
+            onPostRequested: page.openDetail(Qt.resolvedUrl("PostDetailPage.qml"),
+                { author: post.author, permlink: post.permlink, title: post.title, seedPost: post })
+        }
+    }
     readonly property bool splitOpen: !!(page.pageStack && page.pageStack.columns > 1)
 
     property Item keyboardFocusItem: emptyState.visible ? emptyState : list
@@ -854,6 +861,8 @@ Page {
         id: emptyState
         anchors { top: topBar.bottom; bottom: parent.bottom; left: parent.left; right: parent.right }
         leadingWidth: 0
+        // Wide: posts live in the side panel
+        showPosts: !page.splitOpen
         visible: !page.loading && page.errorMsg === "" && feedModel.count === 0
                  && Session.isLoggedIn
         // Coalesces a burst of follows into one refetch (refresh() drops overlapping calls).

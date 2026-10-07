@@ -418,79 +418,14 @@ Item {
             }
 
             // Category + platform tags, top-right
-            Row {
+            PostCornerTags {
                 id: cornerTags
                 visible: !root.isNote
                 // Above the thumbnail's MouseArea
                 z: 1
                 anchors { top: parent.top; right: parent.right; topMargin: Style.spacingS; rightMargin: Style.spacingS }
-                spacing: Style.spacingXs
-
-                Rectangle {
-                    id: catTag
-                    // categories is ListModel-wrapped here; use the mapper's scalar copy instead.
-                    visible: (p.primaryCategory || "") !== ""
-                    width: catLabel.width + Style.spacingM
-                    height: units.gu(3)
-                    radius: Style.pillRadius
-                    color: Style.accentRed
-                    Label {
-                        id: catLabel
-                        anchors.centerIn: parent
-                        text: p.primaryCategory || ""
-                        font.pixelSize: Style.fontSmall
-                        font.weight: Font.DemiBold
-                        color: Style.textOnBrand
-                    }
-                }
-
-                // Platform tag
-                Rectangle {
-                    id: platformTag
-                    readonly property var communityInfo: p.communityId > 0 ? Config.communityInfoFor(p.communityId) : null
-                    // Global uses the bundled globe icon
-                    readonly property string iconUrl: {
-                        if (!platformTag.communityInfo) return "";
-                        if (platformTag.communityInfo.dns === Config.sources[0].dns)
-                            return Config.communityIcon(platformTag.communityInfo.dns);
-                        return platformTag.communityInfo.icon || "";
-                    }
-                    visible: (p.community || "") !== ""
-                    width: platformRow.width + Style.spacingM
-                    height: units.gu(3)
-                    radius: Style.pillRadius
-                    color: "black"
-
-                    Row {
-                        id: platformRow
-                        anchors.centerIn: parent
-                        spacing: units.dp(4)
-
-                        Item {
-                            visible: platformTag.iconUrl !== ""
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: visible ? units.gu(1.8) : 0
-                            height: units.gu(1.8)
-                            CircleImage {
-                                anchors.fill: parent
-                                source: platformTag.iconUrl
-                                fillMode: Image.PreserveAspectFit
-                            }
-                        }
-                        Label {
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: Math.min(implicitWidth, units.gu(16))
-                            elide: Text.ElideRight
-                            text: p.community || ""
-                            font.pixelSize: Style.fontSmall
-                            font.weight: Font.DemiBold
-                            font.family: Style.fontFor(text)
-                            color: "white"
-                        }
-                    }
-                    // Own tap target
-                    MouseArea { anchors.fill: parent; onClicked: root.openPlatform() }
-                }
+                post: root.p
+                onPlatformClicked: root.openPlatform()
             }
 
             MouseArea { anchors.fill: parent; onClicked: root.clicked(); onPressAndHold: root.moreClicked() }

@@ -794,6 +794,8 @@ var nl = {
     "Choose other category":                            "Kies een andere categorie",
     "Pick where this post belongs.":                    "Kies waar dit artikel thuishoort.",
     "Suggested posts":                                  "Voorgestelde berichten",
+    "Suggested notes":                                  "Voorgestelde notities",
+    "Breaking news":                                    "Breaking news",
     "1 trending post":                                  "1 populair artikel",
     "%1 trending posts":                                "%1 populaire artikelen",
     "Suggested platforms":                              "Voorgestelde platforms",

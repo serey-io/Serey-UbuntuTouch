@@ -47,6 +47,11 @@ Item {
         return all;
     }
 
+    // Off when the side panel shows posts
+    property bool showPosts: true
+    property bool _postsLoaded: false
+    onShowPostsChanged: if (showPosts && root._loaded && !root._postsLoaded) root._loadPosts()
+
     // > 0 = intro in a leading column of that width, cards in the pane beside it.
     property real leadingWidth: 0
     readonly property bool split: leadingWidth > 0
@@ -76,6 +81,11 @@ Item {
         root._loaded = true;
         platforms.load();
 
+        if (root.showPosts) root._loadPosts();
+    }
+
+    function _loadPosts() {
+        root._postsLoaded = true;
         // Scoped to the reader's country first, like the platform picks; the header's
         // community can't stand in (the picker has no Cambodia row, so KH readers sit
         // on Global, which hides Cambodia). A country with nothing falls back to it.
@@ -318,7 +328,7 @@ Item {
         Column {
             width: parent.width
             spacing: 0
-            visible: root.suggestions.length > 0
+            visible: root.showPosts && root.suggestions.length > 0
 
             ListSectionHeader { text: Lang.tr("Suggested posts") }
 

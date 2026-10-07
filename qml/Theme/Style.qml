@@ -28,6 +28,8 @@ QtObject {
 
     readonly property color surface: dark ? "#111111" : "#FFFFFF"        // Jet / White
     readonly property color card:    dark ? "#1B1B1B" : "#FFFFFF"
+    readonly property color noteCard: dark ? "#221D14" : "#FFF9EC"       // warm note tint (web)
+    readonly property color noteCardBorder: dark ? "#3A3122" : "#F3E8CF"
     readonly property color navigationBg: dark ? "#161616" : "#FFFFFF"
     readonly property color divider: dark ? "#2E2E2E" : "#E4E4E4"        // neutral Suru hairline
     readonly property color iconBackground: dark ? "#262626" : "#F3F3F3" // pills, chips, avatar bg

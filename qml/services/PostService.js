@@ -38,6 +38,11 @@ function listTrending(baseUrl, params, token, onOk, onErr) {
     return _list(baseUrl, "/serey-web/list-by-trending", params, token, onOk, onErr);
 }
 
+// Notes only, same shape (web's Trending Notes)
+function listTrendingNotes(baseUrl, params, token, onOk, onErr) {
+    return _list(baseUrl, "/serey-web/list-notes-by-trending", params, token, onOk, onErr);
+}
+
 function listHot(baseUrl, params, token, onOk, onErr) {
     return _list(baseUrl, "/serey-web/list-by-hot", params, token, onOk, onErr);
 }

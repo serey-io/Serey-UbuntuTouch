@@ -12,6 +12,10 @@ Item {
     property string source: ""
     property real radius: Style.thumbRadius
     property int decodeWidth: units.gu(45)
+    // 0 = width-only decode
+    property int decodeHeight: 0
+    // Sharper downscale
+    property bool mipmap: false
     property bool autoTransform: false      // honour EXIF orientation
     // Height/width of loaded image, 0 until ready
     readonly property real sourceAspect: loader.status === Image.Ready && loader.implicitWidth > 0
@@ -73,6 +77,8 @@ Item {
         autoTransform: root.autoTransform
         // Snap the decode size to a breakpoint instead of tracking width, which re-rasterized on every resize.
         sourceSize.width: root.decodeWidth
+        sourceSize.height: root.decodeHeight
+        mipmap: root.mipmap
         visible: false
         onStatusChanged: root._sync()
         // A cached image goes Ready inside the assignment, with no status change
@@ -87,6 +93,8 @@ Item {
         asynchronous: true
         autoTransform: root.autoTransform
         sourceSize.width: loader.sourceSize.width
+        sourceSize.height: loader.sourceSize.height
+        mipmap: root.mipmap
         visible: false
         // Fade the stale frame fully out; a dimmed ghost read as the wrong thumbnail
         readonly property bool transitioning: loader.status === Image.Loading && status === Image.Ready
