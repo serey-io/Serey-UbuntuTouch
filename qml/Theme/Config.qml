@@ -28,6 +28,9 @@ QtObject {
     readonly property bool debugWebApp: false
     // Scroll benchmark once per load; scrolls the page, needs debugWebApp on too
     readonly property bool debugScrollTest: false
+    // Temp: [navperf] My Feed <-> Homepage timings; auto = scripted wide-window round trips
+    readonly property bool debugNavPerf: true
+    readonly property bool debugNavPerfAuto: false
     property bool useLocalDev: false
 
     readonly property string baseUrl: useLocalDev ? devBase : prodBase

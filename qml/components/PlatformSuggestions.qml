@@ -52,10 +52,12 @@ Column {
         if (Session.isLoggedIn)
             SubscriberService.fetchSubscribed(Config.baseUrl, Session.token,
                 function (map) {
+                    // Answers can land after the host page closed
+                    if (!root) return;
                     root.subscribedMap = map; root._excludeMap = map;
                     root.subscribedRev++; root._subsLoaded = true;
                 },
-                function () { root._subsLoaded = true; /* rows just start unsubscribed */ });
+                function () { if (root) root._subsLoaded = true; /* rows just start unsubscribed */ });
         else
             root._subsLoaded = true;
 
@@ -64,6 +66,7 @@ Column {
         trendCap.start();
         PostService.listTrending(Config.baseUrl, { limit: 30, offset: 0 }, Session.token,
             function (posts) {
+                if (!root) return;
                 var counts = {};
                 var order = [];
                 for (var i = 0; i < posts.length; i++) {
@@ -76,7 +79,7 @@ Column {
                 root._trendOrder = order;
                 root._trendDone = true;
             },
-            function () { root._trendDone = true; /* country order still stands */ });
+            function () { if (root) root._trendDone = true; /* country order still stands */ });
     }
 
     function _pickSuggestions() {

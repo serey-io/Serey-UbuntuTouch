@@ -7,6 +7,7 @@ import "../services/PostService.js" as PostService
 import "../services/HiddenPosts.js" as HiddenPosts
 import "../services/BlockedUsers.js" as BlockedUsers
 import "../services/Notes.js" as Notes
+import "../services/NavPerf.js" as NavPerf
 
 // Wide-window detail placeholder: featured row + paged carousel (web homepage style)
 Rectangle {
@@ -94,41 +95,74 @@ Rectangle {
             function (rows) { if (rows.length) done(rows); else fallback(); }, fallback);
     }
 
+    // Last lists shown, so reopening My Feed paints at once; the fetch below refreshes them
+    function _cacheKey(kind) {
+        return "suggested:" + kind + ":" + (Config.homeCountryCommunityId || "0") + ":" + Config.communityId
+               + ":" + (Session.username || "__guest__");
+    }
+    function _sig(list) { return list.map(function (p) { return p.permlink; }).join(","); }
+    // Same rows as on screen: skip the swap, it would rebuild every card
+    function _setPosts(list) {
+        if (!root.loading && root._sig(list) === root._sig(root.posts)) return;
+        root.posts = list;
+        root.loading = false;
+    }
+    function _setNotes(list) {
+        if (!root.notesLoading && root._sig(list) === root._sig(root.notes)) return;
+        root.notes = list;
+        root.notesLoading = false;
+    }
+
     // Posts and notes in parallel
     function load() {
-        root.loading = true;
-        root.notesLoading = true;
+        var cachedPosts = FeedCache.peek(root._cacheKey("posts"));
+        var cachedNotes = FeedCache.peek(root._cacheKey("notes"));
+        if (cachedPosts) root._setPosts(cachedPosts.filter(root._allowed));
+        if (cachedNotes) root._setNotes(root._pickNotes(cachedNotes));
+        if (cachedPosts || cachedNotes)
+            NavPerf.log("suggested cache painted +" + NavPerf.since("feedOpen") + "ms (posts "
+                        + (cachedPosts ? cachedPosts.length : 0) + ", notes " + (cachedNotes ? cachedNotes.length : 0) + ")");
+        // Callbacks can land after My Feed closed and destroyed us
         root._scoped(PostService.listTrending, 20, function (rows) {
-            root.posts = root._pickPosts(rows);
-            root.loading = false;
-        }, function () { root.loading = false; });
+            if (!root) return;
+            var picked = root._pickPosts(rows);
+            FeedCache.put(root._cacheKey("posts"), picked);
+            root._setPosts(picked);
+            NavPerf.log("suggested posts +" + NavPerf.since("feedOpen") + "ms (" + picked.length + ")");
+        }, function () { if (root) root.loading = false; });
         root._loadNotes();
     }
 
     // Home notes first, topped up globally (one country rarely fills it)
     function _loadNotes() {
         var want = 9, limit = 12;   // spare rows for hidden/blocked
+        function finish(list) {
+            FeedCache.put(root._cacheKey("notes"), list);
+            root._setNotes(list);
+            NavPerf.log("suggested notes +" + NavPerf.since("feedOpen") + "ms (" + list.length + ")");
+        }
         function global(first) {
             var params = { limit: limit, offset: 0 };
             if (Config.communityId > 0) params.community_id = Config.communityId;
             else params.exclude_home = 1;
             PostService.listTrendingNotes(Config.baseUrl, params, Session.token, function (rows) {
+                if (!root) return;
                 var seen = {}, out = [];
                 var all = first.concat(root._pickNotes(rows));
                 for (var i = 0; i < all.length; i++)
                     if (!seen[all[i].permlink]) { seen[all[i].permlink] = true; out.push(all[i]); }
-                root.notes = out;
-                root.notesLoading = false;
-            }, function () { root.notes = first; root.notesLoading = false; });
+                finish(out);
+            }, function () { if (root) root._setNotes(first.length ? first : root.notes); });
         }
         var home = Config.homeCountryCommunityId;
         if (!home) { global([]); return; }
         PostService.listTrendingNotes(Config.baseUrl, { limit: limit, offset: 0, community_id: home }, Session.token,
             function (rows) {
+                if (!root) return;
                 var picked = root._pickNotes(rows);
-                if (picked.length >= want) { root.notes = picked; root.notesLoading = false; }
+                if (picked.length >= want) finish(picked);
                 else global(picked);
-            }, function () { global([]); });
+            }, function () { if (root) global([]); });
     }
 
     // Same as the blog card's platform tag

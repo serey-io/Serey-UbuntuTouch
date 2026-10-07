@@ -9,6 +9,7 @@ import "../services/FollowService.js" as FollowService
 import "../services/CommunitySubscriberService.js" as SubscriberService
 import "../services/HiddenPosts.js" as HiddenPosts
 import "../services/BlockedUsers.js" as BlockedUsers
+import "../services/NavPerf.js" as NavPerf
 
 Page {
     id: page
@@ -289,6 +290,7 @@ Page {
         if (!cached) return false;
         _syncRows(_filterRows(cached));
         page.showingCached = feedModel.count > 0;
+        NavPerf.log("My Feed cached rows painted +" + NavPerf.since("feedOpen") + "ms (" + feedModel.count + " rows)");
         return page.showingCached;
     }
 
@@ -345,6 +347,7 @@ Page {
             if (page._firstRound) {
                 // First batch replaces list in place: no flash, refresh doesn't rebuild delegates.
                 page._syncRows(rows);
+                NavPerf.log("My Feed network rows +" + NavPerf.since("feedOpen") + "ms (" + rows.length + " rows)");
                 page._firstRound = false;
                 page.showingCached = false;
                 FeedCache.put(page._cacheKey(), rows);
@@ -465,7 +468,14 @@ Page {
         if (page.followingLoaded || !Session.isLoggedIn) { next(); return; }
         var pending = 2;
         // Same destroyed-page guard as loadMore's callbacks.
-        function done() { if (!page) return; if (--pending === 0) { page.followingLoaded = true; next(); } }
+        function done() {
+            if (!page) return;
+            if (--pending === 0) {
+                NavPerf.log("My Feed follow lists " + NavPerf.since("feedFollows") + "ms");
+                page.followingLoaded = true; next();
+            }
+        }
+        NavPerf.mark("feedFollows");
         FollowService.listAllFollowings(Config.baseUrl, Session.token,
             function (map) { if (page) page.followingSet = map; done(); }, done);
         SubscriberService.fetchSubscribed(Config.baseUrl, Session.token,

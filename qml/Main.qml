@@ -1,6 +1,7 @@
 import QtQuick 2.7
 import Lomiri.Components 1.3
 import Lomiri.Components.Themes 1.3
+import QtQuick.Window 2.2
 // Lomiri.Notifications/Ubuntu.PushNotifications exist only on-device, so they're created dynamically to keep desktop builds alive.
 import "Theme"
 import "Session"
@@ -20,6 +21,7 @@ import "services/VideoService.js" as VideoService
 import "services/PlatformService.js" as PlatformService
 import "services/CustomMenuService.js" as CustomMenuService
 import "services/HomepageService.js" as HomepageService
+import "services/NavPerf.js" as NavPerf
 
 MainView {
     id: root
@@ -81,6 +83,35 @@ MainView {
             videoStack.push(Qt.resolvedUrl("pages/VideoPage.qml"));
         else if (tab === 3 && settingsStack.depth === 0)
             settingsStack.push(Qt.resolvedUrl("pages/SettingsPage.qml"));
+    }
+    function openFeed() {
+        NavPerf.mark("feedOpen");
+        NavPerf.log("open My Feed (tab " + root.currentTab + ", window " + Math.round(root.width) + "px)");
+        root.activeStack.pushMaster(Qt.resolvedUrl("pages/FeedPage.qml"));
+    }
+
+    // Temp: scripted wide-window My Feed round trips so [navperf] runs are comparable
+    Timer {
+        id: navPerfAuto
+        property int step: 0
+        running: Config.debugNavPerfAuto && Session.isLoggedIn
+        interval: step === 0 ? 2000 : 9000
+        repeat: true
+        onTriggered: {
+            if (step === 0) {
+                root.Window.window.width = units.gu(170);
+                root.Window.window.height = units.gu(100);
+            } else if (step > 6) {
+                NavPerf.log("auto run done");
+                stop();
+                return;
+            } else if (step % 2 === 1) {
+                if (root.currentTab === 0 && !root.feedPageOpen) root.openFeed();
+            } else if (root.feedPageOpen) {
+                homeStack.rootPage.closeFeed();
+            }
+            step++;
+        }
     }
     NumberAnimation { id: tabFadeIn; target: body; property: "opacity"; from: 0; to: 1; duration: 200; easing.type: Easing.OutQuad }
 
@@ -194,6 +225,7 @@ MainView {
     }
 
     Component.onCompleted: {
+        NavPerf.enabled = Config.debugNavPerf;
         root._loadNavVisibility();
         root._loadHomepageAvailability();
         // Expired tokens caught lazily via 401; only clear if rejected token is still current
@@ -753,17 +785,31 @@ MainView {
             visible: Session.isLoggedIn && !root.feedPageOpen
             anchors.centerIn: parent
             // Tap target fills header height for comfort; icon keeps smaller visual size
-            width: units.gu(6)
-            height: width
+            width: feedRow.width + units.gu(2)
+            height: units.gu(6)
             // Destination, not a detail: it takes the leading column and opens posts beside itself.
-            onClicked: root.activeStack.pushMaster(Qt.resolvedUrl("pages/FeedPage.qml"))
-            Image {
+            onClicked: root.openFeed()
+            // Logo + label, same as the My Feed page title
+            Row {
+                id: feedRow
                 anchors.centerIn: parent
-                width: root.wideMode ? units.gu(4.5) : units.gu(3.5)
-                height: width
-                source: Qt.resolvedUrl("../assets/iconFeed.png")
-                fillMode: Image.PreserveAspectFit
-                asynchronous: true
+                spacing: Style.spacingS
+                Image {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: root.wideMode ? units.gu(4.5) : units.gu(3.5)
+                    height: width
+                    source: Qt.resolvedUrl("../assets/iconFeed.png")
+                    fillMode: Image.PreserveAspectFit
+                    asynchronous: true
+                }
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: Lang.tr("My Feed")
+                    font.pixelSize: Style.fontMedium
+                    font.weight: Font.DemiBold
+                    font.family: Style.fontFor(text)
+                    color: Style.textPrimary
+                }
             }
             KeyTapArea { onActivated: feedBtn.clicked() }
         }

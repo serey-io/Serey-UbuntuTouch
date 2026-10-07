@@ -4,6 +4,7 @@ import "../Theme"
 import "../Session"
 import "../components"
 import "../services/AnonymousInviteService.js" as InviteService
+import "../services/NavPerf.js" as NavPerf
 
 Page {
     id: page
@@ -30,6 +31,10 @@ Page {
     property Item keyboardFocusItem: webApp
     onVisibleChanged: {
         if (!visible) return;
+        if (NavPerf.since("feedClose") >= 0 && NavPerf.since("feedClose") < 3000) {
+            page._awaitReady = true;
+            Qt.callLater(page._checkReady);
+        }
         webApp.forceActiveFocus();
         // Back from My Feed (pushed on this tab) after a reconnect: don't wait out the 20s
         // backstop on the offline panel, reload now. Deferred path: frozen views can't reload.
@@ -40,6 +45,19 @@ Page {
             webApp._applyDeferredNav();
         }
     }
+    // Temp [navperf]: how long until the site is usable again after leaving My Feed
+    property bool _awaitReady: false
+    function _checkReady() {
+        if (!page._awaitReady || webApp.loading || webApp._hopping) return;
+        page._awaitReady = false;
+        NavPerf.log("Homepage usable +" + NavPerf.since("feedClose") + "ms after back (full reloads since back: "
+                    + webApp._reloadsSince + ")");
+    }
+    Connections {
+        target: webApp
+        function onLoadingChanged() { Qt.callLater(page._checkReady); }
+    }
+
     // Web view load is itself deferred; grabbing focus from onCompleted lands on nothing
     Component.onCompleted: if (visible) Qt.callLater(webApp.forceActiveFocus)
 
@@ -53,7 +71,11 @@ Page {
         id: webApp
         anchors.fill: parent
         // Freeze this Chromium renderer while another tab is showing so it doesn't compete for GPU/shared memory with the video player's WebView.
-        suspended: Config.currentTab !== 0
+        // Same once loaded while My Feed or a pushed page covers it: nobody sees it, and it ate CPU under them.
+        suspended: Config.currentTab !== 0 || (!page.visible && !webApp.loading)
+        // Split under My Feed we sit in its narrow column (the page shows before the column
+        // widens back); a resize there reloaded the whole site, so keep the last real size.
+        holdSize: !!page.pageStack && page.pageStack.columns > 1 && page.pageStack.rootPage !== page
         url: page.loadUrl()
         authToken: Session.token
         username: Session.username
@@ -130,6 +152,7 @@ Page {
         anchors.fill: parent
         // Backdrop cuts in, content fades: same as the News/Video covers.
         visible: !Net.online || Net.justReconnected || (webApp.loadFailed && page._gaveUp)
+        onVisibleChanged: NavPerf.log("Homepage offline cover " + (visible ? "SHOWN" : "hidden"))
         color: Style.surface
 
         OfflineState {
@@ -169,14 +192,26 @@ Page {
     Timer {
         interval: 20000
         repeat: true
-        running: offlineCover.visible && Net.online && Config.currentTab === 0
+        // Not while frozen (another tab, or covered by My Feed); returning retries it anyway
+        running: offlineCover.visible && Net.online && !webApp.suspended
         onTriggered: webApp.reload()
+    }
+
+    // Reloading a frozen view crashes Chromium; let it reload on resume instead
+    function _reloadWhenLive() {
+        if (webApp.suspended) {
+            NavPerf.log("Homepage reload deferred until resume (view is frozen)");
+            webApp._deferredNav = true;
+            return;
+        }
+        NavPerf.log("Homepage reload now (view is live)");
+        webApp.reload();
     }
 
     // After a confirmed payment, reload the site so it reflects the new plan.
     Connections {
         target: Payments
-        function onPaymentSucceeded() { webApp.reload(); }
+        function onPaymentSucceeded() { page._reloadWhenLive(); }
     }
 
     // Persistent cookies otherwise survive a native logout/account switch
@@ -184,7 +219,7 @@ Page {
         target: Session
         function onTokenChanged() {
             webApp.clearSession();
-            webApp.reload();
+            page._reloadWhenLive();
         }
     }
 }

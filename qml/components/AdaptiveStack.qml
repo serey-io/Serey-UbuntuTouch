@@ -1,6 +1,7 @@
 import QtQuick 2.7
 import Lomiri.Components 1.3
 import "../Theme"
+import "../services/NavPerf.js" as NavPerf
 
 // Per-tab master-detail: phones push full-screen, wide windows split list + detail (two real PageStacks, not AdaptivePageLayout)
 Item {
@@ -72,6 +73,8 @@ Item {
     }
     // Leaving a destination drops the detail it opened along with it.
     function popMaster() {
+        NavPerf.mark("feedClose");
+        NavPerf.log("close My Feed (was open " + NavPerf.since("feedOpen") + "ms)");
         while (detailStack.depth > 0) detailStack.pop();
         if (rootStack.depth > 1) rootStack.pop();
     }

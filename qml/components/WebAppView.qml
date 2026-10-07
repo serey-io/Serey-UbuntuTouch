@@ -3,6 +3,7 @@ import QtQuick.Window 2.2
 import Lomiri.Components 1.3
 import QtWebEngine 1.10
 import "../Theme"
+import "../services/NavPerf.js" as NavPerf
 
 // FocusScope so forceActiveFocus() lands on the Chromium view for scroll keys
 FocusScope {
@@ -27,6 +28,7 @@ FocusScope {
     // Freezing is only legal once `visible` has settled hidden, so defer it; resuming to Active is always legal.
     onSuspendedChanged: {
         webAppView._log("[lifecycle] suspended -> " + suspended);
+        NavPerf.log("Homepage web view " + (suspended ? "frozen" : "resumed"));
         if (suspended) {
             // Active->Frozen is rejected while visible; an overlay can leave it visible, so hide explicitly
             webView.visible = false;
@@ -62,9 +64,32 @@ FocusScope {
     readonly property string mobileUA: "Mozilla/5.0 (Linux; Android 13; Pixel 3a) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
     readonly property string desktopUA: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
+    // Size Chromium sees. Held while hidden: under My Feed the page sits in the narrow
+    // leading column, and passing that on flipped desktopMode and reloaded the site twice.
+    property real _viewW: 0
+    property real _viewH: 0
+    // Host sets this while our column is squeezed by a page covering us
+    property bool holdSize: false
+    function _syncViewSize() {
+        if ((!webAppView.visible || webAppView.holdSize) && webAppView._viewW > 0) return;
+        webAppView._viewW = webAppView.width;
+        webAppView._viewH = webAppView.height;
+    }
+    onWidthChanged: _syncViewSize()
+    onHeightChanged: _syncViewSize()
+    // Again once layout settles: the column can widen back after we show
+    onVisibleChanged: if (visible) { _syncViewSize(); Qt.callLater(webAppView._syncViewSize); }
+    onHoldSizeChanged: if (!holdSize) Qt.callLater(webAppView._syncViewSize)
+
     // Grid units, not raw pixels; a phone's native resolution can exceed a flat px threshold
-    readonly property bool desktopMode: webAppView.width >= Config.convergenceBreakpoint
-    onDesktopModeChanged: reload()
+    readonly property bool desktopMode: webAppView._viewW >= Config.convergenceBreakpoint
+    onDesktopModeChanged: {
+        NavPerf.log("Homepage web view desktopMode -> " + desktopMode + " (width " + Math.round(_viewW)
+                    + ", visible " + visible + ") => FULL RELOAD");
+        reload();
+    }
+    // Temp [navperf]: full loads started, read by HomepagePage
+    property int _reloadsSince: 0
 
     signal getUserInfoRequested()
     // Never wire this to Session.setAuth; the web side's identity comes from its own persistent cookies and can be stale, silently switching accounts.
@@ -90,9 +115,10 @@ FocusScope {
 
     WebEngineView {
         id: webView
-        anchors.fill: parent
+        width: webAppView._viewW
+        height: webAppView._viewH
         focus: true
-        zoomFactor: webAppView.desktopMode ? 1.0 : (webAppView.width > 0 ? webAppView.width / 412 : 1.0)
+        zoomFactor: webAppView.desktopMode ? 1.0 : (webAppView._viewW > 0 ? webAppView._viewW / 412 : 1.0)
         settings.showScrollBars: false
 
         userScripts: [
@@ -179,12 +205,16 @@ FocusScope {
                 if (!Net.online) Net.probe();
                 webAppView._injectBridge();
                 webAppView._injectProfiler();
+                NavPerf.log("Homepage full load finished, " + (Date.now() - webAppView._navStartedAt)
+                            + "ms after it was requested");
                 webAppView._log("full load succeeded after "
                                 + (Date.now() - webAppView._navStartedAt) + "ms");
             } else if (loadRequest.status === WebEngineLoadRequest.LoadStartedStatus) {
                 webAppView.loading = true;
                 webAppView._pageReady = false;
                 webAppView._log("full load started: " + loadRequest.url);
+                webAppView._reloadsSince++;
+                NavPerf.log("Homepage full load started (visible " + webAppView.visible + ")");
             } else if (loadRequest.status === WebEngineLoadRequest.LoadFailedStatus) {
                 webAppView.loading = false;
                 webAppView._pageReady = false;
@@ -263,6 +293,7 @@ FocusScope {
         webAppView.loading = false;
         webAppView._deferredNav = true;
         webAppView._log("nav deferred (" + why + "): " + webAppView.url);
+        NavPerf.log("Homepage nav deferred (" + why + ")");
     }
     function _applyDeferredNav() {
         if (!webAppView._deferredNav || !Net.online) return;
@@ -270,6 +301,7 @@ FocusScope {
         if (webAppView.suspended || webAppView.appAway) return;
         webAppView._deferredNav = false;
         webAppView._log("applying deferred nav");
+        NavPerf.log("Homepage applying deferred reload");
         webAppView.reload();
     }
 
@@ -430,6 +462,7 @@ FocusScope {
     }
 
     function reload() {
+        webAppView._navStartedAt = Date.now();
         navTimer.stop(); navVerify.stop(); hopSettle.stop(); hopWatchdog.stop();
         _hopping = false; _deferredNav = false;
         loading = true;   // now, not after loadTimer: the offline panel's button keys off it
