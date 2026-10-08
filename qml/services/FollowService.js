@@ -45,6 +45,21 @@ function listAllFollowings(baseUrl, token, onOk, onErr) {
         }, onErr);
 }
 
+// Viewer's followings, server order
+function listFollowings(baseUrl, token, onOk, onErr) {
+    return Http.get(baseUrl, "/follow/list-all-followings", {}, token,
+        function (data) {
+            var list = (data && data.followings) || [];
+            if (!Array.isArray(list)) list = [];
+            var out = [];
+            for (var i = 0; i < list.length; i++) {
+                var u = list[i] && (typeof list[i] === "string" ? list[i] : (list[i].username || list[i].following));
+                if (u) out.push(u);
+            }
+            onOk(out);
+        }, onErr);
+}
+
 function toggle(baseUrl, author, isCurrentlyFollowing, token, onOk, onErr) {
     Http.post(baseUrl, "/follow/follow-or-unfollow",
         { author: author, action_type: isCurrentlyFollowing ? "unfollow" : "follow" },

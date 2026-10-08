@@ -17,7 +17,7 @@ AbstractButton {
         color: pill.subscribed ? "transparent"
              : pill.pressed ? Style.brandDark : Style.brand
         border.width: pill.subscribed ? units.dp(1.5) : 0
-        border.color: Style.divider
+        border.color: Style.brand
         Behavior on color { ColorAnimation { duration: 120 } }
 
         Label {
@@ -26,7 +26,7 @@ AbstractButton {
             font.pixelSize: Style.fontSmall
             font.weight: Font.DemiBold
             font.family: Style.fontFor(text)
-            color: pill.subscribed ? Style.textSecondary : Style.textOnBrand
+            color: pill.subscribed ? Style.brand : Style.textOnBrand
         }
     }
 }

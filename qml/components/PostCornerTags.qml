@@ -38,6 +38,19 @@ Row {
             font.weight: Font.DemiBold
             color: Style.textOnBrand
         }
+
+        // Shine sweep, looped
+        ShineSweep {
+            anchors.fill: parent
+            visible: catTag.visible
+            mask: shineMask
+        }
+        Rectangle {
+            id: shineMask
+            anchors.fill: parent
+            radius: catTag.radius
+            visible: false
+        }
     }
 
     // Platform tag

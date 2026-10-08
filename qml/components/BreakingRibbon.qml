@@ -39,6 +39,13 @@ Item {
         }
     }
 
+    // Shine, clipped to banner shape
+    ShineSweep {
+        width: shape.width
+        height: shape.height
+        mask: shape
+    }
+
     Label {
         id: label
         anchors.verticalCenter: parent.verticalCenter

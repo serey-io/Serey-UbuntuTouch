@@ -133,6 +133,8 @@ Page {
     property var followingSet: ({})
     property var subscribedSet: ({})
     property bool followingLoaded: false
+    // Follows anyone: no platform pitch
+    readonly property bool followsSomeone: Object.keys(page.followingSet).length > 0
     // Set by reload()/refresh(): next batch REPLACES the list via _syncRows, not append.
     property bool _firstRound: false
 
@@ -790,6 +792,7 @@ Page {
         header: Item {
             width: list.width
             readonly property bool active: Session.isLoggedIn && feedModel.count > 0 && !page.splitOpen
+                                            && page.followingLoaded && !page.followsSomeone
             onActiveChanged: if (active) feedPlatforms.load()
             Component.onCompleted: if (active) feedPlatforms.load()
             id: suggestHeader

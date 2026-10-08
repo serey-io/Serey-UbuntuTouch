@@ -48,8 +48,10 @@ Rectangle {
 
     // Thin feed (follows little): topped up with country trending
     property var trending: []
-    property bool trendingLoading: false
-    property bool _trendingAsked: false
+    property bool trendingLoading: true
+    // Feed notes topped up with these
+    property var trendingNotes: []
+    property bool trendingNotesLoading: true
 
     // Imperative, not bound: a refresh used to rebuild every card and flip the pagers
     // through empty states. _refresh() only swaps a list when its members really change.
@@ -57,7 +59,7 @@ Rectangle {
     property var notes: []
     property bool thin: false
     property bool loading: true
-    readonly property bool notesLoading: root.loading
+    property bool notesLoading: true
     readonly property int notePages: Math.ceil(Math.min(notes.length, notesPerPage * maxPages) / notesPerPage)
     // Notes need a few to look like a row
     readonly property bool showNotes: root.notes.length >= 3
@@ -119,10 +121,16 @@ Rectangle {
         return out;
     }
 
-    function _feedNotes(rows) {
-        var out = [];
-        for (var i = 0; i < rows.length && out.length < root.notesPerPage * root.maxPages; i++)
-            if (rows[i].isNote && root._usable(rows[i])) out.push(rows[i]);
+    // Feed notes first, then trending
+    function _pickNotes(rows, extra) {
+        var want = root.notesPerPage * root.maxPages, seen = {}, out = [];
+        var all = rows.concat(extra);
+        for (var i = 0; i < all.length && out.length < want; i++) {
+            var n = all[i];
+            if (!n.isNote || seen[n.permlink] || !root._usable(n)) continue;
+            seen[n.permlink] = true;
+            out.push(n);
+        }
         return out;
     }
 
@@ -152,9 +160,16 @@ Rectangle {
             function (rows) { if (rows.length) done(rows); else fallback(); }, fallback);
     }
 
+    // Last trending lists, so reopening paints at once
+    function _cacheKey(kind) {
+        return "suggested:" + kind + ":" + (Config.homeCountryCommunityId || "0") + ":" + Config.communityId
+               + ":" + (Session.username || "__guest__");
+    }
+
+    // Fetched with the feed, not after it: rows land together
     function _loadTrending() {
-        root._trendingAsked = true;
-        root.trendingLoading = true;
+        var cached = FeedCache.peek(root._cacheKey("posts"));
+        if (cached) { root.trending = cached; root.trendingLoading = false; }
         // Callbacks can land after My Feed closed and destroyed us
         root._scoped(PostService.listTrending, 20, function (rows) {
             if (!root) return;
@@ -164,9 +179,47 @@ Rectangle {
                     rows[i].title = root._decode(rows[i].title);
                     out.push(rows[i]);
                 }
+            FeedCache.put(root._cacheKey("posts"), out);
             root.trending = out;
             root.trendingLoading = false;
         }, function () { if (root) root.trendingLoading = false; });
+    }
+
+    // Home notes first, topped up globally (one country rarely fills it)
+    function _loadTrendingNotes() {
+        var cached = FeedCache.peek(root._cacheKey("notes"));
+        if (cached) { root.trendingNotes = cached; root.trendingNotesLoading = false; }
+        var want = root.notesPerPage * root.maxPages, limit = want + 4;
+        function finish(list) {
+            if (!root) return;
+            FeedCache.put(root._cacheKey("notes"), list);
+            root.trendingNotes = list;
+            root.trendingNotesLoading = false;
+        }
+        function onlyNotes(rows) { return rows.filter(function (p) { return p.isNote && root._allowed(p); }); }
+        function global(first) {
+            var params = { limit: limit, offset: 0 };
+            // Scope = home: widen, don't re-ask
+            if (Config.communityId > 0 && String(Config.communityId) !== String(home))
+                params.community_id = Config.communityId;
+            else params.exclude_home = 1;
+            PostService.listTrendingNotes(Config.baseUrl, params, Session.token, function (rows) {
+                if (!root) return;
+                var seen = {}, out = [], all = first.concat(onlyNotes(rows));
+                for (var i = 0; i < all.length; i++)
+                    if (!seen[all[i].permlink]) { seen[all[i].permlink] = true; out.push(all[i]); }
+                finish(out);
+            }, function () { if (root) finish(first.length ? first : root.trendingNotes); });
+        }
+        var home = Config.homeCountryCommunityId;
+        if (!home) { global([]); return; }
+        PostService.listTrendingNotes(Config.baseUrl, { limit: limit, offset: 0, community_id: home }, Session.token,
+            function (rows) {
+                if (!root) return;
+                var picked = onlyNotes(rows);
+                if (picked.length >= want) finish(picked);
+                else global(picked);
+            }, function () { if (root) global([]); });
     }
 
     function _members(list) {
@@ -182,15 +235,20 @@ Rectangle {
         if (root.feedLoading) return;
         var r = root._rank(root.feedRows);
         var isThin = r.length < root.minPosts;
-        var p = isThin ? root._topUp(r, root.trending) : r;
-        var n = root._feedNotes(root.feedRows);
+        // Any empty slot: fill with trending
+        var gaps = r.length < root.featuredCount + root.perPage * root.maxPages;
+        var p = gaps ? root._topUp(r, root.trending) : r;
+        var feedNotes = root._pickNotes(root.feedRows, []);
+        var n = feedNotes.length >= root.notesPerPage * root.maxPages ? feedNotes
+                : root._pickNotes(root.feedRows, root.trendingNotes);
         if (isThin !== root.thin) root.thin = isThin;
-        if (isThin && !root._trendingAsked) root._loadTrending();
         if (!root._keep(root.posts, p)) root.posts = p;
         if (!root._keep(root.notes, n)) root.notes = n;
-        // A thin feed with trending still on its way keeps the skeleton, not an empty pane
-        var wait = isThin && root.trendingLoading && p.length === 0;
+        // Thin feed: hold skeleton until trending lands, so both rows appear together
+        var wait = gaps && root.trendingLoading;
         if (root.loading !== wait) root.loading = wait;
+        var nWait = wait || (root.trendingNotesLoading && n.length < 3);
+        if (root.notesLoading !== nWait) root.notesLoading = nWait;
     }
 
     onFeedRowsChanged: root._refresh()
@@ -199,6 +257,8 @@ Rectangle {
     onDroppedAuthorsChanged: root._refresh()
     onTrendingChanged: root._refresh()
     onTrendingLoadingChanged: root._refresh()
+    onTrendingNotesChanged: root._refresh()
+    onTrendingNotesLoadingChanged: root._refresh()
     // First data in: start at the heading, not wherever the empty pane was left
     onLoadingChanged: if (!root.loading && !flick.moving) flick.contentY = 0
 
@@ -216,7 +276,11 @@ Rectangle {
         });
     }
 
-    Component.onCompleted: root._refresh()
+    Component.onCompleted: {
+        root._loadTrending();
+        root._loadTrendingNotes();
+        root._refresh();
+    }
 
     Connections {
         target: PostActions
@@ -264,6 +328,10 @@ Rectangle {
                         readonly property var post: root.loading ? ({}) : modelData
                         width: featuredRow.cardW
                         height: Math.round(width * 0.62)
+                        // Hover lift
+                        z: bigMouse.containsMouse ? 1 : 0
+                        scale: bigMouse.containsMouse ? 1.02 : 1
+                        Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
 
                         SkeletonRect {
                             anchors.fill: parent
@@ -390,6 +458,10 @@ Rectangle {
                                 width: carousel.cardW
                                 height: carousel.cardH
                                 visible: root.loading || !!post
+                                // Hover lift
+                                z: smallMouse.containsMouse ? 1 : 0
+                                scale: smallMouse.containsMouse ? 1.03 : 1
+                                Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
 
                                 Column {
                                     width: parent.width

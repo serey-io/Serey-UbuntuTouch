@@ -437,25 +437,41 @@ Page {
                         model: page.profile ? [
                             { label: Lang.tr("Posts"),     value: "" + page.profile.postCount },
                             { label: Lang.tr("Followers"), value: "" + page.profile.followers },
-                            { label: Lang.tr("Following"), value: "" + page.profile.following }
+                            { label: Lang.tr("Following"), value: "" + page.profile.following, open: "FollowingPage.qml" }
                         ] : []
-                        delegate: Column {
+                        delegate: Item {
+                            id: stat
                             width: parent.width / 3
-                            spacing: units.dp(2)
-                            Label {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                text: modelData.value
-                                font.pixelSize: Style.fontLarge
-                                font.weight: Font.DemiBold
-                                font.family: Style.fontFor(text)
-                                color: Style.textPrimary
+                            height: statCol.height
+                            // Own list only
+                            readonly property bool tappable: page.isSelf && !!modelData.open
+                            Column {
+                                id: statCol
+                                width: parent.width
+                                spacing: units.dp(2)
+                                opacity: statPress.pressed ? 0.6 : 1
+                                Label {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    text: modelData.value
+                                    font.pixelSize: Style.fontLarge
+                                    font.weight: Font.DemiBold
+                                    font.family: Style.fontFor(text)
+                                    color: Style.textPrimary
+                                }
+                                Label {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    text: modelData.label
+                                    font.pixelSize: Style.fontXSmall
+                                    font.family: Style.fontFor(text)
+                                    color: Style.textSecondary
+                                }
                             }
-                            Label {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                text: modelData.label
-                                font.pixelSize: Style.fontXSmall
-                                font.family: Style.fontFor(text)
-                                color: Style.textSecondary
+                            MouseArea {
+                                id: statPress
+                                anchors.fill: parent
+                                enabled: stat.tappable
+                                cursorShape: stat.tappable ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                onClicked: page.pageStack.push(Qt.resolvedUrl(modelData.open))
                             }
                         }
                     }
@@ -477,10 +493,19 @@ Page {
                 }
 
                 PrimaryButton {
-                    visible: !page.isSelf && !!page.profile
+                    visible: !page.isSelf && !!page.profile && !FollowStore.isFollowing(page.username)
                     width: Math.min(parent.width - Style.spacingL * 2, units.gu(50))
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: FollowStore.isFollowing(page.username) ? Lang.tr("Following") : Lang.tr("Follow")
+                    text: Lang.tr("Follow")
+                    onClicked: page.toggleFollow()
+                }
+
+                // Followed: hollow outline
+                SecondaryButton {
+                    visible: !page.isSelf && !!page.profile && FollowStore.isFollowing(page.username)
+                    width: Math.min(parent.width - Style.spacingL * 2, units.gu(50))
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: Lang.tr("Unfollow")
                     onClicked: page.toggleFollow()
                 }
 
