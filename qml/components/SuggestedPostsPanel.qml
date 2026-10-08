@@ -42,9 +42,6 @@ Rectangle {
     property var feedRows: []
     // True until the feed's first batch has landed
     property bool feedLoading: true
-    // Pulled from FeedPage's last successful sync
-    property var updatedAt: 0
-
     // Rows hidden/blocked while this panel is open
     property var droppedPermlinks: ({})
     property var droppedAuthors: ({})
@@ -252,21 +249,6 @@ Rectangle {
             x: root.sidePad
             width: root.width - root.sidePad * 2
             spacing: Style.spacingL
-
-            Label {
-                text: root.thin ? Lang.tr("Trending on Serey") : Lang.tr("Your briefing")
-                font.pixelSize: Style.fontLarge
-                font.weight: Font.DemiBold
-                font.family: Style.fontFor(text)
-                color: Style.textTitle
-            }
-
-            Label {
-                visible: root.updatedAt > 0 && !root.thin
-                text: Lang.tr("Updated") + " " + Style.formatTimeAgo(new Date(root.updatedAt).toISOString())
-                font.pixelSize: Style.fontXSmall
-                color: Style.textSecondary
-            }
 
             // Featured: text over image
             Row {

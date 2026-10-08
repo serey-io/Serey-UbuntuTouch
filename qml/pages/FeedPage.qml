@@ -31,7 +31,6 @@ Page {
         SuggestedPostsPanel {
             feedRows: page.overviewRows
             feedLoading: page.overviewLoading
-            updatedAt: page.overviewUpdatedAt
             onPostRequested: page.openDetail(Qt.resolvedUrl("PostDetailPage.qml"),
                 { author: post.author, permlink: post.permlink, title: post.title, seedPost: post })
         }
@@ -48,7 +47,6 @@ Page {
     // Plain copies of the first feed rows for the overview pane (a dynamicRoles row
     // wraps arrays, so the pane can't rank straight off the model).
     property var overviewRows: []
-    property real overviewUpdatedAt: 0
     readonly property bool overviewLoading: feedModel.count === 0 && (page.loading || !page.followingLoaded)
     readonly property var _overviewFields: ["author", "permlink", "title", "thumbnail", "authorImage", "date",
         "votes", "comments", "payout", "isNote", "noteText", "noteVideo", "primaryCategory",
@@ -388,7 +386,6 @@ Page {
                 NavPerf.log("My Feed network rows +" + NavPerf.since("feedOpen") + "ms (" + rows.length + " rows)");
                 page._firstRound = false;
                 page.showingCached = false;
-                page.overviewUpdatedAt = Date.now();
                 FeedCache.put(page._cacheKey(), rows);
             } else {
                 for (var i = 0; i < rows.length; i++)
