@@ -7,7 +7,6 @@ import "../services/PostService.js" as PostService
 import "../services/HiddenPosts.js" as HiddenPosts
 import "../services/BlockedUsers.js" as BlockedUsers
 import "../services/Notes.js" as Notes
-import "../services/NavPerf.js" as NavPerf
 
 // Wide-window detail placeholder: featured row + paged carousel (web homepage style)
 Rectangle {
@@ -24,7 +23,10 @@ Rectangle {
     readonly property int notesPerPage: perPage
     // Notes row inset from blog edges
     readonly property real notesInset: roomy ? units.gu(10) : units.gu(4)
-    readonly property int maxPages: 3
+    // A short briefing: 5 to 8 posts, not a second feed
+    readonly property int maxPages: 2
+    readonly property int minPosts: 3
+    readonly property int maxPerAuthor: 2
     readonly property real gap: Style.spacingM
     // Wider gutters, content capped
     readonly property real maxContentW: units.gu(130)
@@ -36,11 +38,32 @@ Rectangle {
         return Math.ceil(logical * Screen.devicePixelRatio / step) * step;
     }
 
+    // Plain copies of the reader's own feed rows, handed in by FeedPage
+    property var feedRows: []
+    // True until the feed's first batch has landed
+    property bool feedLoading: true
+    // Pulled from FeedPage's last successful sync
+    property var updatedAt: 0
+
+    // Rows hidden/blocked while this panel is open
+    property var droppedPermlinks: ({})
+    property var droppedAuthors: ({})
+
+    // Thin feed (follows little): topped up with country trending
+    property var trending: []
+    property bool trendingLoading: false
+    property bool _trendingAsked: false
+
+    // Imperative, not bound: a refresh used to rebuild every card and flip the pagers
+    // through empty states. _refresh() only swaps a list when its members really change.
     property var posts: []
     property var notes: []
+    property bool thin: false
     property bool loading: true
-    property bool notesLoading: true
+    readonly property bool notesLoading: root.loading
     readonly property int notePages: Math.ceil(Math.min(notes.length, notesPerPage * maxPages) / notesPerPage)
+    // Notes need a few to look like a row
+    readonly property bool showNotes: root.notes.length >= 3
 
     readonly property var featured: posts.slice(0, featuredCount)
     readonly property var rest: posts.slice(featuredCount, featuredCount + perPage * maxPages)
@@ -65,20 +88,57 @@ Rectangle {
             .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
     }
 
-    // Articles, photos first
-    function _pickPosts(rows) {
-        var withImg = [], noImg = [];
-        for (var i = 0; i < rows.length; i++) {
-            var p = rows[i];
-            if (p.isNote || !root._allowed(p)) continue;
-            p.title = root._decode(p.title);
-            ((p.thumbnail || "") !== "" ? withImg : noImg).push(p);
-        }
-        return withImg.concat(noImg);
+    function _score(p) {
+        var payout = parseFloat(String(p.payout || ""));
+        if (isNaN(payout)) payout = 0;
+        var t = Date.parse(p.date || "");
+        var ageH = isNaN(t) ? 72 : Math.max(0, (Date.now() - t) / 3600000);
+        var s = ((p.votes || 0) + (p.comments || 0) * 2 + Math.log(1 + payout) * 2 + 1) / (1 + ageH / 24);
+        return (p.thumbnail || "") !== "" ? s * 1.25 : s;
     }
 
-    function _pickNotes(rows) {
-        return rows.filter(function (p) { return p.isNote && root._allowed(p); });
+    function _usable(p) {
+        return root._allowed(p) && !root.droppedPermlinks[p.permlink] && !root.droppedAuthors[p.author || ""];
+    }
+
+    // The reader's own feed, most important first; photos win ties, one author can't fill the page
+    function _rank(rows) {
+        var scored = [];
+        for (var i = 0; i < rows.length; i++) {
+            var p = rows[i];
+            if (p.isNote || p._kind === "video" || !root._usable(p)) continue;
+            scored.push({ post: p, score: root._score(p) });
+        }
+        scored.sort(function (a, b) { return b.score - a.score; });
+        var want = root.featuredCount + root.perPage * root.maxPages;
+        var perAuthor = {}, out = [];
+        for (var j = 0; j < scored.length && out.length < want; j++) {
+            var q = scored[j].post, a = q.author || "";
+            if ((perAuthor[a] || 0) >= root.maxPerAuthor) continue;
+            perAuthor[a] = (perAuthor[a] || 0) + 1;
+            q.title = root._decode(q.title);
+            out.push(q);
+        }
+        return out;
+    }
+
+    function _feedNotes(rows) {
+        var out = [];
+        for (var i = 0; i < rows.length && out.length < root.notesPerPage * root.maxPages; i++)
+            if (rows[i].isNote && root._usable(rows[i])) out.push(rows[i]);
+        return out;
+    }
+
+    // Follows little: fill with trending, never repeating a feed post
+    function _topUp(own, extra) {
+        var seen = {}, out = own.slice();
+        for (var i = 0; i < out.length; i++) seen[out[i].permlink] = true;
+        var want = root.featuredCount + root.perPage * root.maxPages;
+        for (var j = 0; j < extra.length && out.length < want; j++) {
+            if (seen[extra[j].permlink] || !root._usable(extra[j])) continue;
+            out.push(extra[j]);
+        }
+        return out;
     }
 
     // Home country first, then header scope
@@ -95,75 +155,55 @@ Rectangle {
             function (rows) { if (rows.length) done(rows); else fallback(); }, fallback);
     }
 
-    // Last lists shown, so reopening My Feed paints at once; the fetch below refreshes them
-    function _cacheKey(kind) {
-        return "suggested:" + kind + ":" + (Config.homeCountryCommunityId || "0") + ":" + Config.communityId
-               + ":" + (Session.username || "__guest__");
-    }
-    function _sig(list) { return list.map(function (p) { return p.permlink; }).join(","); }
-    // Same rows as on screen: skip the swap, it would rebuild every card
-    function _setPosts(list) {
-        if (!root.loading && root._sig(list) === root._sig(root.posts)) return;
-        root.posts = list;
-        root.loading = false;
-    }
-    function _setNotes(list) {
-        if (!root.notesLoading && root._sig(list) === root._sig(root.notes)) return;
-        root.notes = list;
-        root.notesLoading = false;
-    }
-
-    // Posts and notes in parallel
-    function load() {
-        var cachedPosts = FeedCache.peek(root._cacheKey("posts"));
-        var cachedNotes = FeedCache.peek(root._cacheKey("notes"));
-        if (cachedPosts) root._setPosts(cachedPosts.filter(root._allowed));
-        if (cachedNotes) root._setNotes(root._pickNotes(cachedNotes));
-        if (cachedPosts || cachedNotes)
-            NavPerf.log("suggested cache painted +" + NavPerf.since("feedOpen") + "ms (posts "
-                        + (cachedPosts ? cachedPosts.length : 0) + ", notes " + (cachedNotes ? cachedNotes.length : 0) + ")");
+    function _loadTrending() {
+        root._trendingAsked = true;
+        root.trendingLoading = true;
         // Callbacks can land after My Feed closed and destroyed us
         root._scoped(PostService.listTrending, 20, function (rows) {
             if (!root) return;
-            var picked = root._pickPosts(rows);
-            FeedCache.put(root._cacheKey("posts"), picked);
-            root._setPosts(picked);
-            NavPerf.log("suggested posts +" + NavPerf.since("feedOpen") + "ms (" + picked.length + ")");
-        }, function () { if (root) root.loading = false; });
-        root._loadNotes();
+            var out = [];
+            for (var i = 0; i < rows.length; i++)
+                if (!rows[i].isNote && root._allowed(rows[i])) {
+                    rows[i].title = root._decode(rows[i].title);
+                    out.push(rows[i]);
+                }
+            root.trending = out;
+            root.trendingLoading = false;
+        }, function () { if (root) root.trendingLoading = false; });
     }
 
-    // Home notes first, topped up globally (one country rarely fills it)
-    function _loadNotes() {
-        var want = 9, limit = 12;   // spare rows for hidden/blocked
-        function finish(list) {
-            FeedCache.put(root._cacheKey("notes"), list);
-            root._setNotes(list);
-            NavPerf.log("suggested notes +" + NavPerf.since("feedOpen") + "ms (" + list.length + ")");
-        }
-        function global(first) {
-            var params = { limit: limit, offset: 0 };
-            if (Config.communityId > 0) params.community_id = Config.communityId;
-            else params.exclude_home = 1;
-            PostService.listTrendingNotes(Config.baseUrl, params, Session.token, function (rows) {
-                if (!root) return;
-                var seen = {}, out = [];
-                var all = first.concat(root._pickNotes(rows));
-                for (var i = 0; i < all.length; i++)
-                    if (!seen[all[i].permlink]) { seen[all[i].permlink] = true; out.push(all[i]); }
-                finish(out);
-            }, function () { if (root) root._setNotes(first.length ? first : root.notes); });
-        }
-        var home = Config.homeCountryCommunityId;
-        if (!home) { global([]); return; }
-        PostService.listTrendingNotes(Config.baseUrl, { limit: limit, offset: 0, community_id: home }, Session.token,
-            function (rows) {
-                if (!root) return;
-                var picked = root._pickNotes(rows);
-                if (picked.length >= want) finish(picked);
-                else global(picked);
-            }, function () { if (root) global([]); });
+    function _members(list) {
+        return list.map(function (p) { return p.permlink; }).sort().join(",");
     }
+
+    // Same posts as on screen: keep the current order and objects (no card swaps)
+    function _keep(cur, next) {
+        return cur.length === next.length && root._members(cur) === root._members(next);
+    }
+
+    function _refresh() {
+        if (root.feedLoading) return;
+        var r = root._rank(root.feedRows);
+        var isThin = r.length < root.minPosts;
+        var p = isThin ? root._topUp(r, root.trending) : r;
+        var n = root._feedNotes(root.feedRows);
+        if (isThin !== root.thin) root.thin = isThin;
+        if (isThin && !root._trendingAsked) root._loadTrending();
+        if (!root._keep(root.posts, p)) root.posts = p;
+        if (!root._keep(root.notes, n)) root.notes = n;
+        // A thin feed with trending still on its way keeps the skeleton, not an empty pane
+        var wait = isThin && root.trendingLoading && p.length === 0;
+        if (root.loading !== wait) root.loading = wait;
+    }
+
+    onFeedRowsChanged: root._refresh()
+    onFeedLoadingChanged: root._refresh()
+    onDroppedPermlinksChanged: root._refresh()
+    onDroppedAuthorsChanged: root._refresh()
+    onTrendingChanged: root._refresh()
+    onTrendingLoadingChanged: root._refresh()
+    // First data in: start at the heading, not wherever the empty pane was left
+    onLoadingChanged: if (!root.loading && !flick.moving) flick.contentY = 0
 
     // Same as the blog card's platform tag
     function openPlatform(p) {
@@ -179,22 +219,23 @@ Rectangle {
         });
     }
 
-    Component.onCompleted: load()
+    Component.onCompleted: root._refresh()
 
     Connections {
         target: PostActions
         function _drop(permlink) {
-            var out = [];
-            for (var i = 0; i < root.posts.length; i++)
-                if (root.posts[i].permlink !== permlink) out.push(root.posts[i]);
-            root.posts = out;
-            root.notes = root.notes.filter(function (p) { return p.permlink !== permlink; });
+            var d = {};
+            for (var k in root.droppedPermlinks) d[k] = true;
+            d[permlink] = true;
+            root.droppedPermlinks = d;
         }
         function onHideRequested(author, permlink) { _drop(permlink); }
         function onPostDeleted(author, permlink) { _drop(permlink); }
         function onUserBlocked(username) {
-            root.posts = root.posts.filter(function (p) { return p.author !== username; });
-            root.notes = root.notes.filter(function (p) { return p.author !== username; });
+            var d = {};
+            for (var k in root.droppedAuthors) d[k] = true;
+            d[username] = true;
+            root.droppedAuthors = d;
         }
     }
 
@@ -213,11 +254,18 @@ Rectangle {
             spacing: Style.spacingL
 
             Label {
-                text: Lang.tr("Suggested posts")
+                text: root.thin ? Lang.tr("Trending on Serey") : Lang.tr("Your briefing")
                 font.pixelSize: Style.fontLarge
                 font.weight: Font.DemiBold
                 font.family: Style.fontFor(text)
                 color: Style.textTitle
+            }
+
+            Label {
+                visible: root.updatedAt > 0 && !root.thin
+                text: Lang.tr("Updated") + " " + Style.formatTimeAgo(new Date(root.updatedAt).toISOString())
+                font.pixelSize: Style.fontXSmall
+                color: Style.textSecondary
             }
 
             // Featured: text over image
@@ -335,23 +383,18 @@ Rectangle {
                 readonly property real cardW: (width - root.gap * (root.perPage - 1)) / root.perPage
                 readonly property real cardH: Math.round(cardW * 0.62) + units.gu(10)
 
-                ListView {
+                Item {
                     id: pager
                     width: parent.width
                     height: carousel.cardH
-                    orientation: ListView.Horizontal
-                    snapMode: ListView.SnapOneItem
-                    highlightRangeMode: ListView.StrictlyEnforceRange
-                    preferredHighlightBegin: 0
-                    preferredHighlightEnd: width
-                    highlightMoveDuration: 300
-                    boundsBehavior: Flickable.StopAtBounds
-                    clip: true
-                    model: root.loading ? 1 : root.pageCount
-
-                    delegate: Row {
+                    property int currentIndex: 0
+                    // Clamped, so a re-rank that drops a page can never leave a blank one showing
+                    readonly property int page: Math.min(currentIndex, Math.max(0, root.pageCount - 1))
+                    onPageChanged: pagerFade.restart()
+                    NumberAnimation { id: pagerFade; target: pageRow; property: "opacity"; from: 0; to: 1; duration: 200 }
+                    Row {
                         id: pageRow
-                        readonly property int pageIndex: index
+                        readonly property int pageIndex: pager.page
                         width: pager.width
                         height: pager.height
                         spacing: root.gap
@@ -456,15 +499,15 @@ Rectangle {
                 Repeater {
                     model: [-1, 1]
                     delegate: AbstractButton {
-                        readonly property bool canGo: modelData < 0 ? pager.currentIndex > 0
-                                                                     : pager.currentIndex < root.pageCount - 1
+                        readonly property bool canGo: modelData < 0 ? pager.page > 0
+                                                                     : pager.page < root.pageCount - 1
                         visible: !root.loading && root.pageCount > 1
                         enabled: canGo
                         opacity: canGo ? 1 : 0.35
                         width: units.gu(4); height: width
                         x: modelData < 0 ? -width - units.gu(0.5) : carousel.width + units.gu(0.5)
                         y: Math.round(carousel.cardW * 0.62 / 2 - height / 2)
-                        onClicked: pager.currentIndex += modelData
+                        onClicked: pager.currentIndex = pager.page + modelData
                         Icon {
                             anchors.centerIn: parent
                             width: units.gu(2.4); height: width
@@ -483,7 +526,7 @@ Rectangle {
                 Repeater {
                     model: root.pageCount
                     delegate: Rectangle {
-                        readonly property bool on: index === pager.currentIndex
+                        readonly property bool on: index === pager.page
                         width: on ? units.gu(2.5) : units.gu(1)
                         height: units.gu(1)
                         radius: height / 2
@@ -499,9 +542,9 @@ Rectangle {
 
             // Suggested notes (wide only)
             Label {
-                visible: root.notesLoading || root.notes.length > 0
+                visible: root.notesLoading || root.showNotes
                 x: noteCarousel.x
-                text: Lang.tr("Suggested notes")
+                text: Lang.tr("Latest notes")
                 font.pixelSize: Style.fontLarge
                 font.weight: Font.DemiBold
                 font.family: Style.fontFor(text)
@@ -513,7 +556,7 @@ Rectangle {
                 x: root.notesInset
                 width: parent.width - root.notesInset * 2
                 height: notePager.height
-                visible: root.notesLoading || root.notes.length > 0
+                visible: root.notesLoading || root.showNotes
                 readonly property real cardW: (width - root.gap * (root.notesPerPage - 1)) / root.notesPerPage
                 readonly property real pad: units.gu(1.25)
                 // Header + 4 text lines + image
@@ -521,24 +564,18 @@ Rectangle {
                                                          + noteLine.height * 4 + (cardW - pad * 2) * 0.6)
                 FontMetrics { id: noteLine; font.pixelSize: Style.fontRegular }
 
-                ListView {
+                Item {
                     id: notePager
-                    // Room for ribbon fold
                     width: parent.width + units.gu(1)
                     height: noteCarousel.cardH
-                    orientation: ListView.Horizontal
-                    snapMode: ListView.SnapOneItem
-                    highlightRangeMode: ListView.StrictlyEnforceRange
-                    preferredHighlightBegin: 0
-                    preferredHighlightEnd: width
-                    highlightMoveDuration: 300
-                    boundsBehavior: Flickable.StopAtBounds
-                    clip: true
-                    model: root.notesLoading ? 1 : root.notePages
-
-                    delegate: Row {
+                    property int currentIndex: 0
+                    // Clamped, so a re-rank that drops a page can never leave a blank one showing
+                    readonly property int page: Math.min(currentIndex, Math.max(0, root.notePages - 1))
+                    onPageChanged: notePagerFade.restart()
+                    NumberAnimation { id: notePagerFade; target: notePage; property: "opacity"; from: 0; to: 1; duration: 200 }
+                    Row {
                         id: notePage
-                        readonly property int pageIndex: index
+                        readonly property int pageIndex: notePager.page
                         width: notePager.width
                         height: notePager.height
                         spacing: root.gap
@@ -710,15 +747,15 @@ Rectangle {
                 Repeater {
                     model: [-1, 1]
                     delegate: AbstractButton {
-                        readonly property bool canGo: modelData < 0 ? notePager.currentIndex > 0
-                                                                     : notePager.currentIndex < root.notePages - 1
+                        readonly property bool canGo: modelData < 0 ? notePager.page > 0
+                                                                     : notePager.page < root.notePages - 1
                         visible: !root.notesLoading && root.notePages > 1
                         enabled: canGo
                         opacity: canGo ? 1 : 0.35
                         width: units.gu(4); height: width
                         x: modelData < 0 ? -width - units.gu(0.5) : noteCarousel.width + units.gu(0.5)
                         y: Math.round(noteCarousel.height / 2 - height / 2)
-                        onClicked: notePager.currentIndex += modelData
+                        onClicked: notePager.currentIndex = notePager.page + modelData
                         Icon {
                             anchors.centerIn: parent
                             width: units.gu(2.4); height: width
@@ -737,7 +774,7 @@ Rectangle {
                 Repeater {
                     model: root.notePages
                     delegate: Rectangle {
-                        readonly property bool on: index === notePager.currentIndex
+                        readonly property bool on: index === notePager.page
                         width: on ? units.gu(2.5) : units.gu(1)
                         height: units.gu(1)
                         radius: height / 2

@@ -29,9 +29,46 @@ Page {
     // Suggested posts, not the placeholder
     readonly property Component emptyDetailComponent: Component {
         SuggestedPostsPanel {
+            feedRows: page.overviewRows
+            feedLoading: page.overviewLoading
+            updatedAt: page.overviewUpdatedAt
             onPostRequested: page.openDetail(Qt.resolvedUrl("PostDetailPage.qml"),
                 { author: post.author, permlink: post.permlink, title: post.title, seedPost: post })
         }
+    }
+
+    // Wide + nothing open = the overview is on screen; keep it current
+    readonly property bool overviewShowing: page.splitOpen && page.stackDepth <= 2 && page.visible
+    Timer {
+        interval: 300000
+        repeat: true
+        running: page.overviewShowing && Net.online && Session.isLoggedIn
+        onTriggered: if (!page.loading) page.refresh(true)
+    }
+    // Plain copies of the first feed rows for the overview pane (a dynamicRoles row
+    // wraps arrays, so the pane can't rank straight off the model).
+    property var overviewRows: []
+    property real overviewUpdatedAt: 0
+    readonly property bool overviewLoading: feedModel.count === 0 && (page.loading || !page.followingLoaded)
+    readonly property var _overviewFields: ["author", "permlink", "title", "thumbnail", "authorImage", "date",
+        "votes", "comments", "payout", "isNote", "noteText", "noteVideo", "primaryCategory",
+        "community", "communityId", "excerpt", "_kind"]
+    function _publishOverview() {
+        var out = [];
+        var n = Math.min(feedModel.count, 60);
+        for (var i = 0; i < n; i++) {
+            var m = feedModel.get(i), c = {};
+            for (var f = 0; f < page._overviewFields.length; f++)
+                c[page._overviewFields[f]] = m[page._overviewFields[f]];
+            out.push(c);
+        }
+        page.overviewRows = out;
+    }
+    // Coalesces a burst of row changes (sync, hide, append) into one copy
+    Timer { id: overviewTimer; interval: 60; onTriggered: page._publishOverview() }
+    Connections {
+        target: feedModel
+        function onCountChanged() { overviewTimer.restart(); }
     }
     readonly property bool splitOpen: !!(page.pageStack && page.pageStack.columns > 1)
 
@@ -282,6 +319,7 @@ Page {
             feedModel.append(rows[j]);
         while (feedModel.count > rows.length)
             feedModel.remove(feedModel.count - 1);
+        overviewTimer.restart();
     }
 
     // Paints last-seen cached rows so reopening shows content instantly.
@@ -350,6 +388,7 @@ Page {
                 NavPerf.log("My Feed network rows +" + NavPerf.since("feedOpen") + "ms (" + rows.length + " rows)");
                 page._firstRound = false;
                 page.showingCached = false;
+                page.overviewUpdatedAt = Date.now();
                 FeedCache.put(page._cacheKey(), rows);
             } else {
                 for (var i = 0; i < rows.length; i++)
@@ -753,7 +792,7 @@ Page {
         // joined, country first. Collapses to nothing when there are none to offer.
         header: Item {
             width: list.width
-            readonly property bool active: Session.isLoggedIn && feedModel.count > 0
+            readonly property bool active: Session.isLoggedIn && feedModel.count > 0 && !page.splitOpen
             onActiveChanged: if (active) feedPlatforms.load()
             Component.onCompleted: if (active) feedPlatforms.load()
             id: suggestHeader
