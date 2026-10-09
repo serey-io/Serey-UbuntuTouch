@@ -179,7 +179,6 @@ Rectangle {
         var want = root.notesPerPage * root.maxPages, limit = want + 4;
         function finish(list) {
             if (!root) return;
-            console.log("[notesdbg] finish " + list.length + " home=" + home + " scope=" + Config.communityId);
             FeedCache.put(root._cacheKey("notes"), list);
             root.trendingNotes = list;
             root.trendingNotesLoading = false;
@@ -197,7 +196,7 @@ Rectangle {
                 for (var i = 0; i < all.length; i++)
                     if (!seen[all[i].permlink]) { seen[all[i].permlink] = true; out.push(all[i]); }
                 finish(out);
-            }, function (e) { console.log("[notesdbg] global err " + JSON.stringify(e)); if (root) finish(first.length ? first : root.trendingNotes); });
+            }, function () { if (root) finish(first.length ? first : root.trendingNotes); });
         }
         var home = Config.homeCountryCommunityId;
         if (!home) { global([]); return; }
@@ -207,7 +206,7 @@ Rectangle {
                 var picked = onlyNotes(rows);
                 if (picked.length >= want) finish(picked);
                 else global(picked);
-            }, function (e) { console.log("[notesdbg] home err " + JSON.stringify(e)); if (root) global([]); });
+            }, function () { if (root) global([]); });
     }
 
     function _members(list) {
@@ -237,7 +236,6 @@ Rectangle {
         if (root.loading !== wait) root.loading = wait;
         var nWait = root.trendingNotesLoading && root.trendingNotes.length === 0;
         if (root.notesLoading !== nWait) root.notesLoading = nWait;
-        console.log("[notesdbg] refresh trending=" + root.trendingNotes.length + " picked=" + n.length + " loading=" + nWait);
     }
 
     onFeedRowsChanged: root._refresh()
