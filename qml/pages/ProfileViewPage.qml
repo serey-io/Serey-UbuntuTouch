@@ -179,6 +179,17 @@ Page {
         }
     }
 
+    // Own following count
+    Connections {
+        target: FollowStore
+        function onFollowChanged(author, now) {
+            if (!page.isSelf || !page.profile) return;
+            var pr = page.profile;
+            pr.following = Math.max(0, (pr.following || 0) + (now ? 1 : -1));
+            page.profile = pr;
+        }
+    }
+
     Connections {
         target: PostActions
         function onHideRequested(author, permlink) { page.removeRow(permlink); }

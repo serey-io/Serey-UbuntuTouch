@@ -800,7 +800,7 @@ var nl = {
     "Suggested notes":                                  "Voorgestelde notities",
     "Your briefing":                                    "Jouw overzicht",
     "Trending on Serey":                                 "Trending op Serey",
-    "Latest notes":                                     "Laatste notities",
+    "Trending notes":                                   "Populaire notities",
     "Updated":                                          "Bijgewerkt",
     "Breaking news":                                    "Breaking news",
     "1 trending post":                                  "1 populair artikel",

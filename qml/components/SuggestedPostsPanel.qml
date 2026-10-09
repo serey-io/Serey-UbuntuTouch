@@ -26,7 +26,6 @@ Rectangle {
     // A short briefing: 5 to 8 posts, not a second feed
     readonly property int maxPages: 2
     readonly property int minPosts: 3
-    readonly property int maxPerAuthor: 2
     readonly property real gap: Style.spacingM
     // Wider gutters, content capped
     readonly property real maxContentW: units.gu(130)
@@ -46,7 +45,7 @@ Rectangle {
     property var droppedPermlinks: ({})
     property var droppedAuthors: ({})
 
-    // Thin feed (follows little): topped up with country trending
+    // Empty feed only: trending posts
     property var trending: []
     property bool trendingLoading: true
     // Feed notes topped up with these
@@ -58,6 +57,8 @@ Rectangle {
     property var posts: []
     property var notes: []
     property bool thin: false
+    // Feed empty: trending stands in
+    property bool feedEmpty: false
     property bool loading: true
     property bool notesLoading: true
     readonly property int notePages: Math.ceil(Math.min(notes.length, notesPerPage * maxPages) / notesPerPage)
@@ -100,7 +101,7 @@ Rectangle {
         return root._allowed(p) && !root.droppedPermlinks[p.permlink] && !root.droppedAuthors[p.author || ""];
     }
 
-    // The reader's own feed, most important first; photos win ties, one author can't fill the page
+    // The reader's own feed, most important first; photos win ties
     function _rank(rows) {
         var scored = [];
         for (var i = 0; i < rows.length; i++) {
@@ -110,11 +111,9 @@ Rectangle {
         }
         scored.sort(function (a, b) { return b.score - a.score; });
         var want = root.featuredCount + root.perPage * root.maxPages;
-        var perAuthor = {}, out = [];
+        var out = [];
         for (var j = 0; j < scored.length && out.length < want; j++) {
-            var q = scored[j].post, a = q.author || "";
-            if ((perAuthor[a] || 0) >= root.maxPerAuthor) continue;
-            perAuthor[a] = (perAuthor[a] || 0) + 1;
+            var q = scored[j].post;
             q.title = root._decode(q.title);
             out.push(q);
         }
@@ -130,18 +129,6 @@ Rectangle {
             if (!n.isNote || seen[n.permlink] || !root._usable(n)) continue;
             seen[n.permlink] = true;
             out.push(n);
-        }
-        return out;
-    }
-
-    // Follows little: fill with trending, never repeating a feed post
-    function _topUp(own, extra) {
-        var seen = {}, out = own.slice();
-        for (var i = 0; i < out.length; i++) seen[out[i].permlink] = true;
-        var want = root.featuredCount + root.perPage * root.maxPages;
-        for (var j = 0; j < extra.length && out.length < want; j++) {
-            if (seen[extra[j].permlink] || !root._usable(extra[j])) continue;
-            out.push(extra[j]);
         }
         return out;
     }
@@ -166,7 +153,7 @@ Rectangle {
                + ":" + (Session.username || "__guest__");
     }
 
-    // Fetched with the feed, not after it: rows land together
+    // Fetched with the feed, ready if it's empty
     function _loadTrending() {
         var cached = FeedCache.peek(root._cacheKey("posts"));
         if (cached) { root.trending = cached; root.trendingLoading = false; }
@@ -192,6 +179,7 @@ Rectangle {
         var want = root.notesPerPage * root.maxPages, limit = want + 4;
         function finish(list) {
             if (!root) return;
+            console.log("[notesdbg] finish " + list.length + " home=" + home + " scope=" + Config.communityId);
             FeedCache.put(root._cacheKey("notes"), list);
             root.trendingNotes = list;
             root.trendingNotesLoading = false;
@@ -209,7 +197,7 @@ Rectangle {
                 for (var i = 0; i < all.length; i++)
                     if (!seen[all[i].permlink]) { seen[all[i].permlink] = true; out.push(all[i]); }
                 finish(out);
-            }, function () { if (root) finish(first.length ? first : root.trendingNotes); });
+            }, function (e) { console.log("[notesdbg] global err " + JSON.stringify(e)); if (root) finish(first.length ? first : root.trendingNotes); });
         }
         var home = Config.homeCountryCommunityId;
         if (!home) { global([]); return; }
@@ -219,7 +207,7 @@ Rectangle {
                 var picked = onlyNotes(rows);
                 if (picked.length >= want) finish(picked);
                 else global(picked);
-            }, function () { if (root) global([]); });
+            }, function (e) { console.log("[notesdbg] home err " + JSON.stringify(e)); if (root) global([]); });
     }
 
     function _members(list) {
@@ -233,22 +221,23 @@ Rectangle {
 
     function _refresh() {
         if (root.feedLoading) return;
+        // Follows + subscribed; empty: trending
         var r = root._rank(root.feedRows);
+        var empty = r.length === 0;
+        var p = empty ? root._rank(root.trending) : r;
         var isThin = r.length < root.minPosts;
-        // Any empty slot: fill with trending
-        var gaps = r.length < root.featuredCount + root.perPage * root.maxPages;
-        var p = gaps ? root._topUp(r, root.trending) : r;
-        var feedNotes = root._pickNotes(root.feedRows, []);
-        var n = feedNotes.length >= root.notesPerPage * root.maxPages ? feedNotes
-                : root._pickNotes(root.feedRows, root.trendingNotes);
+        // Trending first, feed tops up
+        var n = root._pickNotes(root.trendingNotes, root.feedRows);
         if (isThin !== root.thin) root.thin = isThin;
+        if (empty !== root.feedEmpty) root.feedEmpty = empty;
         if (!root._keep(root.posts, p)) root.posts = p;
         if (!root._keep(root.notes, n)) root.notes = n;
-        // Thin feed: hold skeleton until trending lands, so both rows appear together
-        var wait = gaps && root.trendingLoading;
+        // Empty feed: skeleton till trending lands
+        var wait = empty && root.trendingLoading;
         if (root.loading !== wait) root.loading = wait;
-        var nWait = wait || (root.trendingNotesLoading && n.length < 3);
+        var nWait = root.trendingNotesLoading && root.trendingNotes.length === 0;
         if (root.notesLoading !== nWait) root.notesLoading = nWait;
+        console.log("[notesdbg] refresh trending=" + root.trendingNotes.length + " picked=" + n.length + " loading=" + nWait);
     }
 
     onFeedRowsChanged: root._refresh()
@@ -313,6 +302,16 @@ Rectangle {
             x: root.sidePad
             width: root.width - root.sidePad * 2
             spacing: Style.spacingL
+
+            // Empty feed title
+            Label {
+                visible: root.feedEmpty && (root.loading || root.posts.length > 0)
+                text: Lang.tr("Suggested posts")
+                font.pixelSize: Style.fontLarge
+                font.weight: Font.DemiBold
+                font.family: Style.fontFor(text)
+                color: Style.textTitle
+            }
 
             // Featured: text over image
             Row {
@@ -598,7 +597,7 @@ Rectangle {
             Label {
                 visible: root.notesLoading || root.showNotes
                 x: noteCarousel.x
-                text: Lang.tr("Latest notes")
+                text: root.feedEmpty ? Lang.tr("Suggested notes") : Lang.tr("Trending notes")
                 font.pixelSize: Style.fontLarge
                 font.weight: Font.DemiBold
                 font.family: Style.fontFor(text)

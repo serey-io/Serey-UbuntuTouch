@@ -6,6 +6,8 @@ QtObject {
     id: store
 
     property int rev: 0
+    // User toggle only
+    signal followChanged(string author, bool now)
     property var _map: ({})      // author -> bool
     property var _busy: ({})     // author -> true while a status query is in flight
     property string _viewer: ""  // resets the cache when the logged-in user changes
@@ -63,9 +65,10 @@ QtObject {
     function toggle(baseUrl, author, token) {
         var was = !!_map[author];
         _map[author] = !was; rev++;
+        followChanged(author, !was);
         FollowService.toggle(baseUrl, author, was, token,
             function (now) { store._map[author] = now; store.rev++; },
-            function () { store._map[author] = was; store.rev++; });
+            function () { store._map[author] = was; store.rev++; store.followChanged(author, was); });
         return !was;
     }
 
