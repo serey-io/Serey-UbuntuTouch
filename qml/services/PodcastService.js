@@ -34,12 +34,14 @@ function seasonAccess(episodes) {
     return by;
 }
 
-// access_type to write for a season; locked rows still carry access_type
-function accessForSeason(baseUrl, communityId, season, onOk, onErr) {
+// onOk(accessType, seasonTitle) to write for a season; locked rows still carry access_type
+function seasonInfo(baseUrl, communityId, season, onOk, onErr) {
     return Http.get(baseUrl, "/podcast/list", { community_id: communityId, season_number: season, limit: 200 }, "",
         function (data) {
-            var by = seasonAccess((data.podcasts || []).map(M.toEpisode));
-            onOk(by[String(season)] || 1);
+            var eps = (data.podcasts || []).map(M.toEpisode);
+            var title = "";
+            for (var i = 0; i < eps.length && !title; i++) title = eps[i].seasonTitle;
+            onOk(seasonAccess(eps)[String(season)] || 1, title);
         }, onErr);
 }
 

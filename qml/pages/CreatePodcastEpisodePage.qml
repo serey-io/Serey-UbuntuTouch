@@ -18,6 +18,9 @@ Page {
     property int defaultSeason: 1
 
     readonly property bool isEdit: !!page.editEpisode
+    // synced from an outside feed: the API ignores file, type and length edits
+    readonly property bool isSynced: page.isEdit && !!page.editEpisode.sourceId
+    property bool pickVideo: page.isEdit && page.editEpisode.contentType === "video"
     readonly property real maxContentWidth: units.gu(60)
 
     property string fileName: ""
@@ -93,18 +96,18 @@ Page {
         var season = parseInt(String(seasonField.text).replace(/\D/g, ""), 10) || 1;
         // an edit that stays in its season keeps its own access
         if (page.isEdit && season === page.editEpisode.seasonNumber) {
-            page._submit(page.editEpisode.accessType);
+            page._submit(page.editEpisode.accessType, page.editEpisode.seasonTitle);
             return;
         }
-        PodcastService.accessForSeason(Config.baseUrl, Config.communityId, season,
-            function (access) { page._submit(access); },
+        PodcastService.seasonInfo(Config.baseUrl, Config.communityId, season,
+            function (access, title) { page._submit(access, title); },
             function (e) {
                 page.submitting = false;
                 Toast.error((e && e.message) || Lang.tr("Couldn't save episode."));
             });
     }
 
-    function _submit(accessType) {
+    function _submit(accessType, seasonTitle) {
         var body = PodcastService.payload({
             title: titleField.text,
             description: descField.text,
@@ -114,7 +117,7 @@ Page {
             duration: page.durationMin,
             episode: episodeField.text,
             season: seasonField.text,
-            seasonTitle: page.isEdit ? page.editEpisode.seasonTitle : "",
+            seasonTitle: seasonTitle,
             accessType: accessType
         }, Config.communityId);
         var ok = function () {
@@ -164,7 +167,7 @@ Page {
 
     Component {
         id: mediaPickerComp
-        VideoPicker { pickType: ContentType.Music; onPicked: page.onMediaPicked(fileUrl) }
+        VideoPicker { pickType: page.pickVideo ? ContentType.Videos : ContentType.Music; onPicked: page.onMediaPicked(fileUrl) }
     }
     Component {
         id: photoPickerComp
@@ -200,11 +203,20 @@ Page {
                 font.pixelSize: Style.fontSmall
             }
 
-            Label { text: Lang.tr("Audio or video file"); font.pixelSize: Style.fontSmall; font.weight: Font.DemiBold; color: Style.textPrimary }
+            Label { visible: !page.isSynced; text: Lang.tr("Audio or video file"); font.pixelSize: Style.fontSmall; font.weight: Font.DemiBold; color: Style.textPrimary }
+
+            SectionTabs {
+                width: parent.width
+                visible: !page.isSynced
+                model: [Lang.tr("Audio"), Lang.tr("Video")]
+                currentIndex: page.pickVideo ? 1 : 0
+                onSelected: page.pickVideo = index === 1
+            }
 
             AbstractButton {
                 width: parent.width
                 height: units.gu(10)
+                visible: !page.isSynced
                 enabled: !page.uploading
                 onClicked: page.pickMedia()
                 Rectangle {
@@ -242,7 +254,7 @@ Page {
                             width: parent.width
                             text: page.contentUrl.length > 0 && !page.uploading
                                   ? Lang.tr("Tap to replace")
-                                  : Lang.tr("MP3, M4A, WAV, OGG, FLAC or MP4")
+                                  : (page.pickVideo ? Lang.tr("MP4, MOV, WEBM or MKV") : Lang.tr("MP3, M4A, AAC or WAV"))
                             font.pixelSize: Style.fontXSmall
                             color: Style.textSecondary
                         }
@@ -304,6 +316,7 @@ Page {
                 }
                 FormField {
                     width: (parent.width - Style.spacingM * 2) / 3
+                    enabled: !page.isSynced
                     label: Lang.tr("Minutes")
                     inputMethodHints: Qt.ImhDigitsOnly
                     text: page.durationMin

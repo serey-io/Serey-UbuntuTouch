@@ -95,7 +95,7 @@ function setUploadStore(store) { _uploadStore = store; }
 
 function _saveResume(fingerprint, session) {
     if (_uploadStore) _uploadStore.set(JSON.stringify({
-        f: fingerprint, l: session.uploadUrl, t: session.token, s: session.statusUrl
+        f: fingerprint, l: session.uploadUrl, t: session.token, s: session.statusUrl, a: session.audio ? 1 : 0
     }));
 }
 function _loadResume(fingerprint) {
@@ -103,7 +103,7 @@ function _loadResume(fingerprint) {
     try {
         var rec = JSON.parse(_uploadStore.get() || "null");
         return (rec && rec.f === fingerprint && rec.l && rec.t)
-            ? { uploadUrl: rec.l, token: rec.t, statusUrl: rec.s }
+            ? { uploadUrl: rec.l, token: rec.t, statusUrl: rec.s, audio: !!rec.a }
             : null;
     } catch (e) { return null; }
 }
@@ -127,9 +127,6 @@ function _videoType(fileUrl) {
     if (u.indexOf(".m4a") >= 0)  return { mime: "audio/mp4", ext: "m4a", audio: true };
     if (u.indexOf(".aac") >= 0)  return { mime: "audio/aac", ext: "aac", audio: true };
     if (u.indexOf(".wav") >= 0)  return { mime: "audio/wav", ext: "wav", audio: true };
-    if (u.indexOf(".ogg") >= 0)  return { mime: "audio/ogg", ext: "ogg", audio: true };
-    if (u.indexOf(".opus") >= 0) return { mime: "audio/opus", ext: "opus", audio: true };
-    if (u.indexOf(".flac") >= 0) return { mime: "audio/flac", ext: "flac", audio: true };
     return null;
 }
 
@@ -139,7 +136,7 @@ var _generation = 0;
 function uploadVideo(createUploadUrl, sessionToken, fileUrl, onOk, onErr, onProgress) {
     var type = _videoType(fileUrl);
     if (!type) {
-        onErr({ message: "Unsupported file type. Use mp4, mov, mkv, webm, avi, mp3, m4a, wav, ogg or flac." });
+        onErr({ message: "Unsupported file type. Use mp4, mov, mkv, webm, avi, mp3, m4a, aac or wav." });
         return;
     }
     if (!sessionToken) {
@@ -259,7 +256,8 @@ function _tusStart(createUploadUrl, sessionToken, type, source, fingerprint, gen
             var session = {
                 uploadUrl: data.uploadUrl,
                 token: data.token,
-                statusUrl: data.statusUrl
+                statusUrl: data.statusUrl,
+                audio: !!type.audio
             };
             _saveResume(fingerprint, session);
             _tusPatch(session, source, 0, 0, gen, onOk, onErr, onProgress);
@@ -374,12 +372,18 @@ function _pollStatus(session, tries, gen, onOk, onErr) {
         } else if (job && job.state === "rejected") {
             onErr({ message: job.scan_message || "This file was rejected. Please upload something else." });
         } else if (job && job.state === "failed") {
-            var reasons = {
+            var reasons = session.audio ? {
+                not_a_media_file: "That file isn't playable audio.",
+                no_audio_stream: "That file doesn't contain an audio track.",
+                invalid_duration: "The audio's length couldn't be read or is too long.",
+                metadata_not_stripped: "This file's location data couldn't be removed, so it wasn't published."
+            } : {
                 not_a_video: "That file isn't a playable video.",
                 unsupported_codec: "This video's format isn't supported.",
                 invalid_duration: "The video's length couldn't be read or is too long."
             };
-            onErr({ message: reasons[job.error] || "The server couldn't process this video." });
+            onErr({ message: reasons[job.error] || (session.audio ? "The server couldn't process this audio."
+                                                                    : "The server couldn't process this video.") });
         } else {
             // uploading/queued/processing (or a blip): poll again.
             _delay(STATUS_POLL_MS, function () {
