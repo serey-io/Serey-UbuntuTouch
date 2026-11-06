@@ -72,6 +72,16 @@ QtObject {
         return -1;
     }
 
+    // labels built here so they translate; ep.duration may be "45 min" from older downloads
+    function episodeLabel(ep) {
+        var n = ep ? ep.episodeNumber : 0;
+        return n ? Lang.tr("Ep. %1").arg(n < 10 ? "0" + n : String(n)) : "";
+    }
+    function durationLabel(ep) {
+        var m = parseInt(String((ep && ep.duration) || "").replace(/\D/g, ""), 10);
+        return m > 0 ? Lang.tr("%1 min").arg(m) : "";
+    }
+
     function fmt(ms) {
         var s = Math.max(0, Math.floor(ms / 1000));
         var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
