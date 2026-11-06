@@ -25,8 +25,11 @@ QtObject {
     readonly property bool playing: !!audio && audio.playbackState === Audio.PlayingState
     readonly property bool buffering: !!audio && (audio.status === Audio.Loading || audio.status === Audio.Buffering
                                                   || audio.status === Audio.Stalled)
-    readonly property int position: audio ? audio.position : 0
-    readonly property int duration: audio ? audio.duration : 0
+    // show the target time while the resume seek is pending
+    readonly property int position: audio ? (_resumeTo > 0 ? _resumeTo : audio.position) : 0
+    readonly property int duration: audio && audio.duration > 0 ? audio.duration : _durHint
+    property int _durHint: 0
+    property real _resumeStart: 0
     readonly property var rates: [1.0, 1.25, 1.5, 2.0, 0.75]
 
     property int _resumeTo: 0
@@ -38,7 +41,7 @@ QtObject {
     function sourceFor(ep) { return Downloads.pathFor(key(ep)) || ep.contentUrl || ""; }
 
     // at: start position (ms), else saved resume point
-    function play(ep, list, at) {
+    function play(ep, list, at, dur) {
         if (!canPlay(ep)) return;
         if (isCurrent(ep)) { audio.play(); return; }
         _save();
@@ -48,14 +51,16 @@ QtObject {
         for (var i = 0; i < queue.length; i++) if (String(queue[i].id) === String(ep.id)) { index = i; break; }
         error = "";
         _resumeTo = at > 0 ? at : _loadPos(key(ep));
+        _resumeStart = Date.now();
+        _durHint = dur > 0 ? dur : 0;
         _ensureAudio();
         audio.source = sourceFor(ep);
         audio.play();
     }
     function toggle() { if (playing) pause(); else if (current) audio.play(); }
     function pause() { if (playing) { audio.pause(); _save(); } }
-    function stop() { _save(); if (audio) { audio.stop(); audio.source = ""; } current = null; queue = []; index = -1; }
-    function seekTo(ms) { if (audio) audio.seek(Math.max(0, Math.min(ms, duration > 0 ? duration : ms))); }
+    function stop() { _save(); _resumeTo = 0; if (audio) { audio.stop(); audio.source = ""; } current = null; queue = []; index = -1; }
+    function seekTo(ms) { _resumeTo = 0; if (audio) audio.seek(Math.max(0, Math.min(ms, duration > 0 ? duration : ms))); }
     function seekBy(ms) { seekTo(position + ms); }
     function cycleRate() { var i = rates.indexOf(rate); rate = rates[(i + 1) % rates.length]; }
 
@@ -124,7 +129,18 @@ QtObject {
     }
 
     function _applyResume() {
-        if (audio && _resumeTo > 0 && audio.seekable) { audio.seek(_resumeTo); _resumeTo = 0; }
+        if (audio && _resumeTo > 0 && audio.seekable) { audio.seek(_resumeTo); _seekAt = Date.now(); }
+    }
+    property real _seekAt: 0
+    // silent until the resume seek lands; toggled so media-hub's new session gets it
+    function _mute(on) { if (!audio) return; audio.muted = !on; audio.muted = on; }
+    on_ResumeToChanged: if (_resumeTo <= 0) _mute(false)
+    // keep retrying until the seek lands
+    function _checkResume() {
+        if (_resumeTo <= 0) return;
+        // give up after 10s so it never stays muted
+        if (audio.position >= _resumeTo - 3000 || Date.now() - _resumeStart > 10000) _resumeTo = 0;
+        else if (audio.position > 0 && Date.now() - _seekAt > 1500) _applyResume();
     }
 
     // created on first play; media backend start is slow
@@ -135,6 +151,9 @@ QtObject {
       Audio {
         playbackRate: player.rate
         onSeekableChanged: player._applyResume()
+        // media-hub drops seeks sent before playback starts
+        onPositionChanged: player._checkResume()
+        onPlaybackStateChanged: if (playbackState === Audio.PlayingState) { if (player._resumeTo > 0) player._mute(true); player._applyResume(); }
         onStatusChanged: {
             if (status === Audio.Loaded || status === Audio.Buffered) player._applyResume();
             if (status === Audio.EndOfMedia && player.current) {
@@ -142,7 +161,8 @@ QtObject {
                 if (player.autoplayNext && player.hasNext()) player.next();
             }
         }
-        onError: player.error = errorString || Lang.tr("Couldn't play this episode.")
+        // shortcut: media-hub reports the video page's cleared source ("uri  ") here, drop if hub gets per-player sessions
+        onError: if (errorString.indexOf("uri  ") < 0) player.error = errorString || Lang.tr("Couldn't play this episode.")
       }
     }
 

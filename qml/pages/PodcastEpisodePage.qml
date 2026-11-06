@@ -45,9 +45,9 @@ Page {
     readonly property bool ownPlayer: page.isYoutube || page.isVideo
     readonly property bool ctlActive: page.isYoutube ? !!page.yt : page.isVideo ? !!page.vid : page.isCurrent
     readonly property real ctlPos: page.isYoutube ? (page.yt ? page.yt.position : 0)
-                                 : page.isVideo ? (page.vid ? page.vid.position : 0) : Player.position
+                                 : page.isVideo ? (page._videoStartAt > 0 ? page._videoStartAt : page.vid ? page.vid.position : 0) : Player.position
     readonly property real ctlDur: page.isYoutube ? (page.yt ? page.yt.duration : 0)
-                                 : page.isVideo ? (page.vid ? page.vid.duration : 0) : Player.duration
+                                 : page.isVideo ? (page.vid && page.vid.duration > 0 ? page.vid.duration : page._vidDurHint) : Player.duration
     readonly property bool ctlPlaying: page.isYoutube ? (!!page.yt && !page.yt.paused)
                                      : page.isVideo ? (!!page.vid && page.vid.playbackState === MediaPlayer.PlayingState)
                                      : (page.isCurrent && Player.playing)
@@ -118,11 +118,27 @@ Page {
         target: page.vid
         ignoreUnknownSignals: true
         function onStatusChanged() { if (page.vid.status === MediaPlayer.EndOfMedia && Player.autoplayNext) page.ctlNext(); }
-        function onPositionChanged() { page._vidPos = page.vid.position; }
-        function onPlaybackStateChanged() { page._vidPlaying = page.vid.playbackState === MediaPlayer.PlayingState; }
-        function onSeekableChanged() {
-            if (page.vid.seekable && page._videoStartAt > 0) { page.vid.seek(page._videoStartAt); page._videoStartAt = 0; }
+        function onPositionChanged() {
+            var p = page.vid.position;
+            if (page._videoStartAt <= 0) { page._vidPos = p; return; }
+            if (p >= page._videoStartAt - 3000 || Date.now() - page._vidStartTime > 10000) page._videoStartAt = 0;
+            else if (p > 0 && Date.now() - page._vidSeekAt > 1500) page._seekVideoStart();
         }
+        function onPlaybackStateChanged() {
+            page._vidPlaying = page.vid.playbackState === MediaPlayer.PlayingState;
+            if (page._vidPlaying) { if (page._videoStartAt > 0) page._vidMute(true); page._seekVideoStart(); }
+        }
+        function onSeekableChanged() { page._seekVideoStart(); }
+    }
+    // media-hub drops early seeks; retried from position updates
+    property real _vidSeekAt: 0
+    property real _vidStartTime: 0
+    property real _vidDurHint: 0
+    // silent until the resume seek lands
+    function _vidMute(on) { if (!page.vid) return; page.vid.muted = !on; page.vid.muted = on; }
+    on_VideoStartAtChanged: if (_videoStartAt <= 0) _vidMute(false)
+    function _seekVideoStart() {
+        if (page._videoStartAt > 0 && page.vid && page.vid.seekable) { page.vid.seek(page._videoStartAt); page._vidSeekAt = Date.now(); }
     }
     Connections {
         target: Player
@@ -156,27 +172,36 @@ Page {
     function _handOff() {
         if (!page.isVideo || !page._vidPlaying) return;
         page._vidPlaying = false;
+        var dur = page.vid ? page.vid.duration : 0;
         if (videoLoader.item) videoLoader.item.source = "";
-        Player.play(page.episode, page.queue, page._vidPos);
+        Player.play(page.episode, page.queue, page._vidPos, dur);
     }
     // back: resume the video where audio is
     function _takeOver() {
         if (!page.isVideo || !Player.isCurrent(page.episode)) return;
-        page._videoStartAt = Player.position;
+        page._videoStartAt = Math.max(Player.position, Player._resumeTo);
+        page._vidPos = page._videoStartAt;
+        page._vidStartTime = Date.now();
+        page._vidDurHint = Player.duration;
         Player.stop();
-        if (page.videoSrc && videoLoader.item) page._feedVideo();
-        else page.startVideo();
+        // fresh player: the old one loses its video surface after the handoff
+        page.videoSrc = "";
+        page.videoWarm = false;
+        Qt.callLater(function () { page.videoWarm = true; page.startVideo(); });
     }
     Timer {
         id: warmVideo
         interval: 500
-        onTriggered: if (page.isVideo && !page.locked) page.videoWarm = true
+        // also warm the bar player for the back handoff
+        onTriggered: if (page.isVideo && !page.locked) { page.videoWarm = true; Player._ensureAudio(); }
     }
     Component.onCompleted: {
         warmVideo.start();
         Player.setPageShown(page, page.isAudio);
         page._takeOver();
-        if (!page.locked && !page.isCurrent && (page.ownPlayer || Player.canPlay(page.episode))) autoplay.start();
+        // video loader is async, safe to start now
+        if (page.isVideo && !page.locked && !page.videoSrc) page.startVideo();
+        else if (!page.locked && !page.isCurrent && (page.ownPlayer || Player.canPlay(page.episode))) autoplay.start();
     }
     // start after the page is on screen; first audio init blocks ~300ms
     Timer {
@@ -301,7 +326,7 @@ Page {
                     active: page.videoWarm || page.videoSrc.length > 0
                     visible: page.videoSrc.length > 0
                     sourceComponent: VideoNativePlayer {
-                        onFailed: Toast.error(Lang.tr("Couldn't play this episode."))
+                        onFailed: if (page.visible && page.videoSrc) Toast.error(Lang.tr("Couldn't play this episode."))
                     }
                     // start after creation finishes; gstreamer needs a free main thread for the surface
                     onLoaded: Qt.callLater(page._feedVideo)
@@ -489,50 +514,40 @@ Page {
 
                 Item { width: 1; height: Style.spacingS }
 
-                // speed + autoplay strip
-                Item {
-                    id: strip
-                    width: parent.width
-                    height: units.gu(7)
-
-                    Rectangle { anchors { left: parent.left; right: parent.right; top: parent.top } height: units.dp(1); color: Style.divider }
-                    Rectangle { anchors { left: parent.left; right: parent.right; bottom: parent.bottom } height: units.dp(1); color: Style.divider }
-                    Rectangle { anchors { horizontalCenter: parent.horizontalCenter; top: parent.top; bottom: parent.bottom; margins: Style.spacingS } width: units.dp(1); color: Style.divider }
-
-                    Repeater {
-                        model: [
-                            { caption: Lang.tr("Speed"), value: Player.rate + "×", on: Player.rate !== 1 },
-                            { caption: Lang.tr("Autoplay"), value: Player.autoplayNext ? Lang.tr("On") : Lang.tr("Off"), on: Player.autoplayNext }
-                        ]
-                        delegate: AbstractButton {
-                            id: cell
-                            x: index * strip.width / 2
-                            width: strip.width / 2
-                            height: strip.height
-                            onClicked: {
-                                if (index === 0) Player.cycleRate();
-                                else Player.autoplayNext = !Player.autoplayNext;
-                            }
-                            Rectangle { anchors.fill: parent; anchors.margins: units.dp(1); color: cell.pressed ? Style.pressed : "transparent" }
-                            Column {
-                                anchors.centerIn: parent
-                                spacing: units.dp(2)
-                                Label {
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    text: modelData.caption
-                                    font.pixelSize: Style.fontXSmall
-                                    color: Style.textSecondary
-                                }
-                                Label {
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    text: modelData.value
-                                    font.pixelSize: Style.fontMedium
-                                    font.weight: Font.DemiBold
-                                    color: modelData.on ? Style.brand : Style.textPrimary
-                                }
-                            }
-                            KeyTapArea { onActivated: cell.clicked() }
+                // options rows
+                Rectangle { width: parent.width; height: units.dp(1); color: Style.divider }
+                Repeater {
+                    // media-hub can't change speed; only the youtube view can
+                    model: page.isYoutube ? ["speed", "autoplay"] : ["autoplay"]
+                    delegate: AbstractButton {
+                        id: optRow
+                        readonly property bool isSpeed: modelData === "speed"
+                        width: parent.width
+                        height: units.gu(6.5)
+                        onClicked: if (isSpeed) Player.cycleRate(); else Player.autoplayNext = !Player.autoplayNext
+                        Rectangle { anchors.fill: parent; color: optRow.pressed ? Style.pressed : "transparent" }
+                        Label {
+                            anchors { left: parent.left; verticalCenter: parent.verticalCenter }
+                            text: optRow.isSpeed ? Lang.tr("Speed") : Lang.tr("Autoplay")
+                            font.pixelSize: Style.fontRegular
+                            color: Style.textPrimary
                         }
+                        Label {
+                            visible: optRow.isSpeed
+                            anchors { right: parent.right; verticalCenter: parent.verticalCenter }
+                            text: Player.rate + "×"
+                            font.pixelSize: Style.fontRegular
+                            font.weight: Font.DemiBold
+                            color: Player.rate !== 1 ? Style.brand : Style.textSecondary
+                        }
+                        Switch {
+                            visible: !optRow.isSpeed
+                            anchors { right: parent.right; verticalCenter: parent.verticalCenter }
+                            checked: Player.autoplayNext
+                            onClicked: Player.autoplayNext = checked
+                        }
+                        Rectangle { anchors { left: parent.left; right: parent.right; bottom: parent.bottom } height: units.dp(1); color: Style.divider }
+                        KeyTapArea { onActivated: optRow.clicked() }
                     }
                 }
 
