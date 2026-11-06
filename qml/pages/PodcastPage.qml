@@ -65,8 +65,12 @@ Page {
             if (!page.isAggregate) rows.forEach(function (r) { if (!r.communityTitle) r.communityTitle = Config.communityName; });
             page.episodes = rows;
             FeedCache.put(key, rows);
-            page.seasonList = page.isAggregate ? [] : PodcastService.seasons(rows);
+            // stay on the same season after an edit or delete
+            var keep = page.seasonList.length > page.seasonIndex ? page.seasonList[page.seasonIndex].number : -1;
+            var list = page.isAggregate ? [] : PodcastService.seasons(rows);
             page.seasonIndex = 0;
+            page.seasonList = list;
+            page.seasonIndex = Math.max(0, list.map(function (x) { return x.number; }).indexOf(keep));
         };
         var err = function (e) {
             if (epoch !== page.reqEpoch) return;
