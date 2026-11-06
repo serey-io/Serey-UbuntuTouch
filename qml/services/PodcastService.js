@@ -60,9 +60,9 @@ function listAll(baseUrl, communityId, token, onOk, onErr) {
     return req;
 }
 
-// Global tab: latest episodes from every community, newest first
-function listGlobal(token, onOk, onErr) {
-    return Http.get(GLOBAL_URL, "/podcast/global", {}, token, function (data) {
+// Latest episodes from every community, newest first; a country id narrows it to that branch
+function listGlobal(token, countryId, onOk, onErr) {
+    return Http.get(GLOBAL_URL, "/podcast/global", { community_id: countryId > 0 ? countryId : "" }, token, function (data) {
         var rows = [];
         var comms = data.communities || [];
         for (var i = 0; i < comms.length; i++) {

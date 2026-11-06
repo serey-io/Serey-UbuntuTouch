@@ -904,6 +904,7 @@ MainView {
             AbstractButton {
                 id: podcastAddBtn
                 visible: Session.isLoggedIn && root.currentTab === 3 && Config.isOwnerCurrent
+                         && !Config.topLevelCommunityIds[Config.communityId]
                 anchors.verticalCenter: parent.verticalCenter
                 width: root.wideMode ? units.gu(4.2) : units.gu(3.2)
                 height: width

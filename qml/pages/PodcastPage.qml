@@ -21,6 +21,8 @@ Page {
     property string openId: ""
 
     readonly property bool isGlobal: Config.communityId <= 0
+    // Global and countries list the whole branch, like the web
+    readonly property bool isAggregate: page.isGlobal || !!Config.topLevelCommunityIds[Config.communityId]
     readonly property var shown: {
         // Global hides Cambodia + its platforms, same as the other feeds
         if (page.isGlobal) return page.episodes.filter(function (e) { return !Config.hiddenCommunityIds[String(e.communityId)]; });
@@ -60,10 +62,10 @@ Page {
             inflight = null;
             page.loading = false;
             // platform name for the publisher line
-            if (!page.isGlobal) rows.forEach(function (r) { if (!r.communityTitle) r.communityTitle = Config.communityName; });
+            if (!page.isAggregate) rows.forEach(function (r) { if (!r.communityTitle) r.communityTitle = Config.communityName; });
             page.episodes = rows;
             FeedCache.put(key, rows);
-            page.seasonList = page.isGlobal ? [] : PodcastService.seasons(rows);
+            page.seasonList = page.isAggregate ? [] : PodcastService.seasons(rows);
             page.seasonIndex = 0;
         };
         var err = function (e) {
@@ -72,9 +74,9 @@ Page {
             page.loading = false;
             page.errorMsg = e.message;
         };
-        inflight = page.isGlobal
+        inflight = page.isAggregate
             // no token: premium is hidden anyway, and anonymous hits the server cache (~1.5s vs ~9s)
-            ? PodcastService.listGlobal("", ok, err)
+            ? PodcastService.listGlobal("", Config.communityId, ok, err)
             : PodcastService.listAll(Config.baseUrl, Config.communityId, "", ok, err);
     }
 
@@ -130,7 +132,7 @@ Page {
                 id: headerLabel
                 x: Style.spacingM
                 y: Style.spacingM
-                text: page.isGlobal ? Lang.tr("Latest Episodes") : Lang.tr("Episodes")
+                text: page.isAggregate ? Lang.tr("Latest Episodes") : Lang.tr("Episodes")
                 font.pixelSize: Style.fontMedium
                 font.weight: Font.DemiBold
                 color: Style.textPrimary
