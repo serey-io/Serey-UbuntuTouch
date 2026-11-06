@@ -140,7 +140,7 @@ QtObject {
                     "community", "communityId", "postToBlockchain",
                     "kind", "contentType", "contentUrl", "episodeLabel", "episodeNumber", "duration",
                     "description", "seasonNumber", "seasonTitle", "slug", "communityDns", "communityTitle", "communityIcon",
-                    "accessType", "isLocked", "createdAt"];
+                    "accessType", "isLocked", "createdAt", "releaseDate", "sourceId"];
         var o = {};
         if (v) for (var i = 0; i < keys.length; i++) {
             var val = v[keys[i]];

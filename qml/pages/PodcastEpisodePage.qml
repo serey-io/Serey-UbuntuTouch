@@ -164,6 +164,8 @@ Page {
         }
     }
 
+    // next/prev can swap audio and video in place
+    onIsAudioChanged: Player.setPageShown(page, page.visible && page.isAudio)
     onVisibleChanged: {
         Player.setPageShown(page, visible && page.isAudio);
         if (visible) page._takeOver(); else page._handOff();
@@ -354,7 +356,7 @@ Page {
                     width: parent.width
                     visible: text.length > 0
                     text: page.episode ? [page.episode.seasonTitle || (Lang.tr("Season") + " " + page.episode.seasonNumber),
-                                          page.episode.episodeLabel, page.episode.duration]
+                                          Player.episodeLabel(page.episode), Player.durationLabel(page.episode)]
                                          .filter(function (s) { return s; }).join(" · ") : ""
                     font.pixelSize: Style.fontSmall
                     color: Style.textSecondary
@@ -470,7 +472,7 @@ Page {
                         anchors.right: parent.right
                         text: page.ctlActive && page.ctlDur > 0
                               ? "−" + Player.fmt(Math.max(0, page.ctlDur - times.shownPos))
-                              : (page.episode ? page.episode.duration : "")
+                              : Player.durationLabel(page.episode)
                         font.pixelSize: Style.fontSmall
                         color: Style.textSecondary
                     }

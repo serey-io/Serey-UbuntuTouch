@@ -21,6 +21,30 @@ function _playable(rows) {
     return rows.filter(function (e) { return e.accessType !== 2 && !e.isLocked; });
 }
 
+// Season number -> access_type, port of web seasonAccessType: synced rows don't count, mixed is public
+function seasonAccess(episodes) {
+    var by = {};
+    for (var i = 0; i < episodes.length; i++) {
+        var e = episodes[i];
+        if (e.sourceId) continue;
+        var s = String(e.seasonNumber);
+        if (!(s in by)) by[s] = e.accessType;
+        else if (by[s] !== e.accessType) by[s] = 1;
+    }
+    return by;
+}
+
+// onOk(accessType, seasonTitle) to write for a season; locked rows still carry access_type
+function seasonInfo(baseUrl, communityId, season, onOk, onErr) {
+    return Http.get(baseUrl, "/podcast/list", { community_id: communityId, season_number: season, limit: 200 }, "",
+        function (data) {
+            var eps = (data.podcasts || []).map(M.toEpisode);
+            var title = "";
+            for (var i = 0; i < eps.length && !title; i++) title = eps[i].seasonTitle;
+            onOk(seasonAccess(eps)[String(season)] || 1, title);
+        }, onErr);
+}
+
 // All episodes of one community; API pages at 200
 function listAll(baseUrl, communityId, token, onOk, onErr) {
     var all = [];
@@ -38,9 +62,9 @@ function listAll(baseUrl, communityId, token, onOk, onErr) {
     return req;
 }
 
-// Global tab: latest episodes from every community, newest first
-function listGlobal(token, onOk, onErr) {
-    return Http.get(GLOBAL_URL, "/podcast/global", {}, token, function (data) {
+// Latest episodes from every community, newest first; a country id narrows it to that branch
+function listGlobal(token, countryId, onOk, onErr) {
+    return Http.get(GLOBAL_URL, "/podcast/global", { community_id: countryId > 0 ? countryId : "" }, token, function (data) {
         var rows = [];
         var comms = data.communities || [];
         for (var i = 0; i < comms.length; i++) {
@@ -54,7 +78,7 @@ function listGlobal(token, onOk, onErr) {
             }
         }
         rows = _playable(_dedupe(rows));
-        rows.sort(function (a, b) { return a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0; });
+        rows.sort(function (a, b) { return a.releaseDate < b.releaseDate ? 1 : a.releaseDate > b.releaseDate ? -1 : 0; });
         // shortcut: newest 60 only, keeps the list light; add paging if users want older
         onOk(rows.slice(0, 60));
     }, onErr);
@@ -76,7 +100,8 @@ function seasons(episodes) {
 // Web link that opens this episode
 function shareUrl(ep, fallbackDns) {
     var dns = ep.communityDns || fallbackDns || "serey.io";
-    return "https://" + dns + "/podcast?episode=" + encodeURIComponent(ep.slug || ep.permlink || String(ep.id));
+    // the web looks episodes up by id
+    return "https://" + dns + "/podcast?episode=" + encodeURIComponent(String(ep.id));
 }
 
 // Port of web buildEpisodePayload

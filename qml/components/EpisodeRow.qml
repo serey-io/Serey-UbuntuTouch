@@ -43,7 +43,7 @@ Item {
         Label {
             width: parent.width
             visible: text.length > 0
-            text: root.episode ? [Lang.tr("Season") + " " + root.episode.seasonNumber, root.episode.episodeLabel, root.episode.duration].filter(function (s) { return s; }).join(" · ") : ""
+            text: root.episode ? [Lang.tr("Season") + " " + root.episode.seasonNumber, Player.episodeLabel(root.episode), Player.durationLabel(root.episode)].filter(function (s) { return s; }).join(" · ") : ""
             font.pixelSize: Style.fontXSmall
             color: root.isCurrent ? Style.brand : Style.textSecondary
         }

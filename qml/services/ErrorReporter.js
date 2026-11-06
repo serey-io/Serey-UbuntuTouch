@@ -15,6 +15,7 @@ var CRITICAL = [
     "/serey-web/list-by-", "/serey-web/list-gallery-post-by-", "/serey-web/list-drum-post-by-feed",
     "/serey-web/details-by-permlink-and-author",
     "/video-component/list-all-videos-by-author", "/video-component/detail-video-post",
+    "/podcast/list",
     "/serey-web/create-or-update-post", "/serey-web/create-or-update-comment",
     "/vote/vote", "/vote/flag",
     "/subscription/crypto/", "/subscription/stripe/",
@@ -31,7 +32,7 @@ var PARAM_PREFIXES = [
     "/notification/update-read-by-id/", "/notification/get-by-id/",
     "/community/list-community-manager-by-community-id/",
     "/serey-web/admin-delete-post-or-comment/", "/report-copyright/admin/",
-    "/ubuntu-app/report/"
+    "/ubuntu-app/report/", "/podcast/update-by-id/", "/podcast/delete-by-id/"
 ];
 
 var THROTTLE_MS = 5 * 60 * 1000;   // same route+status at most once per 5 min per device
