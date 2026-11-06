@@ -98,7 +98,8 @@ function seasons(episodes) {
 // Web link that opens this episode
 function shareUrl(ep, fallbackDns) {
     var dns = ep.communityDns || fallbackDns || "serey.io";
-    return "https://" + dns + "/podcast?episode=" + encodeURIComponent(ep.slug || ep.permlink || String(ep.id));
+    // the web looks episodes up by id
+    return "https://" + dns + "/podcast?episode=" + encodeURIComponent(String(ep.id));
 }
 
 // Port of web buildEpisodePayload
