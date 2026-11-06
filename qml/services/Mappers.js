@@ -417,6 +417,8 @@ function toEpisode(raw) {
         // API withholds content_url for premium when locked
         isLocked: !!raw.is_premium_locked,
         accessType: toInt(raw.access_type) || 1,
+        // synced from an outside feed; the API ignores media edits on these
+        sourceId: raw.source_id || null,
         createdAt: raw.created_at || ""
     };
 }

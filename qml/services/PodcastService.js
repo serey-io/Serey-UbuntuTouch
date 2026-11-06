@@ -21,6 +21,28 @@ function _playable(rows) {
     return rows.filter(function (e) { return e.accessType !== 2 && !e.isLocked; });
 }
 
+// Season number -> access_type, port of web seasonAccessType: synced rows don't count, mixed is public
+function seasonAccess(episodes) {
+    var by = {};
+    for (var i = 0; i < episodes.length; i++) {
+        var e = episodes[i];
+        if (e.sourceId) continue;
+        var s = String(e.seasonNumber);
+        if (!(s in by)) by[s] = e.accessType;
+        else if (by[s] !== e.accessType) by[s] = 1;
+    }
+    return by;
+}
+
+// access_type to write for a season; locked rows still carry access_type
+function accessForSeason(baseUrl, communityId, season, onOk, onErr) {
+    return Http.get(baseUrl, "/podcast/list", { community_id: communityId, season_number: season, limit: 200 }, "",
+        function (data) {
+            var by = seasonAccess((data.podcasts || []).map(M.toEpisode));
+            onOk(by[String(season)] || 1);
+        }, onErr);
+}
+
 // All episodes of one community; API pages at 200
 function listAll(baseUrl, communityId, token, onOk, onErr) {
     var all = [];

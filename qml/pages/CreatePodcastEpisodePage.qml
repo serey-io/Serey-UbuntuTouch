@@ -90,6 +90,21 @@ Page {
     function save() {
         if (!page.canSave) return;
         page.submitting = true;
+        var season = parseInt(String(seasonField.text).replace(/\D/g, ""), 10) || 1;
+        // an edit that stays in its season keeps its own access
+        if (page.isEdit && season === page.editEpisode.seasonNumber) {
+            page._submit(page.editEpisode.accessType);
+            return;
+        }
+        PodcastService.accessForSeason(Config.baseUrl, Config.communityId, season,
+            function (access) { page._submit(access); },
+            function (e) {
+                page.submitting = false;
+                Toast.error((e && e.message) || Lang.tr("Couldn't save episode."));
+            });
+    }
+
+    function _submit(accessType) {
         var body = PodcastService.payload({
             title: titleField.text,
             description: descField.text,
@@ -100,12 +115,14 @@ Page {
             episode: episodeField.text,
             season: seasonField.text,
             seasonTitle: page.isEdit ? page.editEpisode.seasonTitle : "",
-            accessType: page.isEdit ? page.editEpisode.accessType : 1
+            accessType: accessType
         }, Config.communityId);
         var ok = function () {
             page.submitting = false;
             page.mediaId = "";
-            Toast.success(page.isEdit ? Lang.tr("Episode updated") : Lang.tr("Episode published!"));
+            // the app hides premium, so say where it went
+            if (accessType === 2) Toast.success(Lang.tr("Saved to a premium season. Premium episodes show on the web only."));
+            else Toast.success(page.isEdit ? Lang.tr("Episode updated") : Lang.tr("Episode published!"));
             page.saved(body);
             if (!page.isEdit) page.pageStack.pop();
         };
