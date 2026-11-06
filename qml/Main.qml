@@ -161,14 +161,20 @@ MainView {
 
     // Nav tabs hidden for the current platform (custom_menu.is_hidden)
     property var navVisibility: ({})
+    // The web's own PODCAST menu row: -1 unknown, 0 missing or hidden, 1 shown
+    property int podcastMenuVisible: -1
     function _loadNavVisibility() {
+        root.podcastMenuVisible = -1
         CustomMenuService.listByWebsiteAndCommunity(Config.baseUrl,
             { community_id: Config.communityId }, Session.token,
             function (rows) {
-                var vis = {}
-                for (var i = 0; i < rows.length; i++)
+                var vis = {}, podcast = 0
+                for (var i = 0; i < rows.length; i++) {
                     if (rows[i].key) vis[rows[i].key] = !!rows[i].is_hidden
+                    if (rows[i].key === "PODCAST" && !rows[i].is_hidden) podcast = 1
+                }
                 root.navVisibility = vis
+                root.podcastMenuVisible = podcast
                 root._redirectIfCurrentTabHidden()
             },
             function () { root.navVisibility = {} /* non-fatal: every tab defaults to visible */ })
@@ -211,13 +217,19 @@ MainView {
                 if (!root._tabHidden(root._tabs[i])) { fallback = i; break }
         if (fallback >= 0 && fallback !== root.currentTab) root.switchTab(fallback)
     }
-    // Only the Homepage tab hides itself while you're on it, and only its stack can
+    // Only Homepage and Podcast hide themselves while you're on them, and only their stacks can
     // strand you on a hidden root. Watching activeDepth instead loops: the redirect
     // moves currentTab, which activeDepth is bound to.
     Connections {
         target: homeStack
         function onDepthChanged() {
             if (root.currentTab === 0 && homeStack.depth <= 1) root._redirectIfCurrentTabHidden();
+        }
+    }
+    Connections {
+        target: podcastStack
+        function onDepthChanged() {
+            if (root.currentTab === 3 && podcastStack.depth <= 1) root._redirectIfCurrentTabHidden();
         }
     }
     Connections {
@@ -1095,7 +1107,12 @@ MainView {
         // An explicit custom_menu row is the owner's call, either way.
         if (root.navVisibility.hasOwnProperty(t.key)) return !!root.navVisibility[t.key];
         // No row: Homepage is hidden unless this community actually built one.
-        return t.key === "homepage" && root.homepageAvailable === 0;
+        if (t.key === "homepage") return root.homepageAvailable === 0;
+        // Podcast follows the web: a platform needs a visible /podcast menu item; Global and countries always show it.
+        if (t.key === "podcast")
+            return Config.communityId > 0 && !Config.topLevelCommunityIds[Config.communityId]
+                   && root.podcastMenuVisible === 0;
+        return false;
     }
     readonly property int _visibleTabCount: {
         var n = 0;
