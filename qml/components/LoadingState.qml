@@ -7,7 +7,7 @@ Item {
     property string message: ""
     // Number of skeleton "cards" to render: 3 for a feed, 1 for a detail page.
     property int count: 3
-    // "post" | "gallery" | "video": picks the card shape to imitate.
+    // "post" | "gallery" | "video" | "episode": picks the card shape to imitate.
     property string variant: "post"
     // Detail pages (PostDetailPage, GalleryDetailPage) show one full-bleed cover.
     property bool fullBleedCover: false
@@ -52,9 +52,25 @@ Item {
                     glyph: root.photoGlyph
                 }
 
+                // Podcast episode: square cover + meta, title, author
+                Row {
+                    visible: root.variant === "episode"
+                    x: root.inset
+                    spacing: Style.spacingM
+                    SkeletonRect { width: units.gu(9); height: width; radius: Style.thumbRadius; baseColor: root.coverTone }
+                    Column {
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: Style.spacingS
+                        SkeletonRect { width: units.gu(8); height: units.gu(1.2); radius: height / 2 }
+                        SkeletonRect { width: root.contentWidth - units.gu(11); height: units.gu(1.8); radius: height / 2 }
+                        SkeletonRect { width: (root.contentWidth - units.gu(11)) * 0.6; height: units.gu(1.8); radius: height / 2 }
+                        SkeletonRect { width: units.gu(10); height: units.gu(1.3); radius: height / 2 }
+                    }
+                }
+
                 // Header: avatar + name/time (post, gallery, detail)
                 Row {
-                    visible: root.variant !== "video" || root.fullBleedCover
+                    visible: (root.variant !== "video" && root.variant !== "episode") || root.fullBleedCover
                     x: root.inset
                     spacing: Style.spacingS
                     SkeletonRect { width: units.gu(4.25); height: width; radius: width / 2 }
@@ -122,7 +138,7 @@ Item {
 
                 // Action chips: mirrors the VoteBar's left icon+count row
                 Row {
-                    visible: root.variant !== "video"
+                    visible: root.variant !== "video" && root.variant !== "episode"
                     x: root.inset
                     spacing: Style.spacingM
                     SkeletonRect { width: units.gu(5); height: units.gu(2); radius: height / 2 }

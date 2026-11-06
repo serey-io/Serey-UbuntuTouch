@@ -27,6 +27,28 @@ Item {
     // True while the user drags our timeline. The host page uses it to freeze its Flickable.
     property bool scrubbing: false
 
+    // host-driven controls (podcast page)
+    property bool reportState: false
+    property real position: 0
+    property real duration: 0
+    property bool ended: false
+    function play() { wv.runJavaScript("if(window.P)P.play();"); root.paused = false; }
+    function pause() { wv.runJavaScript("if(window.P)P.pause();"); root.paused = true; }
+    function seekTo(ms) { wv.runJavaScript("if(window.P)P.seek(" + (ms / 1000) + ");"); root.position = ms; }
+    function setRate(r) { wv.runJavaScript("if(window.P&&P.rate)P.rate(" + r + ");"); }
+    Timer {
+        interval: 500
+        repeat: true
+        running: root.reportState && root.ready
+        onTriggered: wv.runJavaScript("window.P?[P.time(),P.dur(),P.paused(),P.ended()]:null", function (r) {
+            if (!r) return;
+            root.position = (r[0] || 0) * 1000;
+            root.duration = isFinite(r[1]) ? (r[1] || 0) * 1000 : 0;
+            root.paused = !!r[2];
+            root.ended = !!r[3];
+        })
+    }
+
     // Freeze the Chromium renderer on app background/suspend; same SIGBUS-on-resume issue and lifecycleState int trap as WebAppView.
     readonly property int _lcActive: 0
     readonly property int _lcFrozen: 1
@@ -328,19 +350,20 @@ Item {
                'if(!live){live=true;console.log("__SEREY_READY__");}}});' +
                // The player registers its listener late, so keep announcing for a few seconds
                'var n=0,iv=setInterval(function(){post({event:"listening",id:1,channel:"widget"});' +
-               'if(live||++n>24)clearInterval(iv);},250);' +
+               'if(live||++n>' + (root.reportState ? 80 : 24) + ')clearInterval(iv);},250);' +
                'var P={play:function(){cmd("playVideo");st.s=1;st.ts=Date.now();},' +
                'pause:function(){cmd("pauseVideo");st.s=2;},' +
                'paused:function(){return st.s!==1;},' +
                // Extrapolate between pushes so the bar moves smoothly at 250ms ticks
                'time:function(){return st.s===1?st.t+(Date.now()-st.ts)/1000:st.t;},' +
                'dur:function(){return st.d;},' +
-               'seek:function(t){cmd("seekTo",[t,true]);st.t=t;st.ts=Date.now();}};window.P=P;' +
+               'seek:function(t){cmd("seekTo",[t,true]);st.t=t;st.ts=Date.now();},' +
+               'rate:function(r){cmd("setPlaybackRate",[r]);},ended:function(){return st.s===0;}};window.P=P;' +
                'lid.addEventListener("click",function(){if(P.paused()){P.play();}else{P.pause();}});' +
                // Never leave the user with a chromeless player we cannot drive: restore stock controls
                'setTimeout(function(){if(live)return;L("no messaging, reverting to stock controls");' +
                'lid.classList.add("off");var b=document.getElementById("bar");if(b)b.style.display="none";' +
-               'fr.src="' + _ytSrc(id) + '1";console.log("__SEREY_READY__");},6000);' +
+               'fr.src="' + _ytSrc(id) + '1";console.log("__SEREY_READY__");},' + (root.reportState ? 20000 : 6000) + ');' +
                (controls ? _controlsJs() : '') +
                '})();</script></body></html>';
     }
@@ -397,7 +420,8 @@ Item {
                'v.removeEventListener("loadedmetadata",h);try{v.currentTime=t;}catch(_){}});return;}' +
                'var sk=v.seekable;if(sk&&sk.length){' +
                't=Math.max(sk.start(0),Math.min(sk.end(sk.length-1)-0.1,t));}' +
-               'v.currentTime=t;}catch(_){}}};window.P=P;' +
+               'v.currentTime=t;}catch(_){}},' +
+               'rate:function(r){v.playbackRate=r;},ended:function(){return v.ended;}};window.P=P;' +
                'function r(){console.log("__SEREY_READY__");}' +
                'v.addEventListener("loadeddata",r);v.addEventListener("playing",r);' +
                (controls ? _controlsJs() : '') +

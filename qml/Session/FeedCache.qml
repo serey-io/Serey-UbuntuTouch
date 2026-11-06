@@ -113,6 +113,11 @@ QtObject {
                + (bucket ? ":" + String(bucket).toLowerCase() : "") + ":" + _who();
     }
 
+    // anonymous fetch, so not per account
+    function podcastKey(communityId) {
+        return "podcast:" + communityId;
+    }
+
     function videoKey(communityId) {
         return "video:" + communityId + ":" + _who();
     }

@@ -26,8 +26,8 @@ Page {
 
     // Grid on desktop, list otherwise
     readonly property Item _activeVideoList: Config.desktopMode ? videoGrid : videoList
-    property Item keyboardFocusItem: tabIndex === 0 ? _activeVideoList : articleList
-    function _focusActiveList() { (tabIndex === 0 ? _activeVideoList : articleList).forceActiveFocus(); }
+    property Item keyboardFocusItem: tabIndex === 0 ? _activeVideoList : tabIndex === 2 ? podcastList : articleList
+    function _focusActiveList() { keyboardFocusItem.forceActiveFocus(); }
     onVisibleChanged: if (visible) _focusActiveList()
 
     Component {
@@ -51,7 +51,7 @@ Page {
     SectionTabs {
         id: tabs
         anchors { top: parent.header.bottom; left: parent.left; right: parent.right }
-        model: [Lang.tr("Video"), Lang.tr("Articles")]
+        model: [Lang.tr("Video"), Lang.tr("Articles"), Lang.tr("Podcasts")]
         currentIndex: page.tabIndex
         onSelected: { page.tabIndex = index; page._focusActiveList(); }
         onFocusList: page._focusActiveList()
@@ -159,7 +159,7 @@ Page {
         width: Math.min(parent.width, page.maxContentWidth)
         clip: true
         visible: page.tabIndex === 0 && !Config.desktopMode
-        model: Downloads.items
+        model: Downloads.videos
         cacheBuffer: units.gu(16)
         // Left/Escape return to the settings list; Up at top climbs to the strip.
         Keys.onLeftPressed: Nav.focusMaster()
@@ -262,7 +262,7 @@ Page {
         topMargin: Style.spacingM
         clip: true
         visible: page.tabIndex === 0 && Config.desktopMode
-        model: Downloads.items
+        model: Downloads.videos
         cacheBuffer: units.gu(40)
         readonly property int _columns: 2
         cellWidth: width / _columns
@@ -386,7 +386,7 @@ Page {
 
     EmptyState {
         anchors.fill: page._activeVideoList
-        visible: page.tabIndex === 0 && Downloads.items.length === 0
+        visible: page.tabIndex === 0 && Downloads.videos.length === 0
         iconName: "save"
         message: Lang.tr("No downloaded videos yet")
     }
@@ -660,6 +660,47 @@ Page {
         visible: page.tabIndex === 1 && SavedPosts.items.length === 0
         iconName: "save"
         message: Lang.tr("No saved articles yet")
+    }
+
+    // offline podcasts
+    ListView {
+        id: podcastList
+        anchors { top: tabs.bottom; bottom: parent.bottom; horizontalCenter: parent.horizontalCenter }
+        width: Math.min(parent.width, units.gu(60))
+        clip: true
+        visible: page.tabIndex === 2
+        model: Downloads.podcasts
+        Keys.onLeftPressed: Nav.focusMaster()
+        Keys.onEscapePressed: Nav.focusMaster()
+
+        delegate: ListItem {
+            width: podcastList.width
+            height: epRow.height + Style.spacingM * 2
+            color: Style.surface
+            onClicked: page.pageStack.push(Qt.resolvedUrl("PodcastEpisodePage.qml"),
+                { episode: modelData, queue: Downloads.podcasts, offlineMode: true })
+            leadingActions: ListItemActions {
+                actions: [
+                    Action {
+                        iconName: "delete"
+                        text: Lang.tr("Remove")
+                        onTriggered: Downloads.remove(modelData.permlink)
+                    }
+                ]
+            }
+            EpisodeRow {
+                id: epRow
+                anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; leftMargin: Style.spacingM; rightMargin: Style.spacingM }
+                episode: modelData
+            }
+        }
+    }
+
+    EmptyState {
+        anchors.fill: podcastList
+        visible: page.tabIndex === 2 && Downloads.podcasts.length === 0
+        iconName: "save"
+        message: Lang.tr("No downloaded episodes yet")
     }
 
     ActionBottomSheet { id: actionSheet }

@@ -53,7 +53,7 @@ Page {
         // Rebuild picker so deleted platform (and its lone country row) disappears without restart
         Nav.refreshCommunities()
         Toast.success(Lang.tr("Platform deleted."))
-        Nav.goToTab(3)
+        Nav.goToTab(4)
     }
 
     // Not-found means the delete landed: treat it as deleted, not a failure.

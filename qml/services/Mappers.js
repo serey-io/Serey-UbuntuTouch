@@ -382,3 +382,41 @@ function toDevice(raw) {
         lastActiveAt: raw.last_active_at || ""
     };
 }
+
+// Podcast episode (port of web apiToUiEpisode)
+function toEpisode(raw) {
+    var type = raw.content_type;
+    var url = raw.content_url || "";
+    if (!type) {
+        if (raw.is_video === true || raw.is_video === 1) type = "video";
+        else if (raw.is_video === false || raw.is_video === 0) type = "audio";
+        else type = "link";
+    }
+    // Old rows saved as link before content_type was fixed
+    if (type === "link" && url) {
+        if (/\.(mp3|wav|ogg|m4a|aac|flac|opus)(\?|$)/i.test(url) || /\/audios?\//i.test(url)) type = "audio";
+        else if (/\.(mp4|webm|mov|avi|mkv)(\?|$)/i.test(url) || /\/videos?\//i.test(url)) type = "video";
+    }
+    var ep = toInt(raw.episode_number);
+    return {
+        id: raw.id,
+        episodeNumber: ep,
+        episodeLabel: ep ? "Ep. " + (ep < 10 ? "0" + ep : String(ep)) : "",
+        duration: raw.duration ? raw.duration + " min" : "",
+        title: raw.title || "",
+        description: raw.description || "",
+        thumbnail: raw.thumbnail_url || "",
+        contentType: type,
+        contentUrl: url,
+        seasonNumber: raw.season_number != null ? toInt(raw.season_number) : 1,
+        seasonTitle: raw.season_title || "",
+        author: raw.author || "",
+        permlink: raw.permlink || raw.slug || "",
+        slug: raw.slug || "",
+        communityId: toInt(raw.community_id),
+        // API withholds content_url for premium when locked
+        isLocked: !!raw.is_premium_locked,
+        accessType: toInt(raw.access_type) || 1,
+        createdAt: raw.created_at || ""
+    };
+}

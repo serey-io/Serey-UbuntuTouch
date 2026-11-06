@@ -81,7 +81,9 @@ MainView {
             newsStack.push(Qt.resolvedUrl("pages/NewsPage.qml"));
         else if (tab === 2 && videoStack.depth === 0)
             videoStack.push(Qt.resolvedUrl("pages/VideoPage.qml"));
-        else if (tab === 3 && settingsStack.depth === 0)
+        else if (tab === 3 && podcastStack.depth === 0)
+            podcastStack.push(Qt.resolvedUrl("pages/PodcastPage.qml"));
+        else if (tab === 4 && settingsStack.depth === 0)
             settingsStack.push(Qt.resolvedUrl("pages/SettingsPage.qml"));
     }
     function openFeed() {
@@ -119,13 +121,15 @@ MainView {
     property int activeDepth: currentTab === 0 ? homeStack.depth
                             : currentTab === 1 ? newsStack.depth
                             : currentTab === 2 ? videoStack.depth
+                            : currentTab === 3 ? podcastStack.depth
                             : settingsStack.depth
     property int activeColumns: currentTab === 0 ? homeStack.columns
                               : currentTab === 1 ? newsStack.columns
                               : currentTab === 2 ? videoStack.columns
+                              : currentTab === 3 ? podcastStack.columns
                               : settingsStack.columns
     function _stackForTab(tab) {
-        return tab === 0 ? homeStack : tab === 1 ? newsStack : tab === 2 ? videoStack : settingsStack;
+        return tab === 0 ? homeStack : tab === 1 ? newsStack : tab === 2 ? videoStack : tab === 3 ? podcastStack : settingsStack;
     }
     // Offline shortcut to what's on the device; opens on whichever tab asked for it.
     function openLibrary() {
@@ -138,6 +142,7 @@ MainView {
     readonly property var activeStack: currentTab === 0 ? homeStack
                                      : currentTab === 1 ? newsStack
                                      : currentTab === 2 ? videoStack
+                                     : currentTab === 3 ? podcastStack
                                      : settingsStack
     // My Feed draws the same iconFeed logo in its own header, and in split mode
     // this header stays up, so the shortcut showed the logo twice and pointed at
@@ -149,7 +154,7 @@ MainView {
         return !!(p && p.isFeedPage);
     }
     // Hide shell header while Feed page is open
-    readonly property bool showHeader: (activeColumns > 1 || activeDepth <= 1) && currentTab !== 3 && !feedPageOpen
+    readonly property bool showHeader: (activeColumns > 1 || activeDepth <= 1) && currentTab !== 4 && !feedPageOpen
     // Wide windows keep the rail inside pushed pages too: it's app chrome there.
     // Feed page hides the nav bar / side rail so it's an edge-to-edge surface
     readonly property bool showNavBar: !root.feedPageOpen && (root.wideMode || activeColumns > 1 || activeDepth <= 1)
@@ -715,8 +720,8 @@ MainView {
         }
         // Buy-plan -> create-platform funnel; wizard re-checks the now-active subscription
         function onCreatePlatform() {
-            root.currentTab = 3;
-            root._ensureTab(3);
+            root.currentTab = 4;
+            root._ensureTab(4);
             while (settingsStack.depth > 1)
                 settingsStack.pop();
             settingsStack.push(Qt.resolvedUrl("pages/CreatePlatformPage.qml"));
@@ -894,6 +899,31 @@ MainView {
                 }
                 KeyTapArea { onActivated: uploadBtn.clicked() }
             }
+
+            // owner adds an episode
+            AbstractButton {
+                id: podcastAddBtn
+                visible: Session.isLoggedIn && root.currentTab === 3 && Config.isOwnerCurrent
+                anchors.verticalCenter: parent.verticalCenter
+                width: root.wideMode ? units.gu(4.2) : units.gu(3.2)
+                height: width
+                onClicked: if (podcastStack.rootPage && podcastStack.rootPage.compose) podcastStack.rootPage.compose()
+                Rectangle {
+                    anchors.fill: parent
+                    radius: units.gu(0.8)
+                    color: "transparent"
+                    border.width: units.dp(1.5)
+                    border.color: Style.brand
+                }
+                Icon {
+                    anchors.centerIn: parent
+                    width: root.wideMode ? units.gu(3) : units.gu(2.2)
+                    height: width
+                    name: "add"
+                    color: Style.brand
+                }
+                KeyTapArea { onActivated: podcastAddBtn.clicked() }
+            }
         }
     }
 
@@ -904,7 +934,7 @@ MainView {
             left: root.wideMode ? sideNavBar.right : parent.left
             right: parent.right
             top: appHeader.bottom
-            bottom: (root.showNavBar && !root.wideMode) ? navBar.top : parent.bottom
+            bottom: miniBar.top
         }
 
         AdaptiveStack {
@@ -915,7 +945,7 @@ MainView {
             visible: root.currentTab === 0
             Component.onCompleted: push(Qt.resolvedUrl("pages/HomepagePage.qml"))
         }
-        // News/Video/Settings are filled lazily by _ensureTab() on first visit.
+        // News/Video/Podcast/Settings are filled lazily by _ensureTab() on first visit.
         AdaptiveStack {
             id: newsStack
             emptyDetailIconName: "stock_note"
@@ -931,15 +961,22 @@ MainView {
             visible: root.currentTab === 2
         }
         AdaptiveStack {
+            id: podcastStack
+            emptyDetailIconName: "audio-input-microphone-symbolic"
+            emptyDetailMessage: Lang.tr("Select an episode to listen")
+            anchors.fill: parent
+            visible: root.currentTab === 3
+        }
+        AdaptiveStack {
             id: settingsStack
             emptyDetailIconName: "settings"
             emptyDetailMessage: Lang.tr("Select a setting")
             anchors { top: parent.top; bottom: parent.bottom; left: parent.left; right: accountPanelDivider.visible ? accountPanelDivider.left : parent.right }
-            visible: root.currentTab === 3
+            visible: root.currentTab === 4
         }
 
         // Desktop-only (not tablet)
-        readonly property bool _showAccountPanel: root.currentTab === 3 && root.desktopMode
+        readonly property bool _showAccountPanel: root.currentTab === 4 && root.desktopMode
 
         // Draggable splitter (Account status rail)
         readonly property real _minAccountPanelW: units.gu(30)
@@ -990,6 +1027,7 @@ MainView {
     Shortcut { sequence: "Ctrl+2"; enabled: root.showNavBar && !root._tabHidden(root._tabs[1]); onActivated: root.switchTab(1, true) }
     Shortcut { sequence: "Ctrl+3"; enabled: root.showNavBar && !root._tabHidden(root._tabs[2]); onActivated: root.switchTab(2, true) }
     Shortcut { sequence: "Ctrl+4"; enabled: root.showNavBar && !root._tabHidden(root._tabs[3]); onActivated: root.switchTab(3, true) }
+    Shortcut { sequence: "Ctrl+5"; enabled: root.showNavBar && !root._tabHidden(root._tabs[4]); onActivated: root.switchTab(4, true) }
 
     // Ctrl+Tab walks the tabs you can actually see
     function _stepVisibleTab(dir) {
@@ -1027,6 +1065,7 @@ MainView {
         var stack = root.currentTab === 0 ? homeStack
                   : root.currentTab === 1 ? newsStack
                   : root.currentTab === 2 ? videoStack
+                  : root.currentTab === 3 ? podcastStack
                   : settingsStack;
         var p = stack.rootPage;
         if (!p) return;
@@ -1046,6 +1085,7 @@ MainView {
         { label: Lang.tr("Homepage"), icon: "home",       key: "homepage" },
         { label: Lang.tr("News"),     icon: "stock_note", key: "blog" },
         { label: Lang.tr("Video"),    icon: "camcorder",  key: "video" },
+        { label: Lang.tr("Podcast"),  icon: "audio-input-microphone-symbolic", key: "podcast" },
         { label: Lang.tr("Settings"), icon: "settings" }
     ]
     // Tab indices stay fixed even when hidden
@@ -1111,6 +1151,26 @@ MainView {
                 }
             }
         }
+    }
+
+    PodcastMiniBar {
+        id: miniBar
+        anchors {
+            left: root.wideMode ? sideNavBar.right : parent.left
+            right: parent.right
+            bottom: (root.showNavBar && !root.wideMode) ? navBar.top : parent.bottom
+        }
+        visible: Player.current !== null && !Player.pageOpen
+        height: visible ? units.gu(7) : 0
+        onOpened: root.openPodcastPlayer()
+    }
+    function openPodcastPlayer() {
+        if (!Player.current) return;
+        root.switchTab(3);
+        root._ensureTab(3);
+        while (podcastStack.depth > 1) podcastStack.pop();
+        podcastStack.push(Qt.resolvedUrl("pages/PodcastEpisodePage.qml"),
+                          { episode: Player.current, queue: Player.queue });
     }
 
     // Side navigation: full-height vertical rail (convergence, not scaling); icon-only on tablet

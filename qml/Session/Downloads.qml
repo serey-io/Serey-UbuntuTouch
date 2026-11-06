@@ -8,6 +8,9 @@ QtObject {
 
     // Saved view-models (the original video object + { localPath }), newest first.
     property var items: []
+    // split by kind
+    readonly property var videos: items.filter(function (v) { return v.kind !== "podcast"; })
+    readonly property var podcasts: items.filter(function (v) { return v.kind === "podcast"; })
     // Bumped on every mutation so UI re-reads the lookup helpers.
     property int rev: 0
 
@@ -134,7 +137,10 @@ QtObject {
         var keys = ["id", "author", "permlink", "title", "body", "excerpt", "thumbnail",
                     "localThumb", "authorImage", "date", "votes", "comments", "payout",
                     "embedUrl", "videoLink", "videoId", "platform", "dimensions",
-                    "community", "communityId", "postToBlockchain"];
+                    "community", "communityId", "postToBlockchain",
+                    "kind", "contentType", "contentUrl", "episodeLabel", "episodeNumber", "duration",
+                    "description", "seasonNumber", "seasonTitle", "slug", "communityDns", "communityTitle", "communityIcon",
+                    "accessType", "isLocked", "createdAt"];
         var o = {};
         if (v) for (var i = 0; i < keys.length; i++) {
             var val = v[keys[i]];
@@ -197,7 +203,7 @@ QtObject {
         });
 
         // one-off started toast
-        Toast.show(Lang.tr("Downloading video…"));
+        Toast.show(pv.kind === "podcast" ? Lang.tr("Downloading episode…") : Lang.tr("Downloading video…"));
         dl.start(url);
     }
 

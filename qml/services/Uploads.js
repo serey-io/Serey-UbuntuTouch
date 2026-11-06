@@ -122,6 +122,14 @@ function _videoType(fileUrl) {
     if (u.indexOf(".mkv") >= 0)  return { mime: "video/x-matroska", ext: "mkv" };
     if (u.indexOf(".avi") >= 0)  return { mime: "video/x-msvideo", ext: "avi" };
     if (u.indexOf(".mp4") >= 0 || u.indexOf(".m4v") >= 0) return { mime: "video/mp4", ext: "mp4" };
+    // podcast audio
+    if (u.indexOf(".mp3") >= 0)  return { mime: "audio/mpeg", ext: "mp3", audio: true };
+    if (u.indexOf(".m4a") >= 0)  return { mime: "audio/mp4", ext: "m4a", audio: true };
+    if (u.indexOf(".aac") >= 0)  return { mime: "audio/aac", ext: "aac", audio: true };
+    if (u.indexOf(".wav") >= 0)  return { mime: "audio/wav", ext: "wav", audio: true };
+    if (u.indexOf(".ogg") >= 0)  return { mime: "audio/ogg", ext: "ogg", audio: true };
+    if (u.indexOf(".opus") >= 0) return { mime: "audio/opus", ext: "opus", audio: true };
+    if (u.indexOf(".flac") >= 0) return { mime: "audio/flac", ext: "flac", audio: true };
     return null;
 }
 
@@ -131,7 +139,7 @@ var _generation = 0;
 function uploadVideo(createUploadUrl, sessionToken, fileUrl, onOk, onErr, onProgress) {
     var type = _videoType(fileUrl);
     if (!type) {
-        onErr({ message: "Unsupported video type. Use mp4, mov, mkv, webm or avi." });
+        onErr({ message: "Unsupported file type. Use mp4, mov, mkv, webm, avi, mp3, m4a, wav, ogg or flac." });
         return;
     }
     if (!sessionToken) {
@@ -271,7 +279,7 @@ function _tusStart(createUploadUrl, sessionToken, type, source, fingerprint, gen
         }
     };
     xhr.send(JSON.stringify({
-        filename: "video." + type.ext,
+        filename: (type.audio ? "audio." : "video.") + type.ext,
         filetype: type.mime,
         size: source.size
     }));
@@ -363,6 +371,8 @@ function _pollStatus(session, tries, gen, onOk, onErr) {
         catch (e) { /* fall through to retry */ }
         if (job && job.state === "ready" && job.url) {
             onOk(job.url, job);
+        } else if (job && job.state === "rejected") {
+            onErr({ message: job.scan_message || "This file was rejected. Please upload something else." });
         } else if (job && job.state === "failed") {
             var reasons = {
                 not_a_video: "That file isn't a playable video.",
@@ -389,11 +399,11 @@ function _delay(ms, fn) {
 }
 
 // Deletes a video that finished uploading but was never published, via the web backend (the scoped token can't delete); fire-and-forget since an orphaned file is a minor storage cost, not a bug.
-function deleteVideo(deleteUploadUrl, sessionToken, id) {
+function deleteVideo(deleteUploadUrl, sessionToken, id, kind) {
     if (!id) return;
     _clearResume();   // user discarded it; don't resume into a deleted upload
     var xhr = new XMLHttpRequest();
-    xhr.open("DELETE", deleteUploadUrl + "?type=videos&id=" + encodeURIComponent(id));
+    xhr.open("DELETE", deleteUploadUrl + "?type=" + (kind || "videos") + "&id=" + encodeURIComponent(id));
     xhr.setRequestHeader("Authorization", "Bearer " + sessionToken);
     xhr.send();
 }

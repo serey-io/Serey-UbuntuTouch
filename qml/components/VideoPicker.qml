@@ -12,6 +12,8 @@ Popups.PopupBase {
     anchors.fill: parent
 
     property var activeTransfer
+    // Music for podcast audio
+    property int pickType: ContentType.Videos
     signal picked(string fileUrl)
     signal cancelled()
 
@@ -28,7 +30,7 @@ Popups.PopupBase {
             id: peerPicker
             anchors.fill: parent
             visible: true
-            contentType: ContentType.Videos
+            contentType: picker.pickType
             handler: ContentHandler.Source
 
             onPeerSelected: {

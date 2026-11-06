@@ -2,10 +2,13 @@ import QtQuick 2.7
 import QtMultimedia 5.12
 import Lomiri.Components 1.3
 import "../Theme"
+import "../Session"
 
 Item {
     id: root
     property string source: ""
+    // podcast page drives position/seek/rate
+    property alias media: player
 
     // True only on a real user pause; media-hub reports buffering pre-roll as "paused" too, so playbackState alone can't tell them apart.
     property bool _userPaused: false
@@ -18,6 +21,7 @@ Item {
         player.stop();
         root._userPaused = false;
         if (source.length > 0) {
+            Player.pause();
             player.source = source;
             watchdog.restart();
             player.play();
