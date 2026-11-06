@@ -514,40 +514,50 @@ Page {
 
                 Item { width: 1; height: Style.spacingS }
 
-                // options rows
-                Rectangle { width: parent.width; height: units.dp(1); color: Style.divider }
-                Repeater {
-                    // media-hub can't change speed; only the youtube view can
-                    model: page.isYoutube ? ["speed", "autoplay"] : ["autoplay"]
-                    delegate: AbstractButton {
-                        id: optRow
-                        readonly property bool isSpeed: modelData === "speed"
-                        width: parent.width
-                        height: units.gu(6.5)
-                        onClicked: if (isSpeed) Player.cycleRate(); else Player.autoplayNext = !Player.autoplayNext
-                        Rectangle { anchors.fill: parent; color: optRow.pressed ? Style.pressed : "transparent" }
-                        Label {
-                            anchors { left: parent.left; verticalCenter: parent.verticalCenter }
-                            text: optRow.isSpeed ? Lang.tr("Speed") : Lang.tr("Autoplay")
-                            font.pixelSize: Style.fontRegular
-                            color: Style.textPrimary
+                // speed + autoplay strip
+                Item {
+                    id: strip
+                    width: parent.width
+                    height: units.gu(7)
+
+                    Rectangle { anchors { left: parent.left; right: parent.right; top: parent.top } height: units.dp(1); color: Style.divider }
+                    Rectangle { anchors { left: parent.left; right: parent.right; bottom: parent.bottom } height: units.dp(1); color: Style.divider }
+                    Rectangle { anchors { horizontalCenter: parent.horizontalCenter; top: parent.top; bottom: parent.bottom; margins: Style.spacingS } width: units.dp(1); color: Style.divider }
+
+                    Repeater {
+                        model: [
+                            { caption: Lang.tr("Speed"), value: Player.rate + "×", on: Player.rate !== 1 },
+                            { caption: Lang.tr("Autoplay"), value: Player.autoplayNext ? Lang.tr("On") : Lang.tr("Off"), on: Player.autoplayNext }
+                        ]
+                        delegate: AbstractButton {
+                            id: cell
+                            x: index * strip.width / 2
+                            width: strip.width / 2
+                            height: strip.height
+                            onClicked: {
+                                if (index === 0) Player.cycleRate();
+                                else Player.autoplayNext = !Player.autoplayNext;
+                            }
+                            Rectangle { anchors.fill: parent; anchors.margins: units.dp(1); color: cell.pressed ? Style.pressed : "transparent" }
+                            Column {
+                                anchors.centerIn: parent
+                                spacing: units.dp(2)
+                                Label {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    text: modelData.caption
+                                    font.pixelSize: Style.fontXSmall
+                                    color: Style.textSecondary
+                                }
+                                Label {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    text: modelData.value
+                                    font.pixelSize: Style.fontMedium
+                                    font.weight: Font.DemiBold
+                                    color: modelData.on ? Style.brand : Style.textPrimary
+                                }
+                            }
+                            KeyTapArea { onActivated: cell.clicked() }
                         }
-                        Label {
-                            visible: optRow.isSpeed
-                            anchors { right: parent.right; verticalCenter: parent.verticalCenter }
-                            text: Player.rate + "×"
-                            font.pixelSize: Style.fontRegular
-                            font.weight: Font.DemiBold
-                            color: Player.rate !== 1 ? Style.brand : Style.textSecondary
-                        }
-                        Switch {
-                            visible: !optRow.isSpeed
-                            anchors { right: parent.right; verticalCenter: parent.verticalCenter }
-                            checked: Player.autoplayNext
-                            onClicked: Player.autoplayNext = checked
-                        }
-                        Rectangle { anchors { left: parent.left; right: parent.right; bottom: parent.bottom } height: units.dp(1); color: Style.divider }
-                        KeyTapArea { onActivated: optRow.clicked() }
                     }
                 }
 
