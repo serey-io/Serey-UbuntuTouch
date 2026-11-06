@@ -146,6 +146,12 @@ QtObject {
       }
     }
 
+    // the app may be suspended or closed before the next tick
+    property Connections _appState: Connections {
+        target: Qt.application
+        function onStateChanged() { if (Qt.application.state !== Qt.ApplicationActive) player._save(); }
+    }
+
     property Timer _saver: Timer {
         interval: 5000
         repeat: true

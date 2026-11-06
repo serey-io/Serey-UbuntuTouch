@@ -148,6 +148,8 @@ Page {
         }
     }
 
+    // next/prev can swap audio and video in place
+    onIsAudioChanged: Player.setPageShown(page, page.visible && page.isAudio)
     onVisibleChanged: {
         Player.setPageShown(page, visible && page.isAudio);
         if (visible) page._takeOver(); else page._handOff();
