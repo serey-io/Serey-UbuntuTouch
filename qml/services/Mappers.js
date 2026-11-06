@@ -419,6 +419,8 @@ function toEpisode(raw) {
         accessType: toInt(raw.access_type) || 1,
         // synced from an outside feed; the API ignores media edits on these
         sourceId: raw.source_id || null,
-        createdAt: raw.created_at || ""
+        createdAt: raw.created_at || "",
+        // imports keep their original date in published_at
+        releaseDate: raw.published_at || raw.created_at || ""
     };
 }

@@ -76,7 +76,7 @@ function listGlobal(token, onOk, onErr) {
             }
         }
         rows = _playable(_dedupe(rows));
-        rows.sort(function (a, b) { return a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0; });
+        rows.sort(function (a, b) { return a.releaseDate < b.releaseDate ? 1 : a.releaseDate > b.releaseDate ? -1 : 0; });
         // shortcut: newest 60 only, keeps the list light; add paging if users want older
         onOk(rows.slice(0, 60));
     }, onErr);
