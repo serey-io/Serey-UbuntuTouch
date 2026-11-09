@@ -21,7 +21,7 @@ Item {
         ? Math.min(root.width, root.contentMaxWidth) : root.width
     readonly property real contentWidth: root.colWidth - inset * 2
     // Covers sit lighter than text bars to keep title-vs-photo hierarchy; needs its own dark variant
-    readonly property color coverTone: Style.dark ? "#333333" : "#ECECEC"
+    readonly property color coverTone: Style.skeletonCover
     readonly property string photoGlyph: "image-x-generic-symbolic"
 
     // Opaque card surface so the skeleton always reads cleanly on its own.

@@ -17,6 +17,8 @@ Page {
     property string errorMsg: ""
     property int reqEpoch: 0
     property var inflight: null
+    // background refresh: no spinner over the cached list
+    property bool _quiet: false
     // episode open in the detail pane
     property string openId: ""
 
@@ -48,10 +50,13 @@ Page {
         function onOnlineChanged() { if (Net.online && page.episodes.length === 0) page.reload(); }
     }
 
-    function reload() {
+    function reload(pulled) {
+        page._quiet = !pulled;
         page.reqEpoch++;
         if (inflight) { inflight.abort(); inflight = null; }
         var epoch = page.reqEpoch;
+        // shortcut: fetch timing log, remove once measured
+        var t0 = Date.now();
         page.loading = true;
         // last list paints at once, fetch replaces it
         var key = FeedCache.podcastKey(Config.communityId);
@@ -59,12 +64,14 @@ Page {
         page.errorMsg = "";
         var ok = function (rows) {
             if (epoch !== page.reqEpoch) return;
+            console.log("[pod] fetch " + (Date.now() - t0) + "ms, " + rows.length + " episodes, " + (page.isAggregate ? "global" : "platform " + Config.communityId));
             inflight = null;
             page.loading = false;
             // platform name for the publisher line
             if (!page.isAggregate) rows.forEach(function (r) { if (!r.communityTitle) r.communityTitle = Config.communityName; });
             page.episodes = rows;
             FeedCache.put(key, rows);
+            Qt.callLater(function () { console.log("[pod] list shown " + (Date.now() - t0) + "ms"); });
             // stay on the same season after an edit or delete
             var keep = page.seasonList.length > page.seasonIndex ? page.seasonList[page.seasonIndex].number : -1;
             var list = page.isAggregate ? [] : PodcastService.seasons(rows);
@@ -74,6 +81,7 @@ Page {
         };
         var err = function (e) {
             if (epoch !== page.reqEpoch) return;
+            console.log("[pod] fetch failed " + (Date.now() - t0) + "ms: " + e.message);
             inflight = null;
             page.loading = false;
             page.errorMsg = e.message;
@@ -125,8 +133,9 @@ Page {
         Keys.onLeftPressed: Nav.focusNav()
 
         PullToRefresh {
-            refreshing: page.loading && page.shown.length > 0
-            onRefresh: page.reload()
+            refreshing: page.loading && page.shown.length > 0 && !page._quiet
+            // a pull during a quiet refresh adopts it
+            onRefresh: if (page.loading) page._quiet = false; else page.reload(true)
         }
 
         header: Item {
@@ -165,7 +174,8 @@ Page {
         anchors.fill: list
         variant: "episode"
         count: 8
-        visible: page.loading && page.shown.length === 0
+        // covers the cached list while fetching; a pull keeps its spinner
+        visible: page.loading && (page.shown.length === 0 || page._quiet)
     }
 
     ErrorState {

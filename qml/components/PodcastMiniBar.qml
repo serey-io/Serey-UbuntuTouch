@@ -19,7 +19,7 @@ Rectangle {
     // progress line
     Rectangle {
         anchors { left: parent.left; top: parent.top }
-        height: units.dp(2)
+        height: units.dp(3)
         width: Player.duration > 0 ? parent.width * Player.position / Player.duration : 0
         color: Style.brand
     }
@@ -59,12 +59,17 @@ Rectangle {
     Row {
         id: controls
         anchors { right: parent.right; rightMargin: Style.spacingS; verticalCenter: parent.verticalCenter }
-        PlayerButton { icon: "media-seek-backward"; onClicked: Player.seekBy(-15000) }
+        spacing: Style.spacingXs
+        PlayerButton { icon: "media-seek-backward"; caption: "15"; onClicked: Player.seekBy(-15000) }
         PlayerButton {
+            accent: true
             busy: Player.buffering
             icon: Player.playing ? "media-playback-pause" : "media-playback-start"
             onClicked: Player.toggle()
         }
+        PlayerButton { icon: "media-seek-forward"; caption: "30"; onClicked: Player.seekBy(30000) }
+        // gap before close
+        Item { width: Style.spacingM; height: 1 }
         PlayerButton { icon: "close"; onClicked: Player.stop() }
     }
 }

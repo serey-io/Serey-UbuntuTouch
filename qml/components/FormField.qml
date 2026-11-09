@@ -22,6 +22,7 @@ Item {
     // Password fields get a show/hide eye toggle; revealed flips the live echoMode.
     readonly property bool isPasswordField: echoMode === TextInput.Password
     property bool revealed: false
+    readonly property var keepKeyboardItems: [box]
 
     signal accepted()
 
@@ -60,6 +61,7 @@ Item {
 
             TextField {
                 id: input
+                TapToFocus { field: input }
                 anchors.fill: parent
                 anchors.leftMargin: Style.spacingM
                 anchors.rightMargin: root.isPasswordField ? units.gu(5) : Style.spacingM

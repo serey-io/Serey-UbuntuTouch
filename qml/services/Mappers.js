@@ -417,8 +417,15 @@ function toEpisode(raw) {
         // API withholds content_url for premium when locked
         isLocked: !!raw.is_premium_locked,
         accessType: toInt(raw.access_type) || 1,
+        // undefined = row didn't say, 0 = everywhere
+        publishCeilingId: raw.publish_scope_community_id === undefined ? undefined : publishCeiling(raw),
         // synced from an outside feed; the API ignores media edits on these
         sourceId: raw.source_id || null,
+        voters: voterNames(raw.voters),
+        flaggers: voterNames(raw.flaggers),
+        payout: raw.pending_payout_value || "0.000 SEREY",
+        earnsRewards: !!raw.earns_rewards,
+        onChainAt: raw.on_chain_at || "",
         createdAt: raw.created_at || "",
         // imports keep their original date in published_at
         releaseDate: raw.published_at || raw.created_at || ""

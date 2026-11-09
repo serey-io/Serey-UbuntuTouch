@@ -9,7 +9,6 @@ Item {
 
     property var episode: null
     readonly property bool isCurrent: (Player.current, Player.isCurrent(episode))
-    readonly property bool saved: (Downloads.rev, !!episode && Downloads.isSaved(Player.key(episode)))
 
     width: parent ? parent.width : 0
     height: Math.max(cover.height, info.height)
@@ -68,12 +67,6 @@ Item {
         id: badges
         anchors { right: parent.right; verticalCenter: parent.verticalCenter }
         spacing: Style.spacingXs
-        Icon {
-            visible: root.saved
-            width: visible ? units.gu(2) : 0; height: units.gu(2)
-            name: "save-to"
-            color: Style.positive
-        }
         Icon {
             visible: !!root.episode && root.episode.isLocked
             width: visible ? units.gu(2.2) : 0; height: units.gu(2.2)

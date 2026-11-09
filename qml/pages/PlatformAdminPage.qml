@@ -178,7 +178,7 @@ Page {
     // Keyboard nav: arrows scroll, Left/Escape return to settings list (focus grab above)
     property Item keyboardFocusItem: scroll
 
-    Flickable {
+    KeyboardAwareFlickable {
         id: scroll
         anchors { top: page.header.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
         contentHeight: column.height
@@ -309,6 +309,7 @@ Page {
 
                     TextInput {
                         id: nameField
+                        TapToFocus { field: nameField }
                         width: parent.width
                         horizontalAlignment: Text.AlignHCenter
                         text: page.platformName

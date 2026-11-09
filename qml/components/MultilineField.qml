@@ -10,6 +10,7 @@ Rectangle {
     property string placeholder: ""
     property int maximumLength: 0          // 0 = no limit
     readonly property int length: input.text.length
+    readonly property var keepKeyboardItems: [root]
 
     width: parent ? parent.width : units.gu(40)
     // Grows for text or wrapped placeholder

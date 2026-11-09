@@ -38,6 +38,7 @@ QtObject {
     readonly property color dotInactive: dark ? "#4D4D4D" : "#CECECE"
     readonly property color lightGray: dark ? "#3B3B3B" : "#D3D3D3"      // image placeholder
     readonly property color skeleton: dark ? "#2A2A2A" : "#E0E0E0"       // shimmer base
+    readonly property color skeletonCover: dark ? "#333333" : "#ECECEC"  // image placeholders
     readonly property color toastBg: "#323232"                           // dark chip (both themes)
     readonly property color videoStage: "#000000"                        // video stage (both themes)
 

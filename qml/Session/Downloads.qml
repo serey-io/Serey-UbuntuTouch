@@ -1,6 +1,7 @@
 pragma Singleton
 import QtQuick 2.7
 import QtQuick.LocalStorage 2.0
+import Serey.FileUtils 1.0 as FileUtils
 import "../Theme"
 
 QtObject {
@@ -21,6 +22,13 @@ QtObject {
     property var _thumbDls: ({})
     property var _comp: null
     property var _dbHandle: null
+    property var _files: FileUtils.AppFiles {}
+
+    // media-hub only opens files under the app's own data dir
+    function _playable(vm, path) {
+        if (vm.kind !== "podcast" || path.indexOf("/lomiri-download-manager/") < 0) return path;
+        return store._files.moveToAppData(path, "podcasts") || path;
+    }
 
     function _db() {
         if (!_dbHandle)
@@ -57,6 +65,12 @@ QtObject {
                     try { vm = JSON.parse(row.data); } catch (e) { vm = {}; }
                     vm.permlink = row.permlink;
                     vm.localPath = row.local_path;
+                    // move older podcast downloads
+                    var p = store._playable(vm, row.local_path || "");
+                    if (p !== row.local_path) {
+                        vm.localPath = p;
+                        tx.executeSql("UPDATE downloads SET local_path = ? WHERE permlink = ? AND local_path = ?", [p, row.permlink, row.local_path]);
+                    }
                     out.push(vm);
                 }
             });
@@ -179,6 +193,7 @@ QtObject {
             if (_active[permlink]) { _active[permlink].progress = pct; store.rev++; }
         });
         dl.finished.connect(function (path) {
+            path = store._playable(pv, path);
             var vm = pv;
             var t = store._pendingThumb[permlink];
             if (t) { vm = Object.assign({}, pv, { localThumb: t }); delete store._pendingThumb[permlink]; }

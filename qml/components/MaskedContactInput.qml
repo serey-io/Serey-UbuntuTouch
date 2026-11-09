@@ -50,6 +50,7 @@ Rectangle {
     // Transparent capture field on top (its own glyphs invisible); a custom caret keeps the cursor visible.
     TextInput {
         id: hidden
+        TapToFocus { field: hidden }
         anchors {
             left: parent.left; leftMargin: Style.spacingM
             right: parent.right; rightMargin: Style.spacingM

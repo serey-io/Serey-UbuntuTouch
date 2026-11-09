@@ -74,6 +74,12 @@ MainView {
     }
 
     // Tabs are created lazily on first visit; launching all four at once made the Homepage web view janky on low-end devices.
+    // podcast list takes ~8s when the server cache is cold; fetch it before the tab is opened
+    Timer {
+        interval: 4000
+        running: true
+        onTriggered: root._ensureTab(3)
+    }
     function _ensureTab(tab) {
         if (tab === 0 && homeStack.depth === 0)
             homeStack.push(Qt.resolvedUrl("pages/HomepagePage.qml"));
@@ -1182,6 +1188,54 @@ MainView {
         height: visible ? units.gu(7) : 0
         onOpened: root.openPodcastPlayer()
     }
+    // podcast youtube + video views; live here so they keep playing off the page
+    // off-screen at stage size: hidden or resized, youtube throttles and re-buffers
+    Item { id: ytHome; x: -width - units.gu(2); width: units.gu(45); height: width * 9 / 16 }
+    Connections {
+        target: Player
+        function onStageChanged() { if (Player.stage) { ytHome.width = Player.stage.width; ytHome.height = Player.stage.height; } }
+    }
+    // visible 2px spot under everything: a hidden VideoOutput may stall the stream
+    Item { id: vidHome; width: 2; height: 2; z: -1 }
+    Loader {
+        id: ytHost
+        parent: Player.ytMode && Player.stage ? Player.stage : ytHome
+        anchors.fill: parent
+        active: Player.ytMode
+        sourceComponent: VideoWebView {
+            wrap: true
+            controls: false
+            reportState: true
+            keepVisible: true
+            embedUrl: Player.ytMode ? Player.current.contentUrl : ""
+            onReadyChanged: { console.log("[pod] yt ready=" + ready + " pos=" + position); if (ready) setRate(Player.rate); }
+            onEndedChanged: if (ended) Player._ended()
+            // shortcut: debug logs for the back jump, remove once fixed
+            onPausedChanged: {
+                console.log("[pod] yt paused=" + paused + " pos=" + position + " stage=" + !!Player.stage);
+                // off the page youtube pauses itself; keep it going
+                if (paused && ready && !ended && !Player.stage && !Player.ytUserPaused) Qt.callLater(play);
+            }
+            onPositionChanged: { if (Math.abs(position - _lastPos) > 2500) console.log("[pod] yt jump " + _lastPos + " -> " + position + " stage=" + !!Player.stage); _lastPos = position; }
+            property real _lastPos: 0
+        }
+        onItemChanged: Player.yt = item
+        onParentChanged: console.log("[pod] yt moved, stage=" + !!Player.stage + " pos=" + (item ? item.position : -1))
+    }
+    Loader {
+        id: vidHost
+        parent: Player.vidMode && Player.stage ? Player.stage : vidHome
+        anchors.fill: parent
+        // async: building it on the tap froze the page
+        asynchronous: true
+        active: Player.vidWarm
+        sourceComponent: VideoNativePlayer {
+            onFailed: if (Player.vidMode) Player.error = Lang.tr("Couldn't play this episode.")
+        }
+        onItemChanged: Player.vid = item
+        // gstreamer needs a free main thread for the surface
+        onLoaded: Qt.callLater(Player._feedVid)
+    }
     function openPodcastPlayer() {
         if (!Player.current) return;
         root.switchTab(3);
@@ -1269,4 +1323,5 @@ MainView {
     NoCookieNotice { }
     RateUsNotice { }
     Toaster { }
+    KeyboardDismisser { }
 }

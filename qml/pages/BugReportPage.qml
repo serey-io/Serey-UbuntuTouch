@@ -87,7 +87,7 @@ Page {
         }
     }
 
-    // C++ streaming file reader: uploads read 25 MB slices from disk instead of loading the whole video into RAM.
+    // C++ streaming file reader: uploads read 5 MB slices from disk instead of loading the whole video into RAM.
     FileUtils.FileChunkReader { id: chunkReader }
 
     // Survives app restarts, letting Uploads.js resume a half-finished upload. Own category

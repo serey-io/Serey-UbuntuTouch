@@ -462,6 +462,7 @@ Page {
                         // Plain TextInput (not TextField) to fire onTextChanged live per keystroke, like SettingsPage
                         TextInput {
                             id: banField
+                            TapToFocus { field: banField }
                             anchors.fill: parent
                             verticalAlignment: TextInput.AlignVCenter
                             font.pixelSize: Style.fontRegular

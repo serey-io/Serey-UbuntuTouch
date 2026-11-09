@@ -202,6 +202,7 @@ Page {
 
                 TextEdit {
                     id: captionField
+                    TapToFocus { field: captionField }
                     anchors { fill: parent; margins: Style.spacingM }
                     font.family: Style.fontFor(text)
                     font.pixelSize: Style.fontRegular

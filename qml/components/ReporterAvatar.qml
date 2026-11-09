@@ -16,7 +16,8 @@ Item {
         anchors.fill: parent
         radius: width / 2
         color: root.name ? Style.avatarTint(root.name) : Style.iconBackground
-        visible: root.source === ""
+        // until photo loads
+        visible: !photo.loaded
         Label {
             anchors.centerIn: parent
             text: root.name ? root.name.charAt(0).toUpperCase() : "?"
@@ -27,8 +28,9 @@ Item {
     }
 
     CircleImage {
+        id: photo
         anchors.fill: parent
-        visible: root.source !== ""
+        visible: loaded
         source: root.source
         decode: root.size * 2
     }

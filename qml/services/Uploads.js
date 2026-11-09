@@ -80,10 +80,11 @@ function uploadImageData(uploadUrl, secret, dataUrl, onOk, onErr) {
     _post(uploadUrl, secret, { mime: "image/jpeg", ext: "jpg" }, bytes, onOk, onErr);
 }
 
-// Video upload uses tus to storage.serey.io via a scoped per-upload token (like S3 presigned URLs, app never holds the storage master key); CreateVideoPage's C++ FileChunkReader streams 25 MB slices from disk so RAM stays constant, since a whole-file XHR read previously OOM-crashed phones on large uploads.
+// Video upload uses tus to storage.serey.io via a scoped per-upload token (like S3 presigned URLs, app never holds the storage master key); CreateVideoPage's C++ FileChunkReader streams 5 MB slices from disk so RAM stays constant, since a whole-file XHR read previously OOM-crashed phones on large uploads.
 var MAX_VIDEO_BYTES_STREAM = 2 * 1024 * 1024 * 1024;   // server maxSize
 var MAX_VIDEO_BYTES_FALLBACK = 300 * 1024 * 1024;
-var CHUNK_BYTES = 25 * 1024 * 1024;
+// percent only moves per chunk (QML XHR has no upload progress)
+var CHUNK_BYTES = 5 * 1024 * 1024;
 
 // C++ FileChunkReader (Serey.FileUtils 1.0), installed by CreateVideoPage.
 var _fileReader = null;
@@ -147,7 +148,7 @@ function uploadVideo(createUploadUrl, sessionToken, fileUrl, onOk, onErr, onProg
     var gen = _generation;
     var progress = onProgress || function () {};
 
-    // Streaming path: read 25 MB slices from disk as each PATCH needs them.
+    // Streaming path: read 5 MB slices from disk as each PATCH needs them.
     if (_fileReader) {
         var size = _fileReader.size(fileUrl);
         if (size <= 0) {

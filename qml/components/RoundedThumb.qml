@@ -21,6 +21,7 @@ Item {
     readonly property real sourceAspect: loader.status === Image.Ready && loader.implicitWidth > 0
         ? loader.implicitHeight / loader.implicitWidth : 0
 
+    readonly property bool loading: loader.status === Image.Loading
     readonly property int _maxRetries: 3
     property int _attempt: 0
     // Retry needs a new URL string or Qt hands back the cached failure.

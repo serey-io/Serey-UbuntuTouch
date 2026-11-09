@@ -8,6 +8,9 @@ QtObject {
     // App version shown in Settings and reported to the web bridge; keep in sync with manifest.json.in "version" on every release.
     readonly property string appVersion: "1.1.21"
 
+    // set by a tap that opens the comment box, so KeyboardDismisser leaves it open
+    property bool keepKeyboardTap: false
+
     // Single source of truth for the convergence breakpoint, shared by Main.qml and AdaptiveStack.qml so the two never drift out of sync.
     readonly property real convergenceBreakpoint: units.gu(80)
     // Second tier: desktop is where a THIRD column fits (nav 20 + list 46 + article 50 + panel 34)
@@ -240,6 +243,23 @@ QtObject {
             names.push(sources[0].name);
         for (var i = start; i >= 0; i--) names.push(chain[i].name);
         return names.join(" - ");
+    }
+
+    // Publish-scope rows for a community, generated from its real ancestor chain
+    function scopeOptionsFor(id, tr) {
+        var chain = scopeChainFor(id);
+        var opts = [{ "id": 0, "label": scopePath(chain, -1), "hint": tr("Also shown in the Global feed.") }];
+        for (var i = chain.length - 1; i >= 0; i--) {
+            var hint = chain[i].isRoot
+                ? tr("Everywhere except the Global feed.")
+                : (i === 0 ? tr("Only people browsing %1.").arg(chain[i].name)
+                           : tr("%1 and the platforms under it.").arg(chain[i].name));
+            // the root's path reads the same as no ceiling
+            var label = scopePath(chain, i);
+            if (label === opts[0].label) label = tr("Not on Global");
+            opts.push({ "id": chain[i].id, "label": label, "hint": hint });
+        }
+        return opts;
     }
 
     // True for both spellings of Global: the id-0 pseudo-source (no filter) and

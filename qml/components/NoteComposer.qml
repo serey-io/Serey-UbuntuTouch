@@ -255,6 +255,7 @@ Item {
 
                 TextArea {
                     id: noteField
+                    TapToFocus { field: noteField }
                     anchors { left: parent.left; right: parent.right; top: parent.top }
                     // Grows with text, min height; room for counter
                     height: Math.max(units.gu(18), contentHeight + units.gu(2) + counter.height)

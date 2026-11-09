@@ -690,8 +690,16 @@ Page {
             }
             EpisodeRow {
                 id: epRow
-                anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; leftMargin: Style.spacingM; rightMargin: Style.spacingM }
+                anchors { left: parent.left; right: epRemove.left; verticalCenter: parent.verticalCenter; leftMargin: Style.spacingM }
                 episode: modelData
+            }
+            // remove
+            AbstractButton {
+                id: epRemove
+                anchors { right: parent.right; verticalCenter: parent.verticalCenter; rightMargin: Style.spacingS }
+                width: units.gu(5); height: width
+                onClicked: Downloads.remove(modelData.permlink)
+                Icon { anchors.centerIn: parent; width: units.gu(2.2); height: width; name: "delete"; color: Style.danger }
             }
         }
     }

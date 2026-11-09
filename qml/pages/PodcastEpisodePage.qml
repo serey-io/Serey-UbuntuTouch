@@ -7,6 +7,8 @@ import "../Session"
 import "../components"
 import "../services/PodcastService.js" as PodcastService
 import "../services/Mappers.js" as M
+import "../services/VoteService.js" as VoteService
+import "../services/YouTube.js" as YouTube
 
 Page {
     id: page
@@ -28,213 +30,125 @@ Page {
     readonly property bool isYoutube: !!page.episode && page.episode.contentType === "link"
                                       && /(youtube\.com\/(watch|embed|shorts)|youtu\.be\/)/i.test(page.episode.contentUrl || "")
     readonly property bool wideStage: page.isVideo || page.isYoutube
-    property bool ytStarted: false
-    // set on tap
-    property string videoSrc: ""
-    // video player built early so the tap doesn't freeze
-    property bool videoWarm: false
-    // video <-> background audio handoff
-    property real _vidPos: 0
-    property bool _vidPlaying: false
-    property real _videoStartAt: 0
+    // youtube + video play in shared views (Main.qml) shown in this stage, so leaving never restarts them
+    readonly property bool onStage: page.wideStage && page.isCurrent
 
-    // controls drive Player (audio), the youtube view, or the native video
-    readonly property var yt: ytLoader.item
-    readonly property var vid: videoLoader.item ? videoLoader.item.media : null
-    // page-owned playback (not the global Player)
-    readonly property bool ownPlayer: page.isYoutube || page.isVideo
-    readonly property bool ctlActive: page.isYoutube ? !!page.yt : page.isVideo ? !!page.vid : page.isCurrent
-    readonly property real ctlPos: page.isYoutube ? (page.yt ? page.yt.position : 0)
-                                 : page.isVideo ? (page._videoStartAt > 0 ? page._videoStartAt : page.vid ? page.vid.position : 0) : Player.position
-    readonly property real ctlDur: page.isYoutube ? (page.yt ? page.yt.duration : 0)
-                                 : page.isVideo ? (page.vid && page.vid.duration > 0 ? page.vid.duration : page._vidDurHint) : Player.duration
-    readonly property bool ctlPlaying: page.isYoutube ? (!!page.yt && !page.yt.paused)
-                                     : page.isVideo ? (!!page.vid && page.vid.playbackState === MediaPlayer.PlayingState)
-                                     : (page.isCurrent && Player.playing)
-    readonly property bool ctlBusy: page.isYoutube ? (page.ytStarted && (!page.yt || !page.yt.ready))
-                                  : page.isVideo ? (page.videoSrc.length > 0 && (!page.vid || page.vid.status === MediaPlayer.Loading
-                                                                                 || page.vid.status === MediaPlayer.Stalled))
-                                  : (page.isCurrent && Player.buffering)
-    readonly property bool ctlHasNext: page.ownPlayer ? page._queueStep(1) >= 0 : Player.hasNext()
+    // all controls drive Player
+    readonly property bool ctlActive: page.isCurrent
+    readonly property real ctlPos: page.isCurrent ? Player.position : 0
+    readonly property real ctlDur: page.isCurrent ? Player.duration : 0
+    readonly property bool ctlPlaying: page.isCurrent && Player.playing
+    readonly property bool ctlBusy: page.isCurrent && Player.buffering
+    readonly property bool ctlHasNext: page.isCurrent && Player.hasNext()
 
-    function _queueStep(dir) {
-        var i = -1;
-        for (var k = 0; k < page.queue.length; k++) if (String(page.queue[k].id) === String(page.episode.id)) { i = k; break; }
-        if (i < 0) return -1;
-        for (var j = i + dir; j >= 0 && j < page.queue.length; j += dir) if (!page.queue[j].isLocked) return j;
-        return -1;
-    }
-    function startYt() { Player.pause(); page.ytStarted = true; }
-    function startVideo() {
-        Player.pause();
-        page.videoSrc = Downloads.pathFor(page.dlKey) || page.episode.contentUrl;
-    }
-    onVideoSrcChanged: if (videoLoader.status === Loader.Ready) page._feedVideo()
-    // hand the source to a ready player
-    function _feedVideo() {
-        var it = videoLoader.item;
-        if (!it || it.source === page.videoSrc) return;
-        it.media.playbackRate = Player.rate;
-        it.source = page.videoSrc;
-    }
     function ctlToggle() {
-        if (page.isYoutube) {
-            if (!page.ytStarted) page.startYt();
-            else if (page.yt) { if (page.yt.paused) page.yt.play(); else page.yt.pause(); }
-        } else if (page.isVideo) {
-            if (!page.videoSrc) page.startVideo();
-            else if (videoLoader.item) videoLoader.item.togglePause();
-        } else if (page.isCurrent) Player.toggle();
+        if (page.isCurrent) Player.toggle();
         else Player.play(page.episode, page.queue);
     }
-    function ctlSeekTo(ms) {
-        if (page.isYoutube) { if (page.yt) page.yt.seekTo(ms); }
-        else if (page.isVideo) { if (page.vid) page.vid.seek(ms); }
-        else Player.seekTo(ms);
-    }
-    function ctlSeekBy(d) { page.ctlSeekTo(Math.max(0, page.ctlPos + d)); }
-    function ctlNext() {
-        if (!page.ownPlayer) { Player.next(); return; }
-        var i = page._queueStep(1);
-        if (i >= 0) page.showEpisode(page.queue[i]);
-    }
-    function ctlPrev() {
-        if (!page.ownPlayer) { Player.prev(); return; }
-        var i = page._queueStep(-1);
-        if (page.ctlPos > 5000 || i < 0) page.ctlSeekTo(0);
-        else page.showEpisode(page.queue[i]);
-    }
-    // swap episode in place, keep playing
-    function showEpisode(ep) {
-        page.ytStarted = false;
-        page.videoSrc = "";
-        page.episode = ep;
-        if (page.isYoutube) page.startYt();
-        else if (page.isVideo) page.startVideo();
-        else if (Player.canPlay(ep)) Player.play(ep, page.queue);
-        else Player.pause();
-    }
-    Connections {
-        target: page.vid
-        ignoreUnknownSignals: true
-        function onStatusChanged() { if (page.vid.status === MediaPlayer.EndOfMedia && Player.autoplayNext) page.ctlNext(); }
-        function onPositionChanged() {
-            var p = page.vid.position;
-            if (page._videoStartAt <= 0) { page._vidPos = p; return; }
-            if (p >= page._videoStartAt - 3000 || Date.now() - page._vidStartTime > 10000) page._videoStartAt = 0;
-            else if (p > 0 && Date.now() - page._vidSeekAt > 1500) page._seekVideoStart();
-        }
-        function onPlaybackStateChanged() {
-            page._vidPlaying = page.vid.playbackState === MediaPlayer.PlayingState;
-            if (page._vidPlaying) { if (page._videoStartAt > 0) page._vidMute(true); page._seekVideoStart(); }
-        }
-        function onSeekableChanged() { page._seekVideoStart(); }
-    }
-    // media-hub drops early seeks; retried from position updates
-    property real _vidSeekAt: 0
-    property real _vidStartTime: 0
-    property real _vidDurHint: 0
-    // silent until the resume seek lands
-    function _vidMute(on) { if (!page.vid) return; page.vid.muted = !on; page.vid.muted = on; }
-    on_VideoStartAtChanged: if (_videoStartAt <= 0) _vidMute(false)
-    function _seekVideoStart() {
-        if (page._videoStartAt > 0 && page.vid && page.vid.seekable) { page.vid.seek(page._videoStartAt); page._vidSeekAt = Date.now(); }
-    }
-    Connections {
-        target: Player
-        function onRateChanged() {
-            if (page.yt) page.yt.setRate(Player.rate);
-            if (page.vid) page.vid.playbackRate = Player.rate;
-        }
-    }
-    readonly property bool canDownload: !page.locked && (page.isAudio || page.isVideo)
+    function ctlSeekTo(ms) { Player.seekTo(ms); }
+    function ctlSeekBy(d) { Player.seekBy(d); }
+    function ctlNext() { Player.next(); }
+    function ctlPrev() { Player.prev(); }
+
+    readonly property bool canDownload: !page.locked && (page.isAudio || page.isVideo || page.isYoutube)
                                         && (page.dlSaved || (page.episode.contentUrl || "").length > 0)
+    readonly property bool canVote: !page.offlineMode && !!page.episode && !!page.episode.author && !!page.episode.permlink
+    // youtube link -> direct file in flight
+    property bool ytExtracting: false
     readonly property bool isCurrent: (Player.current, Player.isCurrent(page.episode))
-    readonly property bool canManage: !!page.episode && Config.isOwnerCurrent && !page.offlineMode
-                                      && (!page.episode.communityId || page.episode.communityId === Config.communityId)
+    // manager of the episode's own community, from any platform; locked 7 days after chain, like web
+    readonly property bool canManage: !!page.episode && !page.offlineMode
+                                      && !!Config.ownedCommunityIdSet[page.episode.communityId || Config.communityId]
+                                      && !Config.isPayoutClosed(page.episode.onChainAt)
     property bool busy: false
 
-    // follow autoplay to next episode
+    // follow autoplay / next / prev
     Connections {
         target: Player
         function onCurrentChanged() {
-            if (page.visible && Player.current && page.isAudio && !page.isCurrent
+            if (page.visible && Player.current && !page.isCurrent
                     && page.queue.some(function (e) { return Player.isCurrent(e); }))
                 page.episode = Player.current;
         }
     }
 
-    // next/prev can swap audio and video in place
-    onIsAudioChanged: Player.setPageShown(page, page.visible && page.isAudio)
-    onVisibleChanged: {
-        Player.setPageShown(page, visible && page.isAudio);
-        if (visible) page._takeOver(); else page._handOff();
+    onIsCurrentChanged: page._syncShown()
+    onOnStageChanged: page._syncShown()
+    function _syncShown() {
+        Player.setPageShown(page, page.visible && (page.isAudio || page.onStage));
+        Player.setStage(page, stage, page.visible && page.onStage);
     }
-    // leaving: keep the video going as audio
-    function _handOff() {
-        if (!page.isVideo || !page._vidPlaying) return;
-        page._vidPlaying = false;
-        var dur = page.vid ? page.vid.duration : 0;
-        if (videoLoader.item) videoLoader.item.source = "";
-        Player.play(page.episode, page.queue, page._vidPos, dur);
-    }
-    // back: resume the video where audio is
-    function _takeOver() {
-        if (!page.isVideo || !Player.isCurrent(page.episode)) return;
-        page._videoStartAt = Math.max(Player.position, Player._resumeTo);
-        page._vidPos = page._videoStartAt;
-        page._vidStartTime = Date.now();
-        page._vidDurHint = Player.duration;
-        Player.stop();
-        // fresh player: the old one loses its video surface after the handoff
-        page.videoSrc = "";
-        page.videoWarm = false;
-        Qt.callLater(function () { page.videoWarm = true; page.startVideo(); });
-    }
+    onVisibleChanged: page._syncShown()
+    // build the shared video player before playing
     Timer {
         id: warmVideo
         interval: 500
-        // also warm the bar player for the back handoff
-        onTriggered: if (page.isVideo && !page.locked) { page.videoWarm = true; Player._ensureAudio(); }
+        onTriggered: if (Player.isVideo(page.episode) && !page.locked) Player.vidWarm = true
     }
     Component.onCompleted: {
         warmVideo.start();
-        Player.setPageShown(page, page.isAudio);
-        page._takeOver();
-        // video loader is async, safe to start now
-        if (page.isVideo && !page.locked && !page.videoSrc) page.startVideo();
-        else if (!page.locked && !page.isCurrent && (page.ownPlayer || Player.canPlay(page.episode))) autoplay.start();
+        page._syncVotes();
+        page._syncShown();
+        if (!page.locked && !page.isCurrent && Player.canPlay(page.episode)) autoplay.start();
     }
-    // start after the page is on screen; first audio init blocks ~300ms
+    // start after the page is on screen; first media init blocks ~300ms
     Timer {
         id: autoplay
         interval: 350
-        onTriggered: {
-            if (!page.visible || page.isCurrent) return;
-            if (page.isYoutube) { if (!page.ytStarted) page.startYt(); }
-            else if (page.isVideo) { if (!page.videoSrc) page.startVideo(); }
-            else Player.play(page.episode, page.queue);
-        }
+        onTriggered: if (page.visible && !page.isCurrent) Player.play(page.episode, page.queue)
     }
-    Component.onDestruction: { Player.setPageShown(page, false); page._handOff(); }
+    Component.onDestruction: { Player.setPageShown(page, false); Player.setStage(page, null, false); }
+
+    // VoteBar overwrites these, so bindings would stick to the old episode
+    onEpisodeChanged: page._syncVotes()
+    function _syncVotes() {
+        var ep = page.episode;
+        if (!ep || !voteBar) return;
+        var voters = ep.voters || [], flaggers = ep.flaggers || [];
+        voteBar.flaggers = flaggers.length;
+        var cached = VoteService.getCached(ep.author, ep.permlink);
+        voteBar.upvoted = cached ? cached.upvoted : voters.indexOf(Session.username) >= 0;
+        voteBar.flagged = cached ? cached.flagged : flaggers.indexOf(Session.username) >= 0;
+        voteBar.votes = cached ? cached.votes : voters.length;
+        voteBar.payout = (cached && cached.payout) || ep.payout || "";
+    }
 
     function share() { Share.open(PodcastService.shareUrl(page.episode, Config.communityDns)); }
 
     function download() {
-        if (page.dlSaved) { PopupUtils.open(removeDialog); return; }
-        if (page.dlActive) return;
+        if (page.dlSaved) { page.openDownloads(); return; }
+        if (page.dlActive || page.ytExtracting) return;
         var ep = Object.assign({}, page.episode, { kind: "podcast", permlink: page.dlKey });
-        Downloads.start(ep, page.episode.contentUrl);
+        if (!page.isYoutube) { Downloads.start(ep, page.episode.contentUrl); return; }
+        var m = (page.episode.contentUrl || "").match(/(?:youtube\.com\/(?:embed\/|watch\?v=|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+        if (!m) { Toast.error(Lang.tr("This YouTube video can't be downloaded.")); return; }
+        page.ytExtracting = true;
+        Toast.show(Lang.tr("Preparing download…"));
+        YouTube.extract(m[1], function (result, errMsg) {
+            page.ytExtracting = false;
+            if (result && result.url) Downloads.start(ep, result.url);
+            else {
+                Toast.error(Lang.tr("This YouTube video can't be downloaded."));
+                console.log("YouTube extract failed: " + (errMsg || "unknown"));
+            }
+        });
+    }
+    // podcasts tab of the library
+    function openDownloads() {
+        if (page.offlineMode) page.pageStack.pop();
+        else page.pageStack.push(Qt.resolvedUrl("DownloadedContentPage.qml"), { tabIndex: 2 });
     }
 
     function edit() {
+        Player.stop();
         var p = page.pageStack.push(Qt.resolvedUrl("CreatePodcastEpisodePage.qml"), { editEpisode: page.episode });
         if (p && p.saved) p.saved.connect(function (body) {
             var e = M.toEpisode(body);
             page.episode = Object.assign({}, page.episode, {
                 title: e.title, description: e.description, thumbnail: e.thumbnail,
                 contentType: e.contentType, contentUrl: e.contentUrl, seasonNumber: e.seasonNumber,
-                episodeNumber: e.episodeNumber, episodeLabel: e.episodeLabel, duration: e.duration
+                episodeNumber: e.episodeNumber, episodeLabel: e.episodeLabel, duration: e.duration,
+                publishCeilingId: e.publishCeilingId !== undefined ? e.publishCeilingId : page.episode.publishCeilingId
             });
             page.changed();
             page.pageStack.pop();
@@ -266,29 +180,29 @@ Page {
                 onTriggered: page.share()
             },
             Action {
-                iconName: page.dlSaved ? "delete" : "save-to"
-                text: page.dlSaved ? Lang.tr("Remove download") : Lang.tr("Download")
-                visible: page.canDownload && !page.dlActive
+                // blue when saved
+                iconSource: page.dlSaved ? Qt.resolvedUrl("../../assets/save-to-blue.svg") : "image://theme/save-to"
+                text: page.dlSaved ? Lang.tr("Downloaded") : Lang.tr("Download")
+                visible: page.canDownload && !page.dlActive && !page.ytExtracting
                 onTriggered: page.download()
             },
             Action {
-                iconName: "edit"
-                text: Lang.tr("Edit")
+                iconSource: Qt.resolvedUrl("../../assets/more-dots.svg")
+                text: Lang.tr("More")
                 visible: page.canManage
-                onTriggered: page.edit()
-            },
-            Action {
-                iconName: "delete"
-                text: Lang.tr("Delete episode")
-                visible: page.canManage
-                onTriggered: PopupUtils.open(deleteDialog)
+                onTriggered: manageSheet.show([
+                    { iconName: "edit", text: Lang.tr("Edit"),
+                      onTriggered: function () { page.edit(); } },
+                    { iconName: "delete", text: Lang.tr("Delete episode"), danger: true,
+                      onTriggered: function () { PopupUtils.open(deleteDialog); } }
+                ])
             }
         ]
     }
 
     Flickable {
         id: scroll
-        anchors { top: page.header.bottom; bottom: parent.bottom; horizontalCenter: parent.horizontalCenter }
+        anchors { top: page.header.bottom; bottom: voteFooter.visible ? voteFooter.top : parent.bottom; horizontalCenter: parent.horizontalCenter }
         width: Math.min(parent.width, page.maxContentWidth)
         contentHeight: col.height + Style.spacingL * 2
         clip: true
@@ -313,7 +227,7 @@ Page {
                 CoverArt {
                     id: stageCover
                     anchors.fill: parent
-                    visible: page.videoSrc.length === 0 && !page.ytStarted
+                    visible: !page.onStage
                     episode: page.episode
                     // list-size first (cached), then sharp
                     property bool sharp: false
@@ -321,32 +235,7 @@ Page {
                     onSourceAspectChanged: if (sourceAspect > 0 && !sharp) Qt.callLater(function () { stageCover.sharp = true; })
                     decodeWidth: sharp ? units.gu(64) : units.gu(18)
                 }
-                Loader {
-                    id: videoLoader
-                    anchors.fill: parent
-                    asynchronous: true
-                    active: page.videoWarm || page.videoSrc.length > 0
-                    visible: page.videoSrc.length > 0
-                    sourceComponent: VideoNativePlayer {
-                        onFailed: if (page.visible && page.videoSrc) Toast.error(Lang.tr("Couldn't play this episode."))
-                    }
-                    // start after creation finishes; gstreamer needs a free main thread for the surface
-                    onLoaded: Qt.callLater(page._feedVideo)
-                }
-                // youtube, web view only after tap
-                Loader {
-                    id: ytLoader
-                    anchors.fill: parent
-                    active: page.ytStarted
-                    sourceComponent: VideoWebView {
-                        wrap: true
-                        controls: false
-                        reportState: true
-                        embedUrl: page.episode.contentUrl
-                        onReadyChanged: if (ready) setRate(Player.rate)
-                        onEndedChanged: if (ended && Player.autoplayNext) page.ctlNext()
-                    }
-                }
+                // youtube / video view is parented here by Main.qml
             }
 
             Column {
@@ -589,6 +478,38 @@ Page {
         }
     }
 
+    // votes, serey value
+    Rectangle {
+        id: voteFooter
+        anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
+        height: units.gu(6)
+        visible: page.canVote
+        color: Style.surface
+
+        Rectangle { width: parent.width; height: units.dp(1); color: Style.divider }
+
+        Item {
+            width: Math.min(parent.width, page.maxContentWidth) - Style.spacingM * 2
+            height: parent.height
+            anchors.horizontalCenter: parent.horizontalCenter
+
+            VoteBar {
+                id: voteBar
+                width: parent.width
+                anchors.verticalCenter: parent.verticalCenter
+                author: page.episode ? page.episode.author : ""
+                permlink: page.episode ? page.episode.permlink : ""
+                voteType: "podcast"
+                voters: page.episode ? page.episode.voters || [] : []
+                onChain: !!page.episode && !!page.episode.earnsRewards
+                createdAt: page.episode ? page.episode.onChainAt || "" : ""
+                showComments: false
+                showShare: false
+                onRequireLogin: page.pageStack.push(Qt.resolvedUrl("LoginPage.qml"))
+            }
+        }
+    }
+
     Rectangle {
         anchors.fill: parent
         color: Qt.rgba(0, 0, 0, 0.3)
@@ -598,20 +519,7 @@ Page {
         ActivityIndicator { anchors.centerIn: parent; running: page.busy }
     }
 
-    Component {
-        id: removeDialog
-        Dialog {
-            id: rdlg
-            title: Lang.tr("Remove download?")
-            text: Lang.tr("This episode will no longer be available offline.")
-            Button {
-                text: Lang.tr("Remove")
-                color: Style.danger
-                onClicked: { PopupUtils.close(rdlg); Downloads.remove(page.dlKey); }
-            }
-            Button { text: Lang.tr("Cancel"); onClicked: PopupUtils.close(rdlg) }
-        }
-    }
+    ActionBottomSheet { id: manageSheet }
 
     Component {
         id: deleteDialog

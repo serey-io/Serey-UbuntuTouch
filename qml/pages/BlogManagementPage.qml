@@ -391,6 +391,7 @@ Page {
 
                 TextField {
                     id: newCategoryField
+                    TapToFocus { field: newCategoryField }
                     anchors { left: parent.left; leftMargin: Style.spacingM; right: addCategoryBtn.left; rightMargin: Style.spacingS; verticalCenter: parent.verticalCenter }
                     placeholderText: Lang.tr("New category name")
                     enabled: !page.categorySaving
@@ -533,6 +534,7 @@ Page {
                             height: units.gu(5)
                             TextField {
                                 id: newSubField
+                                TapToFocus { field: newSubField }
                                 anchors { left: parent.left; right: addSubBtn.left; rightMargin: Style.spacingS; verticalCenter: parent.verticalCenter }
                                 placeholderText: Lang.tr("New sub-category")
                                 onAccepted: { page.addSubCategory(index, text); text = "" }

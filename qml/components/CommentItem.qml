@@ -176,7 +176,7 @@ Item {
 
                     AbstractButton {
                         width: parent.width; height: units.gu(5)
-                        onClicked: { item._closeMenu(); item.editRequested(c); }
+                        onClicked: { item._closeMenu(); Config.keepKeyboardTap = true; item.editRequested(c); }
                         Label {
                             anchors { left: parent.left; leftMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
                             text: Lang.tr("Edit")
@@ -312,7 +312,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 width: units.gu(3.5)
                 height: units.gu(3.5)
-                onClicked: item.replyRequested(c)
+                onClicked: { Config.keepKeyboardTap = true; item.replyRequested(c); }
 
                 Icon {
                     anchors.centerIn: parent

@@ -29,12 +29,16 @@ Item {
 
     // host-driven controls (podcast page)
     property bool reportState: false
+    // page always reports visible: mobile youtube pauses when hidden (background play)
+    property bool keepVisible: false
     property real position: 0
     property real duration: 0
     property bool ended: false
     function play() { wv.runJavaScript("if(window.P)P.play();"); root.paused = false; }
     function pause() { wv.runJavaScript("if(window.P)P.pause();"); root.paused = true; }
     function seekTo(ms) { wv.runJavaScript("if(window.P)P.seek(" + (ms / 1000) + ");"); root.position = ms; }
+    // mute first: the js pause is async and may not run before teardown
+    function stop() { wv.audioMuted = true; pause(); }
     function setRate(r) { wv.runJavaScript("if(window.P&&P.rate)P.rate(" + r + ");"); }
     Timer {
         interval: 500
@@ -133,7 +137,10 @@ Item {
                 sourceCode: "" +
                     "Object.defineProperty(navigator,'userAgent',{get:function(){return '" + root.mobileUA + "';},configurable:true});" +
                     "Object.defineProperty(navigator,'platform',{get:function(){return 'Linux armv8l';},configurable:true});" +
-                    "Object.defineProperty(navigator,'maxTouchPoints',{get:function(){return 5;},configurable:true});"
+                    "Object.defineProperty(navigator,'maxTouchPoints',{get:function(){return 5;},configurable:true});" +
+                    (root.keepVisible ? "Object.defineProperty(document,'hidden',{get:function(){return false;},configurable:true});" +
+                                        "Object.defineProperty(document,'visibilityState',{get:function(){return 'visible';},configurable:true});" +
+                                        "document.addEventListener('visibilitychange',function(e){e.stopImmediatePropagation();},true);" : "")
             }
         ]
 
@@ -433,6 +440,10 @@ Item {
         if (embedUrl.length === 0)
             return;
         root.ready = false;
+        root.ended = false;
+        root.paused = false;
+        root.position = 0;
+        root.duration = 0;
         // Recompute the id here: the ytId binding may not have settled when onEmbedUrlChanged runs.
         var yid = directVideo ? "" : _ytId(embedUrl);
         if (directVideo)

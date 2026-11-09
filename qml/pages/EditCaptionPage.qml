@@ -163,6 +163,7 @@ Page {
             Item { width: 1; height: Style.spacingXs }
             TextField {
                 id: titleField
+                TapToFocus { field: titleField }
                 width: parent.width - Style.spacingM * 2
                 anchors.horizontalCenter: parent.horizontalCenter
                 enabled: !page.saving
@@ -193,6 +194,7 @@ Page {
             Item { width: 1; height: Style.spacingXs }
             TextArea {
                 id: descField
+                TapToFocus { field: descField }
                 width: parent.width - Style.spacingM * 2
                 anchors.horizontalCenter: parent.horizontalCenter
                 enabled: !page.saving

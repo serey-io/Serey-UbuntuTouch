@@ -33,10 +33,43 @@ Page {
     property int uploadPercent: 0
     property bool submitting: false
 
+    // season picker
+    property int seasonNumber: page.isEdit ? page.editEpisode.seasonNumber : page.defaultSeason
+    property var seasonList: [{ number: page.seasonNumber, title: page.isEdit ? page.editEpisode.seasonTitle : "" }]
+    property var savedSeasons: []
+    property var premiumSeasons: ({})
+    property bool seasonsOpen: false
+    property bool addingSeason: false
+    property bool savingSeason: false
+    property string seasonError: ""
+    readonly property var currentSeason: {
+        for (var i = 0; i < page.seasonList.length; i++)
+            if (page.seasonList[i].number === page.seasonNumber) return page.seasonList[i];
+        return { number: page.seasonNumber, title: "" };
+    }
+
+    // publish scope
+    property var publishCeilingId: page.isEdit ? page.editEpisode.publishCeilingId : 0
+    property bool scopeTouched: false
+    readonly property int scopeCommunityId: page.isEdit && page.editEpisode.communityId > 0 ? page.editEpisode.communityId : Config.communityId
+    readonly property bool targetIsGlobal: {
+        if (!(page.scopeCommunityId > 0)) return true;
+        var c = Config.communityInfoFor(page.scopeCommunityId);
+        return !!c && (c.dns || "") === Config.sources[0].dns;
+    }
+    readonly property var scopeOptions: Config.scopeOptionsFor(page.scopeCommunityId, Lang.tr)
+    // null = saved ceiling unknown, so the row stays hidden
+    readonly property var scopeCurrent: {
+        for (var i = 0; i < page.scopeOptions.length; i++)
+            if (page.scopeOptions[i].id === page.publishCeilingId) return page.scopeOptions[i];
+        return null;
+    }
+
     readonly property bool canSave: !page.submitting && !page.uploading && !coverUploader.uploading
+                                    && !page.savingSeason
                                     && page.contentUrl.length > 0
                                     && titleField.text.trim().length > 0
-                                    && Config.communityId > 0
+                                    && page.scopeCommunityId > 0
 
     signal saved(var body)
 
@@ -76,7 +109,10 @@ Page {
             function (err) {
                 page.uploading = false;
                 page.fileName = "";
-                if (page.isEdit) page.contentUrl = page.editEpisode.contentUrl;
+                if (page.isEdit) {
+                    page.contentUrl = page.editEpisode.contentUrl;
+                    page.contentType = page.editEpisode.contentType;
+                }
                 Toast.error((err && err.message) || Lang.tr("Upload failed."));
             },
             function (pct) { page.uploadPercent = pct; });
@@ -90,24 +126,91 @@ Page {
         page.mediaId = "";
     }
 
+    function seasonLabel(s) {
+        var name = Lang.tr("Season") + " " + s.number;
+        return s.title ? name + ": " + s.title : name;
+    }
+
+    function loadSeasons() {
+        if (page.scopeCommunityId <= 0) return;
+        PodcastService.loadSeasons(Config.baseUrl, page.scopeCommunityId,
+            function (list, saved, premium) {
+                page.savedSeasons = saved;
+                page.premiumSeasons = premium;
+                // new episodes never default into a hidden premium season
+                if (!page.isEdit && premium[page.seasonNumber])
+                    page.seasonNumber = list.length ? list[0].number : page.nextSeason();
+                page.seasonList = PodcastService.mergeSeasons(list, [page.currentSeason]);
+            },
+            function () { Toast.error(Lang.tr("Couldn't load seasons.")); });
+    }
+
+    // first number above every season, hidden ones too
+    function nextSeason() {
+        var nums = page.seasonList.map(function (s) { return s.number; }).concat(Object.keys(page.premiumSeasons).map(Number));
+        return Math.max.apply(null, [0].concat(nums)) + 1;
+    }
+
+    function startNewSeason() {
+        newSeasonNumber.text = String(page.nextSeason());
+        newSeasonTitle.text = "";
+        page.seasonError = "";
+        page.addingSeason = true;
+    }
+
+    function addSeason() {
+        if (page.savingSeason) return;
+        var n = parseInt(newSeasonNumber.text.replace(/\D/g, ""), 10);
+        if (!(n >= 1 && n <= 999)) { page.seasonError = Lang.tr("Use a number from 1 to 999."); return; }
+        if (page.premiumSeasons[n] || page.seasonList.some(function (s) { return s.number === n; })) {
+            page.seasonError = Lang.tr("Season %1 already exists.").arg(n);
+            return;
+        }
+        var season = { number: n, title: newSeasonTitle.text.trim().slice(0, 120) };
+        page.seasonError = "";
+        page.savingSeason = true;
+        PodcastService.addSeason(Config.baseUrl, page.scopeCommunityId, Session.token, season, page.savedSeasons,
+            function (saved) {
+                page.savingSeason = false;
+                page.savedSeasons = saved;
+                page.seasonList = PodcastService.mergeSeasons(page.seasonList, [season]);
+                page.seasonNumber = n;
+                page.addingSeason = false;
+                page.seasonsOpen = false;
+                Toast.success(Lang.tr("Season added"));
+            },
+            function (e) {
+                page.savingSeason = false;
+                Toast.error((e && e.message) || Lang.tr("Couldn't save season."));
+            });
+    }
+
+    function scopeSheetItems() {
+        return page.scopeOptions.map(function (o) {
+            return { text: o.label,
+                     iconName: o.id === page.publishCeilingId ? "tick" : "",
+                     onTriggered: function () { page.publishCeilingId = o.id; page.scopeTouched = true; } };
+        });
+    }
+
     function save() {
         if (!page.canSave) return;
         page.submitting = true;
-        var season = parseInt(String(seasonField.text).replace(/\D/g, ""), 10) || 1;
-        // an edit that stays in its season keeps its own access
+        var season = page.seasonNumber;
         if (page.isEdit && season === page.editEpisode.seasonNumber) {
-            page._submit(page.editEpisode.accessType, page.editEpisode.seasonTitle);
+            page._submit(page.editEpisode.seasonTitle);
             return;
         }
-        PodcastService.seasonInfo(Config.baseUrl, Config.communityId, season,
-            function (access, title) { page._submit(access, title); },
+        PodcastService.seasonTitle(Config.baseUrl, page.scopeCommunityId, season,
+            // an empty season's title lives only in the saved list
+            function (title) { page._submit(title || page.currentSeason.title); },
             function (e) {
                 page.submitting = false;
                 Toast.error((e && e.message) || Lang.tr("Couldn't save episode."));
             });
     }
 
-    function _submit(accessType, seasonTitle) {
+    function _submit(seasonTitle) {
         var body = PodcastService.payload({
             title: titleField.text,
             description: descField.text,
@@ -116,16 +219,16 @@ Page {
             thumbnail: page.thumbUrl,
             duration: page.durationMin,
             episode: episodeField.text,
-            season: seasonField.text,
+            season: page.seasonNumber,
             seasonTitle: seasonTitle,
-            accessType: accessType
-        }, Config.communityId);
+            isEdit: page.isEdit,
+            // edits only send a real change
+            ceiling: page.isEdit && !page.scopeTouched ? undefined : (page.targetIsGlobal ? 0 : page.publishCeilingId)
+        }, page.scopeCommunityId);
         var ok = function () {
             page.submitting = false;
             page.mediaId = "";
-            // the app hides premium, so say where it went
-            if (accessType === 2) Toast.success(Lang.tr("Saved to a premium season. Premium episodes show on the web only."));
-            else Toast.success(page.isEdit ? Lang.tr("Episode updated") : Lang.tr("Episode published!"));
+            Toast.success(page.isEdit ? Lang.tr("Episode updated") : Lang.tr("Episode published!"));
             page.saved(body);
             if (!page.isEdit) page.pageStack.pop();
         };
@@ -163,6 +266,7 @@ Page {
             get: function () { return uploadResumeStore.pendingUpload; },
             set: function (v) { uploadResumeStore.pendingUpload = v; }
         });
+        page.loadSeasons();
     }
 
     Component {
@@ -179,7 +283,7 @@ Page {
         onFailed: Toast.error(message)
     }
 
-    Flickable {
+    KeyboardAwareFlickable {
         id: scroll
         anchors { top: page.header.bottom; bottom: parent.bottom; horizontalCenter: parent.horizontalCenter }
         width: Math.min(parent.width, page.maxContentWidth)
@@ -196,7 +300,7 @@ Page {
             // platform gate
             Label {
                 width: parent.width
-                visible: Config.communityId <= 0
+                visible: page.scopeCommunityId <= 0
                 text: Lang.tr("Pick your platform (not Global) from the top bar first.")
                 wrapMode: Text.WordWrap
                 color: Style.danger
@@ -244,7 +348,7 @@ Page {
                         Label {
                             width: parent.width
                             text: page.uploading
-                                  ? (page.uploadPercent >= 100 ? Lang.tr("Processing…") : Lang.tr("Uploading…") + " " + page.uploadPercent + "%")
+                                  ? Lang.tr("Uploading…") + " " + page.uploadPercent + "%"
                                   : (page.fileName || (page.contentUrl.length > 0 ? Lang.tr("Current file") : Lang.tr("Choose a file")))
                             font.pixelSize: Style.fontRegular
                             color: Style.textPrimary
@@ -297,34 +401,182 @@ Page {
                 text: page.isEdit ? page.editEpisode.description : ""
             }
 
-            Row {
+            Label { text: Lang.tr("Season"); font.pixelSize: Style.fontSmall; font.weight: Font.DemiBold; color: Style.textPrimary }
+
+            // season picker
+            Column {
                 width: parent.width
-                spacing: Style.spacingM
-                FormField {
-                    id: seasonField
-                    width: (parent.width - Style.spacingM * 2) / 3
-                    label: Lang.tr("Season")
-                    inputMethodHints: Qt.ImhDigitsOnly
-                    text: String(page.isEdit ? page.editEpisode.seasonNumber : page.defaultSeason)
+                spacing: Style.spacingS
+
+                AbstractButton {
+                    width: parent.width
+                    height: units.gu(5)
+                    onClicked: page.seasonsOpen = !page.seasonsOpen
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: Style.cardRadius
+                        color: Style.surface
+                        border.width: units.dp(1)
+                        border.color: page.seasonsOpen ? Style.brand : Style.divider
+                    }
+                    Label {
+                        anchors { left: parent.left; right: seasonChevron.left; margins: Style.spacingM; verticalCenter: parent.verticalCenter }
+                        text: page.seasonLabel(page.currentSeason)
+                        font.pixelSize: Style.fontRegular
+                        font.family: Style.fontFor(text)
+                        color: Style.textPrimary
+                        elide: Text.ElideRight
+                    }
+                    Icon {
+                        id: seasonChevron
+                        anchors { right: parent.right; rightMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
+                        width: units.gu(2); height: width
+                        name: page.seasonsOpen ? "go-up" : "go-down"
+                        color: Style.textSecondary
+                    }
                 }
-                FormField {
-                    id: episodeField
-                    width: (parent.width - Style.spacingM * 2) / 3
-                    label: Lang.tr("Episode")
-                    inputMethodHints: Qt.ImhDigitsOnly
-                    text: page.isEdit && page.editEpisode.episodeNumber ? String(page.editEpisode.episodeNumber) : ""
+
+                Repeater {
+                    model: page.seasonsOpen ? page.seasonList : []
+                    delegate: AbstractButton {
+                        width: parent.width
+                        height: units.gu(5)
+                        onClicked: { page.seasonNumber = modelData.number; page.seasonsOpen = false; page.addingSeason = false; }
+                        Label {
+                            anchors { left: parent.left; right: seasonTick.left; margins: Style.spacingM; verticalCenter: parent.verticalCenter }
+                            text: page.seasonLabel(modelData)
+                            font.pixelSize: Style.fontRegular
+                            font.family: Style.fontFor(text)
+                            color: Style.textPrimary
+                            elide: Text.ElideRight
+                        }
+                        Icon {
+                            id: seasonTick
+                            anchors { right: parent.right; rightMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
+                            width: units.gu(2); height: width
+                            name: "tick"
+                            color: Style.brand
+                            visible: modelData.number === page.seasonNumber
+                        }
+                    }
                 }
-                FormField {
-                    width: (parent.width - Style.spacingM * 2) / 3
-                    enabled: !page.isSynced
-                    label: Lang.tr("Minutes")
-                    inputMethodHints: Qt.ImhDigitsOnly
-                    text: page.durationMin
-                    onTextChanged: page.durationMin = text
+
+                AbstractButton {
+                    width: parent.width
+                    height: units.gu(5)
+                    visible: page.seasonsOpen && !page.addingSeason
+                    onClicked: page.startNewSeason()
+                    Row {
+                        anchors { left: parent.left; leftMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
+                        spacing: Style.spacingS
+                        Icon {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: units.gu(2); height: width
+                            name: "add"
+                            color: Style.brand
+                        }
+                        Label {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: Lang.tr("New season")
+                            font.pixelSize: Style.fontRegular
+                            color: Style.brand
+                        }
+                    }
+                }
+
+                // new season form
+                Column {
+                    width: parent.width
+                    spacing: Style.spacingS
+                    visible: page.seasonsOpen && page.addingSeason
+
+                    FormField {
+                        id: newSeasonNumber
+                        width: parent.width
+                        label: Lang.tr("Season number")
+                        inputMethodHints: Qt.ImhDigitsOnly
+                        errorText: page.seasonError
+                    }
+                    FormField {
+                        id: newSeasonTitle
+                        width: parent.width
+                        label: Lang.tr("Season title (optional)")
+                    }
+                    Row {
+                        spacing: Style.spacingS
+                        Button {
+                            text: Lang.tr("Add season")
+                            color: Style.brand
+                            enabled: !page.savingSeason
+                            onClicked: page.addSeason()
+                        }
+                        Button {
+                            text: Lang.tr("Cancel")
+                            enabled: !page.savingSeason
+                            onClicked: page.addingSeason = false
+                        }
+                    }
+                }
+            }
+
+            FormField {
+                id: episodeField
+                width: parent.width
+                label: Lang.tr("Episode")
+                inputMethodHints: Qt.ImhDigitsOnly
+                text: page.isEdit && page.editEpisode.episodeNumber ? String(page.editEpisode.episodeNumber) : ""
+            }
+
+            // publish scope picker
+            Column {
+                width: parent.width
+                spacing: Style.spacingS
+                visible: !page.targetIsGlobal && !!page.scopeCurrent
+
+                Label { text: Lang.tr("Publish to"); font.pixelSize: Style.fontSmall; font.weight: Font.DemiBold; color: Style.textPrimary }
+
+                AbstractButton {
+                    id: scopeRow
+                    width: parent.width
+                    height: units.gu(5)
+                    onClicked: scopeSheet.show(page.scopeSheetItems(), scopeRow)
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: Style.cardRadius
+                        color: Style.surface
+                        border.width: units.dp(1)
+                        border.color: Style.divider
+                    }
+                    Label {
+                        anchors { left: parent.left; right: scopeChevron.left; margins: Style.spacingM; verticalCenter: parent.verticalCenter }
+                        text: page.scopeCurrent ? page.scopeCurrent.label : ""
+                        font.pixelSize: Style.fontRegular
+                        font.family: Style.fontFor(text)
+                        color: Style.textPrimary
+                        elide: Text.ElideRight
+                    }
+                    Icon {
+                        id: scopeChevron
+                        anchors { right: parent.right; rightMargin: Style.spacingM; verticalCenter: parent.verticalCenter }
+                        width: units.gu(2); height: width
+                        name: "go-down"
+                        color: Style.textSecondary
+                    }
+                }
+
+                Label {
+                    width: parent.width
+                    text: page.scopeCurrent ? page.scopeCurrent.hint : ""
+                    font.pixelSize: Style.fontXSmall
+                    font.family: Style.fontFor(text)
+                    color: Style.textSecondary
+                    wrapMode: Text.WordWrap
                 }
             }
         }
     }
+
+    ActionBottomSheet { id: scopeSheet }
 
     Rectangle {
         anchors.fill: parent

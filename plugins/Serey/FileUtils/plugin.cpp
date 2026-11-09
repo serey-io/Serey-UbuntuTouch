@@ -1,6 +1,7 @@
 #include <QQmlExtensionPlugin>
 #include <qqml.h>
 
+#include "appfiles.h"
 #include "filechunkreader.h"
 #include "jsonrequest.h"
 #include "netpool.h"
@@ -16,6 +17,7 @@ public:
         // import Serey.FileUtils 1.0
         qmlRegisterType<FileChunkReader>(uri, 1, 0, "FileChunkReader");
         qmlRegisterType<JsonRequest>(uri, 1, 0, "JsonRequest");
+        qmlRegisterType<AppFiles>(uri, 1, 0, "AppFiles");
     }
 
     // Runs on `import Serey.FileUtils`, before any image loads, so the loader's NAM is tracked.

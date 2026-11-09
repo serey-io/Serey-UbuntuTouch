@@ -21,32 +21,19 @@ function _playable(rows) {
     return rows.filter(function (e) { return e.accessType !== 2 && !e.isLocked; });
 }
 
-// Season number -> access_type, port of web seasonAccessType: synced rows don't count, mixed is public
-function seasonAccess(episodes) {
-    var by = {};
-    for (var i = 0; i < episodes.length; i++) {
-        var e = episodes[i];
-        if (e.sourceId) continue;
-        var s = String(e.seasonNumber);
-        if (!(s in by)) by[s] = e.accessType;
-        else if (by[s] !== e.accessType) by[s] = 1;
-    }
-    return by;
-}
-
-// onOk(accessType, seasonTitle) to write for a season; locked rows still carry access_type
-function seasonInfo(baseUrl, communityId, season, onOk, onErr) {
+// onOk(seasonTitle) to write for a season
+function seasonTitle(baseUrl, communityId, season, onOk, onErr) {
     return Http.get(baseUrl, "/podcast/list", { community_id: communityId, season_number: season, limit: 200 }, "",
         function (data) {
             var eps = (data.podcasts || []).map(M.toEpisode);
             var title = "";
             for (var i = 0; i < eps.length && !title; i++) title = eps[i].seasonTitle;
-            onOk(seasonAccess(eps)[String(season)] || 1, title);
+            onOk(title);
         }, onErr);
 }
 
-// All episodes of one community; API pages at 200
-function listAll(baseUrl, communityId, token, onOk, onErr) {
+// Every episode row of one community; API pages at 200
+function _listRows(baseUrl, communityId, token, onOk, onErr) {
     var all = [];
     var req = { xhr: null, abort: function () { if (this.xhr) this.xhr.abort(); this.xhr = null; } };
     function page(n) {
@@ -55,11 +42,74 @@ function listAll(baseUrl, communityId, token, onOk, onErr) {
                 all = all.concat(data.podcasts || []);
                 var total = (data.pagination && data.pagination.total_pages) || 1;
                 if (n < total) page(n + 1);
-                else { req.xhr = null; onOk(_playable(_dedupe(all).map(M.toEpisode))); }
+                else { req.xhr = null; onOk(_dedupe(all).map(M.toEpisode)); }
             }, onErr);
     }
     page(1);
     return req;
+}
+
+function listAll(baseUrl, communityId, token, onOk, onErr) {
+    return _listRows(baseUrl, communityId, token, function (rows) { onOk(_playable(rows)); }, onErr);
+}
+
+// Seasons saved without episodes (podcast_theme.extra_seasons)
+function savedSeasons(baseUrl, communityId, onOk, onErr) {
+    return Http.get(baseUrl, "/general/get-communities", {}, "", function (data) {
+        var found = null;
+        function walk(nodes) {
+            for (var i = 0; i < nodes.length && !found; i++) {
+                if (String(nodes[i].id) === String(communityId)) found = nodes[i];
+                else walk(nodes[i].child_communities || []);
+            }
+        }
+        ["globals", "locals", "foreigns", "independents"].forEach(function (g) { walk(data[g] || []); });
+        // the save replaces the list, so an unknown list must never read as empty
+        if (!found || !("podcast_theme" in found)) { onErr({ message: "Couldn't load seasons." }); return; }
+        onOk((found.podcast_theme && found.podcast_theme.extra_seasons) || []);
+    }, onErr);
+}
+
+// Union by number, sorted; port of web mergeSavedSeasons
+function mergeSeasons(seasons, extra) {
+    var by = {}, out = [];
+    seasons.concat(extra).forEach(function (s) {
+        var n = Number(s.number);
+        if (!by[n]) { by[n] = { number: n, title: s.title || "" }; out.push(by[n]); }
+        else if (!by[n].title && s.title) by[n].title = s.title;
+    });
+    out.sort(function (a, b) { return a.number - b.number; });
+    return out;
+}
+
+// Season number -> true when all its episodes are premium; port of web seasonAccessType: synced rows don't count, mixed is public
+function premiumSeasons(rows) {
+    var by = {}, out = {};
+    rows.forEach(function (e) {
+        if (!e.sourceId) by[e.seasonNumber] = by[e.seasonNumber] !== false && e.accessType === 2;
+    });
+    Object.keys(by).forEach(function (n) { if (by[n]) out[n] = true; });
+    return out;
+}
+
+// onOk(publicSeasons, saved, premium); locked rows still carry access_type
+function loadSeasons(baseUrl, communityId, onOk, onErr) {
+    savedSeasons(baseUrl, communityId, function (saved) {
+        _listRows(baseUrl, communityId, "", function (rows) {
+            var premium = premiumSeasons(rows);
+            var open = mergeSeasons(seasons(rows), saved).filter(function (s) { return !premium[s.number]; });
+            onOk(open, saved, premium);
+        }, onErr);
+    }, onErr);
+}
+
+// shortcut: the list read is cached 60s on the server, so a season added elsewhere in that window can drop; needs a save-one-season API to fix
+function addSeason(baseUrl, communityId, token, season, known, onOk, onErr) {
+    savedSeasons(baseUrl, communityId, function (saved) {
+        var next = mergeSeasons(mergeSeasons(saved, known), [season]);
+        Http.patch(baseUrl, "/community/update-podcast-theme", { community_id: Number(communityId), extra_seasons: next }, token,
+            function (data) { onOk((data && data.podcast_theme && data.podcast_theme.extra_seasons) || next); }, onErr);
+    }, onErr);
 }
 
 // Latest episodes from every community, newest first; a country id narrows it to that branch
@@ -108,7 +158,7 @@ function shareUrl(ep, fallbackDns) {
 function payload(form, communityId) {
     var num = function (v) { var n = parseInt(String(v || "").replace(/\D/g, ""), 10); return n > 0 ? n : null; };
     var type = form.contentType || "audio";
-    return {
+    var body = {
         community_id: Number(communityId),
         title: String(form.title || "").trim(),
         description: String(form.description || "").trim() || null,
@@ -120,9 +170,13 @@ function payload(form, communityId) {
         episode_number: num(form.episode),
         season_number: num(form.season) || 1,
         season_title: form.seasonTitle ? String(form.seasonTitle).trim() || null : null,
-        tags: null,
-        access_type: form.accessType || 1
+        tags: null
     };
+    // app publishes public only; edits keep the episode's access
+    if (!form.isEdit) body.access_type = 1;
+    // undefined = keep the saved ceiling
+    if (form.ceiling !== undefined) body.publish_scope_community_id = Number(form.ceiling) > 0 ? Number(form.ceiling) : null;
+    return body;
 }
 
 function create(baseUrl, body, token, onOk, onErr) {

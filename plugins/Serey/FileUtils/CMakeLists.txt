@@ -8,6 +8,8 @@ find_package(Qt5 REQUIRED COMPONENTS Core Qml Network)
 
 add_library(${PLUGIN} MODULE
     plugin.cpp
+    appfiles.cpp
+    appfiles.h
     filechunkreader.cpp
     filechunkreader.h
     jsonrequest.cpp

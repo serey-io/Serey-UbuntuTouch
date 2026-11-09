@@ -357,6 +357,7 @@ Page {
 
                     TextEdit {
                         id: nameField
+                        TapToFocus { field: nameField }
                         anchors { left: parent.left; right: parent.right; top: parent.top; topMargin: Style.spacingS }
                         font.family: Style.fontFor(text)
                         font.pixelSize: Style.fontRegular
@@ -403,6 +404,7 @@ Page {
                     }
                     TextInput {
                         id: subField
+                        TapToFocus { field: subField }
                         anchors {
                             left: parent.left
                             right: subSuffix.left; rightMargin: Style.spacingXs
