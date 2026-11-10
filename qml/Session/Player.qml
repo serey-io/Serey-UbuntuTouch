@@ -37,13 +37,18 @@ QtObject {
     }
     function isYtLink(ep) { return !!ep && ep.contentType === "link" && /(youtube\.com\/(watch|embed|shorts)|youtu\.be\/)/i.test(ep.contentUrl || ""); }
     function isSaved(ep) { return !!ep && Downloads.pathFor(key(ep)).length > 0; }
-    // downloaded youtube plays its file natively
     function isYt(ep) { return isYtLink(ep) && !isSaved(ep); }
-    function isVideo(ep) { return !!ep && (ep.contentType === "video" || (isYtLink(ep) && isSaved(ep))); }
-    // fixed at play(), so a download finishing mid-play doesn't swap players
+    function _isFile(ep) { return !!ep && (ep.contentType === "video" || (isYtLink(ep) && isSaved(ep))); }
+    // Chromium can't decode remote .mov, so only those stay on media-hub (which ignores speed)
+    function isVideo(ep) { var s = _isFile(ep) ? sourceFor(ep) : ""; return s.indexOf("file://") !== 0 && /\.mov(\?|$)/i.test(s); }
+    // web view: youtube embeds, plus video files and downloads in a <video>
+    function isWeb(ep) { return isYt(ep) || (_isFile(ep) && !isVideo(ep)); }
+    // fixed at play(), so a download finishing mid-play doesn't swap players or reload
     property bool _local: false
-    readonly property bool ytMode: isYtLink(current) && !_local
-    readonly property bool vidMode: !!current && (current.contentType === "video" || (isYtLink(current) && _local))
+    property string webUrl: ""
+    property bool webFile: false
+    readonly property bool ytMode: webUrl.length > 0
+    readonly property bool vidMode: !!current && !ytMode && _isFile(current)
     // the media object playing the current episode (audio, or the shared video player)
     readonly property var _m: vidMode ? (vid ? vid.media : null) : ytMode ? null : audio
 
@@ -54,7 +59,7 @@ QtObject {
                                              : !!_m && (_m.status === MediaPlayer.Loading || _m.status === MediaPlayer.Buffering
                                                         || _m.status === MediaPlayer.Stalled)
     // show the target time while the resume seek is pending
-    readonly property int position: ytMode ? (yt ? yt.position : 0)
+    readonly property int position: ytMode ? (_resumeTo > 0 ? _resumeTo : yt ? yt.position : 0)
                                     : _m ? (_resumeTo > 0 ? _resumeTo : _seekShow >= 0 ? _seekShow : Math.max(0, _m.position)) : 0
     // media-hub reports junk mid-seek; show the target until it lands
     property int _seekShow: -1
@@ -78,11 +83,14 @@ QtObject {
         if (isCurrent(ep)) { if (!playing) toggle(); return; }
         _save();
         // mute before the view is torn down
-        if (yt && !isYt(ep)) yt.stop();
+        if (yt && !isWeb(ep)) yt.stop();
         // media-hub ignores a cleared source and keeps playing; only destroying the player stops it
         if (!isVideo(ep)) { if (vid) vid.source = ""; vidWarm = false; }
-        if (isYt(ep) || isVideo(ep)) _dropAudio();
+        if (isWeb(ep) || isVideo(ep)) _dropAudio();
         _local = isSaved(ep);
+        webFile = isWeb(ep) && !isYt(ep);
+        webUrl = isYt(ep) ? ep.contentUrl : webFile ? sourceFor(ep) : "";
+        _webRetries = 0;
         current = ep;
         queue = (list && list.length) ? list : [ep];
         index = 0;
@@ -95,7 +103,8 @@ QtObject {
         _resumeTo = isYt(ep) ? 0 : at > 0 ? at : _loadPos(key(ep));
         ytUserPaused = false;
         _log("play " + (ep.title || ep.id) + " at=" + at);
-        if (isYt(ep)) return;
+        // the web view seeks once ready, see _webReady
+        if (isWeb(ep)) return;
         // Main.qml builds the shared video player, then calls _feedVid
         if (isVideo(ep)) { vidWarm = true; _feedVid(); return; }
         _ensureAudio();
@@ -130,7 +139,23 @@ QtObject {
         if (vid) vid.source = "";
         vidWarm = false;
         _dropAudio();
+        webUrl = ""; webFile = false;
         current = null; queue = []; index = -1;
+    }
+    // resume point for a <video> in the web view; youtube starts over like before
+    function _webReady() {
+        if (!yt || !yt.ready) return;
+        yt.setRate(rate);
+        if (webFile && _resumeTo > 0) { var t = _resumeTo; _resumeTo = 0; yt.seekTo(t); }
+    }
+    // storage sometimes fails a mid-file fetch (err=2 after a resume on the phone); reload from the same spot
+    property int _webRetries: 0
+    function _webError() {
+        if (!yt || !webFile || yt.mediaError <= 0) return;
+        if (_webRetries >= 3) { error = Lang.tr("Couldn't play this episode."); return; }
+        _webRetries++;
+        log("web retry " + _webRetries + " err=" + yt.mediaError + " at " + Math.round(yt.position));
+        yt.reloadAt(yt.position);
     }
     function seekTo(ms) {
         _resumeTo = 0;

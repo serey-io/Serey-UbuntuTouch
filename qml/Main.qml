@@ -1211,7 +1211,7 @@ MainView {
         height: visible ? units.gu(7) : 0
         onOpened: root.openPodcastPlayer()
     }
-    // podcast youtube + video views; live here so they keep playing off the page
+    // podcast web (youtube, video files) + native .mov views; live here so they keep playing off the page
     // off-screen at stage size: hidden or resized, youtube throttles and re-buffers
     Item { id: ytHome; x: -width - units.gu(2); width: units.gu(45); height: width * 9 / 16 }
     Connections {
@@ -1226,12 +1226,17 @@ MainView {
         anchors.fill: parent
         active: Player.ytMode
         sourceComponent: VideoWebView {
-            wrap: true
+            // youtube in its wrapper; video files and downloads in a plain <video>, which honours speed
+            wrap: !Player.webFile
+            directVideo: Player.webFile
             controls: false
             reportState: true
             keepVisible: true
-            embedUrl: Player.ytMode ? Player.current.contentUrl : ""
-            onReadyChanged: { console.log("[pod] yt ready=" + ready + " pos=" + position); if (ready) setRate(Player.rate); }
+            keepPlaying: true
+            noCache: true
+            embedUrl: Player.webUrl
+            onReadyChanged: { console.log("[pod] yt ready=" + ready + " pos=" + position); Player._webReady(); }
+            onMediaErrorChanged: Player._webError()
             onEndedChanged: if (ended) Player._ended()
             // shortcut: debug logs for the back jump, remove once fixed
             onPausedChanged: {
