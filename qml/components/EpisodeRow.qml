@@ -8,7 +8,10 @@ Item {
     id: root
 
     property var episode: null
+    // Global and country lists mix shows; inside one the season tabs already say it
+    property bool showSeason: false
     readonly property bool isCurrent: (Player.current, Player.isCurrent(episode))
+    readonly property real progress: (Player.progressRev, Player.progressOf(episode))
 
     width: parent ? parent.width : 0
     height: Math.max(cover.height, info.height)
@@ -32,6 +35,20 @@ Item {
                 color: "white"
             }
         }
+        // listened so far
+        Rectangle {
+            visible: root.progress > 0
+            anchors { left: parent.left; right: parent.right; bottom: parent.bottom; margins: units.dp(4) }
+            height: units.dp(3)
+            radius: height / 2
+            color: Qt.rgba(1, 1, 1, 0.45)
+            Rectangle {
+                width: parent.width * root.progress
+                height: parent.height
+                radius: parent.radius
+                color: Style.brand
+            }
+        }
     }
 
     Column {
@@ -42,7 +59,8 @@ Item {
         Label {
             width: parent.width
             visible: text.length > 0
-            text: root.episode ? [Lang.tr("Season") + " " + root.episode.seasonNumber, Player.episodeLabel(root.episode), Player.durationLabel(root.episode)].filter(function (s) { return s; }).join(" · ") : ""
+            text: root.episode ? [root.showSeason ? (root.episode.seasonTitle || Lang.tr("Season") + " " + root.episode.seasonNumber) : "",
+                                  Player.episodeLabel(root.episode), Player.durationLabel(root.episode)].filter(function (s) { return s; }).join(" · ") : ""
             font.pixelSize: Style.fontXSmall
             color: root.isCurrent ? Style.brand : Style.textSecondary
         }

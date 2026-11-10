@@ -19,6 +19,7 @@ Page {
     property var inflight: null
     // background refresh: no spinner over the cached list
     property bool _quiet: false
+    property string _inflightKey: ""
     // episode open in the detail pane
     property string openId: ""
 
@@ -35,9 +36,15 @@ Page {
 
     header: Item { height: 0 }
 
+    // a hidden tab waits until it's shown, instead of fetching on every platform switch
+    property bool stale: false
     Connections {
         target: Config
-        function onCommunityIdChanged() { page.episodes = []; page.seasonList = []; page.reload(); }
+        function onCommunityIdChanged() {
+            page.episodes = [];
+            page.seasonList = [];
+            if (page.visible) page.reload(); else page.stale = true;
+        }
     }
     // back to the list clears the highlight
     Connections {
@@ -52,44 +59,43 @@ Page {
 
     function reload(pulled) {
         page._quiet = !pulled;
+        page.stale = false;
         page.reqEpoch++;
-        if (inflight) { inflight.abort(); inflight = null; }
         var epoch = page.reqEpoch;
-        // shortcut: fetch timing log, remove once measured
-        var t0 = Date.now();
         page.loading = true;
         // last list paints at once, fetch replaces it
         var key = FeedCache.podcastKey(Config.communityId);
+        // a refresh of the same list joins the shared request; only a platform switch drops the old one
+        if (inflight && page._inflightKey !== key) inflight.abort();
+        inflight = null;
+        page._inflightKey = key;
         if (page.episodes.length === 0) page.episodes = FeedCache.peek(key) || [];
         page.errorMsg = "";
+        var started = Date.now();
         var ok = function (rows) {
             if (epoch !== page.reqEpoch) return;
-            console.log("[pod] fetch " + (Date.now() - t0) + "ms, " + rows.length + " episodes, " + (page.isAggregate ? "global" : "platform " + Config.communityId));
+            Player.log("list " + key + " loaded in " + (Date.now() - started) + "ms, " + rows.length + " rows");
             inflight = null;
             page.loading = false;
             // platform name for the publisher line
-            if (!page.isAggregate) rows.forEach(function (r) { if (!r.communityTitle) r.communityTitle = Config.communityName; });
+            if (!page.isAggregate) rows.forEach(function (r) { if (!r.communityTitle) r.communityTitle = Config.currentCommunityName; });
             page.episodes = rows;
-            FeedCache.put(key, rows);
-            Qt.callLater(function () { console.log("[pod] list shown " + (Date.now() - t0) + "ms"); });
             // stay on the same season after an edit or delete
             var keep = page.seasonList.length > page.seasonIndex ? page.seasonList[page.seasonIndex].number : -1;
-            var list = page.isAggregate ? [] : PodcastService.seasons(rows);
+            var seasons = page.isAggregate ? [] : PodcastService.seasons(rows);
             page.seasonIndex = 0;
-            page.seasonList = list;
-            page.seasonIndex = Math.max(0, list.map(function (x) { return x.number; }).indexOf(keep));
+            page.seasonList = seasons;
+            page.seasonIndex = Math.max(0, seasons.map(function (x) { return x.number; }).indexOf(keep));
         };
         var err = function (e) {
             if (epoch !== page.reqEpoch) return;
-            console.log("[pod] fetch failed " + (Date.now() - t0) + "ms: " + e.message);
             inflight = null;
             page.loading = false;
             page.errorMsg = e.message;
         };
-        inflight = page.isAggregate
-            // no token: premium is hidden anyway, and anonymous hits the server cache (~1.5s vs ~9s)
-            ? PodcastService.listGlobal("", Config.communityId, ok, err)
-            : PodcastService.listAll(Config.baseUrl, Config.communityId, "", ok, err);
+        // joins the launch prefetch when it's still in flight instead of fetching twice
+        var cid = Config.communityId, agg = page.isAggregate;
+        inflight = FeedCache.request(key, function (o, e) { return PodcastService.listFor(Config.baseUrl, cid, agg, o, e); }, ok, err);
     }
 
     function open(ep) {
@@ -109,7 +115,7 @@ Page {
     Component.onCompleted: reload()
 
     property Item keyboardFocusItem: list
-    onVisibleChanged: if (visible) list.forceActiveFocus()
+    onVisibleChanged: if (visible) { if (page.stale) page.reload(); list.forceActiveFocus(); }
 
     SectionTabs {
         id: tabs
@@ -132,6 +138,7 @@ Page {
         model: page.shown
         Keys.onLeftPressed: Nav.focusNav()
 
+        // only for a real pull: running it for background reloads left the header scrolled out of view
         PullToRefresh {
             refreshing: page.loading && page.shown.length > 0 && !page._quiet
             // a pull during a quiet refresh adopts it
@@ -164,6 +171,7 @@ Page {
                 id: row
                 anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; leftMargin: Style.spacingM; rightMargin: Style.spacingM }
                 episode: modelData
+                showSeason: page.isAggregate
             }
         }
 

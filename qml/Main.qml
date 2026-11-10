@@ -21,6 +21,7 @@ import "services/VideoService.js" as VideoService
 import "services/PlatformService.js" as PlatformService
 import "services/CustomMenuService.js" as CustomMenuService
 import "services/HomepageService.js" as HomepageService
+import "services/PodcastService.js" as PodcastService
 import "services/NavPerf.js" as NavPerf
 
 MainView {
@@ -167,23 +168,35 @@ MainView {
 
     // Nav tabs hidden for the current platform (custom_menu.is_hidden)
     property var navVisibility: ({})
-    // The web's own PODCAST menu row: -1 unknown, 0 missing or hidden, 1 shown
+    // The web's own PODCAST menu row: -1 none, 0 hidden, 1 shown
     property int podcastMenuVisible: -1
     function _loadNavVisibility() {
         root.podcastMenuVisible = -1
         CustomMenuService.listByWebsiteAndCommunity(Config.baseUrl,
             { community_id: Config.communityId }, Session.token,
             function (rows) {
-                var vis = {}, podcast = 0
+                var vis = {}, podcast = -1
                 for (var i = 0; i < rows.length; i++) {
                     if (rows[i].key) vis[rows[i].key] = !!rows[i].is_hidden
-                    if (rows[i].key === "PODCAST" && !rows[i].is_hidden) podcast = 1
+                    if (rows[i].key === "PODCAST") podcast = rows[i].is_hidden ? 0 : 1
                 }
                 root.navVisibility = vis
                 root.podcastMenuVisible = podcast
                 root._redirectIfCurrentTabHidden()
             },
             function () { root.navVisibility = {} /* non-fatal: every tab defaults to visible */ })
+    }
+    // Platforms with no menu rows fall back to web defaults, so episodes decide. -1 until resolved.
+    property int podcastAvailable: -1
+    function _loadPodcastAvailability() {
+        root.podcastAvailable = -1
+        var id = Config.communityId
+        if (id <= 0 || Config.topLevelCommunityIds[id]) return
+        PodcastService.hasEpisodes(Config.baseUrl, id, function (has) {
+            if (id !== Config.communityId) return
+            root.podcastAvailable = has ? 1 : 0
+            root._redirectIfCurrentTabHidden()
+        }, function () {})
     }
     // Does the selected community have a homepage of its own? -1 until resolved.
     // Drives the Homepage tab's default: communities that never built one would
@@ -240,7 +253,7 @@ MainView {
     }
     Connections {
         target: Config
-        function onCommunityIdChanged() { root._loadNavVisibility(); root._loadHomepageAvailability(); }
+        function onCommunityIdChanged() { root._loadNavVisibility(); root._loadHomepageAvailability(); root._loadPodcastAvailability(); }
     }
     Connections {
         target: Nav
@@ -251,6 +264,7 @@ MainView {
         NavPerf.enabled = Config.debugNavPerf;
         root._loadNavVisibility();
         root._loadHomepageAvailability();
+        root._loadPodcastAvailability();
         // Expired tokens caught lazily via 401; only clear if rejected token is still current
         Http.setUnauthorizedHandler(function (tokenUsed) {
             if (!Session.isLoggedIn) return;
@@ -493,6 +507,13 @@ MainView {
             },
             function (result) { /* stored by FeedCache; the page reads it */ },
             function (err) { /* offline: the page will show its own error */ });
+
+        // The Global list is built from ~120 per-community calls on the web server (~8s cold), so warm it early
+        var podcastAgg = Config.communityId <= 0 || !!Config.topLevelCommunityIds[Config.communityId];
+        FeedCache.request(FeedCache.podcastKey(Config.communityId),
+            function (ok, err) { return PodcastService.listFor(Config.baseUrl, Config.communityId, podcastAgg, ok, err); },
+            function (result) { /* stored by FeedCache; the page reads it */ },
+            function (err) { /* the page will show its own error */ });
 
         FeedCache.request(FeedCache.videoKey(Config.communityId),
             function (ok, err) {
@@ -1114,10 +1135,12 @@ MainView {
         if (root.navVisibility.hasOwnProperty(t.key)) return !!root.navVisibility[t.key];
         // No row: Homepage is hidden unless this community actually built one.
         if (t.key === "homepage") return root.homepageAvailable === 0;
-        // Podcast follows the web: a platform needs a visible /podcast menu item; Global and countries always show it.
-        if (t.key === "podcast")
-            return Config.communityId > 0 && !Config.topLevelCommunityIds[Config.communityId]
-                   && root.podcastMenuVisible === 0;
+        // Podcast: Global and countries always; a platform follows its web menu row, else whether it has episodes.
+        if (t.key === "podcast") {
+            if (Config.communityId <= 0 || Config.topLevelCommunityIds[Config.communityId]) return false;
+            if (root.podcastMenuVisible >= 0) return root.podcastMenuVisible === 0;
+            return root.podcastAvailable === 0;
+        }
         return false;
     }
     readonly property int _visibleTabCount: {
@@ -1187,54 +1210,6 @@ MainView {
         visible: Player.current !== null && !Player.pageOpen
         height: visible ? units.gu(7) : 0
         onOpened: root.openPodcastPlayer()
-    }
-    // podcast youtube + video views; live here so they keep playing off the page
-    // off-screen at stage size: hidden or resized, youtube throttles and re-buffers
-    Item { id: ytHome; x: -width - units.gu(2); width: units.gu(45); height: width * 9 / 16 }
-    Connections {
-        target: Player
-        function onStageChanged() { if (Player.stage) { ytHome.width = Player.stage.width; ytHome.height = Player.stage.height; } }
-    }
-    // visible 2px spot under everything: a hidden VideoOutput may stall the stream
-    Item { id: vidHome; width: 2; height: 2; z: -1 }
-    Loader {
-        id: ytHost
-        parent: Player.ytMode && Player.stage ? Player.stage : ytHome
-        anchors.fill: parent
-        active: Player.ytMode
-        sourceComponent: VideoWebView {
-            wrap: true
-            controls: false
-            reportState: true
-            keepVisible: true
-            embedUrl: Player.ytMode ? Player.current.contentUrl : ""
-            onReadyChanged: { console.log("[pod] yt ready=" + ready + " pos=" + position); if (ready) setRate(Player.rate); }
-            onEndedChanged: if (ended) Player._ended()
-            // shortcut: debug logs for the back jump, remove once fixed
-            onPausedChanged: {
-                console.log("[pod] yt paused=" + paused + " pos=" + position + " stage=" + !!Player.stage);
-                // off the page youtube pauses itself; keep it going
-                if (paused && ready && !ended && !Player.stage && !Player.ytUserPaused) Qt.callLater(play);
-            }
-            onPositionChanged: { if (Math.abs(position - _lastPos) > 2500) console.log("[pod] yt jump " + _lastPos + " -> " + position + " stage=" + !!Player.stage); _lastPos = position; }
-            property real _lastPos: 0
-        }
-        onItemChanged: Player.yt = item
-        onParentChanged: console.log("[pod] yt moved, stage=" + !!Player.stage + " pos=" + (item ? item.position : -1))
-    }
-    Loader {
-        id: vidHost
-        parent: Player.vidMode && Player.stage ? Player.stage : vidHome
-        anchors.fill: parent
-        // async: building it on the tap froze the page
-        asynchronous: true
-        active: Player.vidWarm
-        sourceComponent: VideoNativePlayer {
-            onFailed: if (Player.vidMode) Player.error = Lang.tr("Couldn't play this episode.")
-        }
-        onItemChanged: Player.vid = item
-        // gstreamer needs a free main thread for the surface
-        onLoaded: Qt.callLater(Player._feedVid)
     }
     function openPodcastPlayer() {
         if (!Player.current) return;

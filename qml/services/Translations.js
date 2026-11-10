@@ -906,6 +906,7 @@ var nl = {
     "Episode deleted":                                   "Aflevering verwijderd",
     "Couldn't delete episode.":                          "Kon de aflevering niet verwijderen.",
     "Delete episode":                                    "Aflevering verwijderen",
+    "More":                                              "Meer",
     "Couldn't play this episode.":                       "Kan deze aflevering niet afspelen.",
     "This is a premium episode. Subscribe to this platform to listen.": "Dit is een premium aflevering. Abonneer u op dit platform om te luisteren.",
     "Open episode link":                                 "Afleveringslink openen",
@@ -940,6 +941,8 @@ var nl = {
     "Podcasts":                                          "Podcasts",
     "No downloaded episodes yet":                        "Nog geen gedownloade afleveringen",
     "Select an episode to listen":                       "Selecteer een aflevering om te luisteren",
+    "Playback speed isn't supported on this device.":    "Afspeelsnelheid wordt op dit apparaat niet ondersteund.",
+    "No network right now. Downloaded episodes still play offline.": "Geen netwerk. Gedownloade afleveringen spelen nog offline af.",
     "Podcast":                                           "Podcast"
 };
 

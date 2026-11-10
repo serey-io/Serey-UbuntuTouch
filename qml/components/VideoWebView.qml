@@ -34,22 +34,52 @@ Item {
     property real position: 0
     property real duration: 0
     property bool ended: false
+    // <video> only (YouTube keeps the defaults): HTMLMediaElement readyState, error code, networkState (2 = loading)
+    property int readyState: 4
+    property int mediaError: 0
+    property int networkState: 2
+    function reloadAt(ms) { wv.runJavaScript("if(window.P&&P.reload)P.reload(" + (ms / 1000) + ");"); root.mediaError = 0; }
     function play() { wv.runJavaScript("if(window.P)P.play();"); root.paused = false; }
     function pause() { wv.runJavaScript("if(window.P)P.pause();"); root.paused = true; }
-    function seekTo(ms) { wv.runJavaScript("if(window.P)P.seek(" + (ms / 1000) + ");"); root.position = ms; }
+    function seekTo(ms) {
+        if (reportState) console.log("[podcast] web seek " + Math.round(ms));
+        wv.runJavaScript("if(window.P)P.seek(" + (ms / 1000) + ");");
+        root.position = ms;
+    }
     // mute first: the js pause is async and may not run before teardown
     function stop() { wv.audioMuted = true; pause(); }
     function setRate(r) { wv.runJavaScript("if(window.P&&P.rate)P.rate(" + r + ");"); }
+    // podcast diagnostics: the <video> element's state every 3s, logged only when it changes
+    property string _diag: ""
     Timer {
-        interval: 500
+        interval: 3000
         repeat: true
-        running: root.reportState && root.ready
-        onTriggered: wv.runJavaScript("window.P?[P.time(),P.dur(),P.paused(),P.ended()]:null", function (r) {
+        running: root.reportState && root.directVideo
+        onTriggered: wv.runJavaScript(
+            "(function(){var v=document.querySelector('video');if(!v)return 'no-video';" +
+            "function e(r){return r&&r.length?r.end(r.length-1).toFixed(0):'-';}" +
+            "return 't='+v.currentTime.toFixed(0)+' d='+(isFinite(v.duration)?v.duration.toFixed(0):'-')+" +
+            "' paused='+v.paused+' ready='+v.readyState+' net='+v.networkState+" +
+            "' err='+(v.error?v.error.code:0)+' seekEnd='+e(v.seekable)+' bufEnd='+e(v.buffered);})()",
+            function (r) {
+                // time alone moving isn't news
+                var k = String(r).replace(/^t=\d+ /, "").replace(/ bufEnd=\d+$/, "");
+                if (k !== root._diag) { root._diag = k; console.log("[podcast] web video " + r); }
+            })
+    }
+    // 250ms like the built-in bar, so the host's seek bar moves smoothly
+    Timer {
+        interval: 250
+        repeat: true
+        // <video> also before ready, so a load error is caught at once
+        running: root.reportState && (root.ready || root.directVideo)
+        onTriggered: wv.runJavaScript("window.P?[P.time(),P.dur(),P.paused(),P.ended(),P.state?P.state():null]:null", function (r) {
             if (!r) return;
             root.position = (r[0] || 0) * 1000;
             root.duration = isFinite(r[1]) ? (r[1] || 0) * 1000 : 0;
             root.paused = !!r[2];
             root.ended = !!r[3];
+            if (r[4]) { root.readyState = r[4][0]; root.mediaError = r[4][1]; root.networkState = r[4][2]; }
         })
     }
 
@@ -59,9 +89,16 @@ Item {
     // Unfocused alone doesn't freeze it (side-by-side windows blanked a playing video)
     readonly property bool _windowShown: Window.visibility !== Window.Hidden
                                          && Window.visibility !== Window.Minimized
+    // Podcast playback: keep running behind other apps or the lock screen. Only possible when the
+    // app is exempt from suspension; a real suspend still freezes it.
+    property bool keepPlaying: false
+    // long podcast files skip the shared reel cache (set at creation; a view's profile can't change later)
+    property bool noCache: false
     property bool appAway: Qt.application.state === Qt.ApplicationSuspended
-                           || (Qt.application.state !== Qt.ApplicationActive && !_windowShown)
+                           || (!(root.keepPlaying && !root.paused)
+                               && Qt.application.state !== Qt.ApplicationActive && !_windowShown)
     onAppAwayChanged: {
+        if (root.reportState) console.log("[podcast] web view " + (appAway ? "frozen" : "thawed"));
         if (!appAway) {
             vwFreezeTimer.stop();
             wv.visible = true;
@@ -120,7 +157,7 @@ Item {
         anchors.fill: parent
         // Shared singleton, not a per-view profile: its disk cache is the difference
         // between re-watching a reel instantly and refetching the whole file.
-        profile: VideoProfile
+        profile: root.noCache ? PodcastProfile : VideoProfile
 
         // Autoplay without a user gesture (our overlay tap is the gesture); local-file access lets an offline file:// <video> load from its wrapper.
         settings.playbackRequiresUserGesture: false
@@ -155,6 +192,11 @@ Item {
                 root.ready = true;
         }
 
+        // a dead renderer is the usual cause of a blank or crashing player; podcast pages log it
+        onRenderProcessTerminated: function (status, exitCode) {
+            console.log("VideoWebView renderer terminated status=" + status + " exit=" + exitCode + " yt=" + root.ytMode);
+        }
+
         onJavaScriptConsoleMessage: function (level, message, lineNumber, sourceID) {
             if (message.indexOf("__SEREY_READY__") >= 0)
                 root.ready = true;
@@ -163,6 +205,9 @@ Item {
             // Overriding this handler suppresses Chromium's own stdout echo, so forward ours.
             if (message.indexOf("[yt]") >= 0)
                 console.log("VideoWebView " + message);
+            // podcast pages also forward the page's warnings and errors
+            else if (root.reportState && level > 0)
+                console.log("[podcast] web console " + level + ": " + message.substring(0, 200));
         }
     }
 
@@ -428,7 +473,11 @@ Item {
                'var sk=v.seekable;if(sk&&sk.length){' +
                't=Math.max(sk.start(0),Math.min(sk.end(sk.length-1)-0.1,t));}' +
                'v.currentTime=t;}catch(_){}},' +
-               'rate:function(r){v.playbackRate=r;},ended:function(){return v.ended;}};window.P=P;' +
+               'rate:function(r){v.playbackRate=r;},ended:function(){return v.ended;},' +
+               'state:function(){return [v.readyState,v.error?v.error.code:0,v.networkState];},' +
+               // Chromium never retries a failed media fetch; a fresh load does. Same URL on purpose:
+               // a cache-busting query makes Cloudflare go to the origin, which is slow and ignores Range.
+               'reload:function(t){v.load();P.seek(t);v.play();}};window.P=P;' +
                'function r(){console.log("__SEREY_READY__");}' +
                'v.addEventListener("loadeddata",r);v.addEventListener("playing",r);' +
                (controls ? _controlsJs() : '') +

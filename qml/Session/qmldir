@@ -6,3 +6,4 @@ singleton Lang 1.0 Lang.qml
 singleton VideoProfile 1.0 VideoProfile.qml
 singleton CommentMenu 1.0 CommentMenu.qml
 singleton Player 1.0 Player.qml
+singleton PodcastProfile 1.0 PodcastProfile.qml

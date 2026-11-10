@@ -32,6 +32,13 @@ function seasonTitle(baseUrl, communityId, season, onOk, onErr) {
         }, onErr);
 }
 
+// Does a platform have any episode the app would show
+function hasEpisodes(baseUrl, communityId, onOk, onErr) {
+    return Http.get(baseUrl, "/podcast/list", { community_id: communityId, limit: 50 }, "", function (data) {
+        onOk(_playable((data.podcasts || []).map(M.toEpisode)).length > 0);
+    }, onErr);
+}
+
 // Every episode row of one community; API pages at 200
 function _listRows(baseUrl, communityId, token, onOk, onErr) {
     var all = [];
@@ -132,6 +139,12 @@ function listGlobal(token, countryId, onOk, onErr) {
         // shortcut: newest 60 only, keeps the list light; add paging if users want older
         onOk(rows.slice(0, 60));
     }, onErr);
+}
+
+// The list a podcast tab shows: Global and countries aggregate, a platform lists its own.
+// No token: premium is hidden anyway, and anonymous requests hit the server cache.
+function listFor(baseUrl, communityId, aggregate, onOk, onErr) {
+    return aggregate ? listGlobal("", communityId, onOk, onErr) : listAll(baseUrl, communityId, "", onOk, onErr);
 }
 
 // Ordered season numbers present in the list
