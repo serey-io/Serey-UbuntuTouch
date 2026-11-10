@@ -11,6 +11,8 @@ Item {
 
     Item { id: sink }
     property var _focusAtTap: null
+    // Window attached is null inside TapHandler
+    readonly property var _focusNow: Window.activeFocusItem
 
     function _inside(item, x, y, margin) {
         var p = item.mapFromItem(null, x, y);
@@ -20,7 +22,7 @@ Item {
 
     function _check(x, y) {
         if (Config.keepKeyboardTap) { Config.keepKeyboardTap = false; return; }
-        var focused = Window.activeFocusItem;
+        var focused = root._focusNow;
         // the tap's own handler moved focus to an input
         if (focused && focused !== root._focusAtTap && focused.cursorPosition !== undefined) return;
         // inner text line is shorter than its field
@@ -31,6 +33,8 @@ Item {
                 if (root._inside(keep[i], x, y, 0)) return;
         }
         Qt.inputMethod.commit();
+        // page scope would hand focus back on scroll
+        for (var f = focused; f; f = f.parent) if (f.cursorPosition !== undefined) f.focus = false;
         sink.forceActiveFocus();
         Qt.inputMethod.hide();
     }
@@ -44,7 +48,7 @@ Item {
             // later: runs after the tap moved focus or pressed a button
             onTapped: {
                 Config.keepKeyboardTap = false;
-                root._focusAtTap = Window.activeFocusItem;
+                root._focusAtTap = root._focusNow;
                 Qt.callLater(root._check, eventPoint.scenePosition.x, eventPoint.scenePosition.y);
             }
         }

@@ -10,38 +10,42 @@ Rectangle {
     property string placeholder: ""
     property int maximumLength: 0          // 0 = no limit
     readonly property int length: input.text.length
-    readonly property var keepKeyboardItems: [root]
 
     width: parent ? parent.width : units.gu(40)
     // Grows for text or wrapped placeholder
-    height: Math.max(units.gu(10), Math.max(input.contentHeight, hint.visible ? hint.implicitHeight : 0) + Style.spacingM * 2)
+    height: Math.max(units.gu(10), Math.max(input.height, hint.visible ? hint.implicitHeight : 0) + Style.spacingS * 2)
     radius: Style.cardRadius
     color: Style.surface
     border.width: units.dp(1)
     border.color: input.activeFocus ? Style.brand : Style.divider
     Behavior on border.color { ColorAnimation { duration: 120 } }
 
-    TextEdit {
+    // Lomiri TextArea, not TextEdit
+    TextArea {
         id: input
-        anchors.fill: parent
-        anchors.margins: Style.spacingM
-        wrapMode: TextEdit.Wrap
-        clip: true
+        anchors { left: parent.left; right: parent.right; top: parent.top; margins: Style.spacingS }
+        autoSize: true
+        maximumLineCount: 0
+        wrapMode: Text.Wrap
         font.pixelSize: Style.fontRegular
         font.family: Style.fontFor(text)
         color: Style.textPrimary
         selectionColor: Style.brand
         selectedTextColor: Style.textOnBrand
-        selectByMouse: true
         inputMethodHints: Qt.ImhNoAutoUppercase
-        onTextChanged: {
-            if (root.maximumLength > 0 && text.length > root.maximumLength)
-                text = text.substring(0, root.maximumLength);
+        StyleHints {
+            backgroundColor: "transparent"
+            borderColor: "transparent"
+        }
+        onTextChanged: if (root.maximumLength > 0 && text.length > root.maximumLength) {
+            var cp = cursorPosition;
+            text = text.substring(0, root.maximumLength);
+            cursorPosition = Math.min(cp, text.length);
         }
 
         Label {
             id: hint
-            anchors { left: parent.left; right: parent.right; top: parent.top }
+            anchors { left: parent.left; right: parent.right; top: parent.top; margins: Style.spacingS }
             text: root.placeholder
             // Per-field only, not Qt.inputMethod.visible, which would blank every other field's placeholder while any one is focused.
             // Stays up while focused, like Suru's own field; it only clears once there's text.
@@ -54,13 +58,14 @@ Rectangle {
         }
     }
 
-    // Match FormField: tap focuses + positions the cursor; press-and-hold pastes.
+    // tap to focus
     MouseArea {
         anchors.fill: parent
+        enabled: !input.activeFocus
         onClicked: {
             input.forceActiveFocus();
             input.cursorPosition = input.positionAt(mouse.x - input.x, mouse.y - input.y);
+            Qt.inputMethod.show();
         }
-        onPressAndHold: { input.forceActiveFocus(); input.paste(); }
     }
 }
