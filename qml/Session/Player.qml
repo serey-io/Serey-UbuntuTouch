@@ -2,7 +2,6 @@ pragma Singleton
 import QtQuick 2.7
 import QtMultimedia 5.12
 import QtQuick.LocalStorage 2.0
-import Qt.labs.settings 1.0
 import "../Theme"
 
 // podcast audio player
@@ -22,83 +21,133 @@ QtObject {
         else if (openPage === pg) openPage = null;
     }
     property string error: ""
+    function log(m) { console.log("[podcast] " + m); }
+    // youtube and video episodes play in shared views in Main.qml; the open page lends its stage
+    property var yt: null
+    property var vid: null
+    // set once a video page opens, so the video player is built before the tap
+    property bool vidWarm: false
+    // only a pause from our buttons counts; youtube may pause itself off-page
+    property bool ytUserPaused: false
+    property var stage: null
+    property var _stageOwner: null
+    function setStage(pg, st, shown) {
+        if (shown) { _stageOwner = pg; stage = st; }
+        else if (_stageOwner === pg) { _stageOwner = null; stage = null; }
+    }
+    function isYtLink(ep) { return !!ep && ep.contentType === "link" && /(youtube\.com\/(watch|embed|shorts)|youtu\.be\/)/i.test(ep.contentUrl || ""); }
+    function isSaved(ep) { return !!ep && Downloads.pathFor(key(ep)).length > 0; }
+    // downloaded youtube plays its file natively
+    function isYt(ep) { return isYtLink(ep) && !isSaved(ep); }
+    function isVideo(ep) { return !!ep && (ep.contentType === "video" || (isYtLink(ep) && isSaved(ep))); }
+    // fixed at play(), so a download finishing mid-play doesn't swap players
+    property bool _local: false
+    readonly property bool ytMode: isYtLink(current) && !_local
+    readonly property bool vidMode: !!current && (current.contentType === "video" || (isYtLink(current) && _local))
+    // the media object playing the current episode (audio, or the shared video player)
+    readonly property var _m: vidMode ? (vid ? vid.media : null) : ytMode ? null : audio
 
-    readonly property bool playing: !!audio && audio.playbackState === Audio.PlayingState
-    // media-hub stays in Loading for the whole playback, so moving playback counts as loaded
-    readonly property bool buffering: !!audio && (_seekTarget >= 0
-                                                  || ((audio.status === Audio.Loading || audio.status === Audio.Buffering
-                                                       || audio.status === Audio.Stalled) && !(playing && _pos > 0)))
-    // a just-requested seek shows at once; media-hub reports the new position late
-    property int _seekTarget: -1
-    // copies fed from change signals: media-hub briefly reports negative garbage, and binding to its duration loops
-    property int _pos: 0
-    property int _dur: 0
-    readonly property int position: _seekTarget >= 0 ? _seekTarget : _resumeTo > 0 ? _resumeTo : _pos
-    readonly property int duration: _dur
+    readonly property bool playing: ytMode ? (!!yt && yt.ready && !yt.paused)
+                                           : _seekHold || (!!_m && _m.playbackState === MediaPlayer.PlayingState)
+    readonly property bool buffering: ytMode ? (!yt || !yt.ready)
+                                             : vidMode && !_m ? true
+                                             : !!_m && (_m.status === MediaPlayer.Loading || _m.status === MediaPlayer.Buffering
+                                                        || _m.status === MediaPlayer.Stalled)
+    // show the target time while the resume seek is pending
+    readonly property int position: ytMode ? (yt ? yt.position : 0)
+                                    : _m ? (_resumeTo > 0 ? _resumeTo : _seekShow >= 0 ? _seekShow : Math.max(0, _m.position)) : 0
+    // media-hub reports junk mid-seek; show the target until it lands
+    property int _seekShow: -1
+    property Timer _seekShowEnd: Timer { interval: 8000; onTriggered: player._seekShow = -1 }
+    readonly property int duration: ytMode ? (yt ? yt.duration : 0) : _m && _m.duration > 0 ? _m.duration : _durHint
+    property int _durHint: 0
+    property real _resumeStart: 0
     readonly property var rates: [1.0, 1.25, 1.5, 2.0, 0.75]
 
     property int _resumeTo: 0
     property var _db: null
 
-    // [podcast] trace for device debugging (journalctl --user); ids and types only, no URLs
-    function log(m) { console.log("[podcast] " + m); }
     function key(ep) { return "podcast-" + (ep ? ep.id : ""); }
-    // audio only: on the phone a video file with no video surface hangs media-hub
-    function canPlay(ep) { return !!ep && ep.contentType === "audio" && !ep.isLocked && !!(ep.contentUrl || Downloads.pathFor(key(ep))); }
+    function canPlay(ep) { return !!ep && (ep.contentType === "audio" || ep.contentType === "video" || isYtLink(ep)) && !ep.isLocked && !!(ep.contentUrl || Downloads.pathFor(key(ep))); }
     function isCurrent(ep) { return !!ep && !!current && String(current.id) === String(ep.id); }
     function sourceFor(ep) { return Downloads.pathFor(key(ep)) || ep.contentUrl || ""; }
 
-    // starts at the saved resume point
-    function play(ep, list) {
+    // at: start position (ms), else saved resume point
+    function play(ep, list, at, dur) {
         if (!canPlay(ep)) return;
-        if (isCurrent(ep)) { audio.play(); return; }
+        if (isCurrent(ep)) { if (!playing) toggle(); return; }
         _save();
-        _seekTarget = -1;
-        _pos = 0;
-        _dur = 0;
+        // mute before the view is torn down
+        if (yt && !isYt(ep)) yt.stop();
+        // media-hub ignores a cleared source and keeps playing; only destroying the player stops it
+        if (!isVideo(ep)) { if (vid) vid.source = ""; vidWarm = false; }
+        if (isYt(ep) || isVideo(ep)) _dropAudio();
+        _local = isSaved(ep);
         current = ep;
         queue = (list && list.length) ? list : [ep];
         index = 0;
         for (var i = 0; i < queue.length; i++) if (String(queue[i].id) === String(ep.id)) { index = i; break; }
         error = "";
-        _resumeTo = _loadPos(key(ep));
-        log("audio play ep=" + ep.id + " resume=" + _resumeTo);
-        _resumeMuted = _resumeTo > 0;
-        _rateChecked = false;
-        _resumeGiveUp.restart();
+        _seekHold = false;
+        _seekShow = -1;
+        _resumeStart = Date.now();
+        _durHint = dur > 0 ? dur : 0;
+        _resumeTo = isYt(ep) ? 0 : at > 0 ? at : _loadPos(key(ep));
+        ytUserPaused = false;
+        _log("play " + (ep.title || ep.id) + " at=" + at);
+        if (isYt(ep)) return;
+        // Main.qml builds the shared video player, then calls _feedVid
+        if (isVideo(ep)) { vidWarm = true; _feedVid(); return; }
         _ensureAudio();
         audio.source = sourceFor(ep);
         audio.play();
     }
-    function toggle() { if (playing) pause(); else if (current) audio.play(); }
-    function pause() { if (playing) { audio.pause(); _save(); } }
-    function stop() { log("audio stop"); _save(); _seekTarget = -1; _resumeTo = 0; _pos = 0; _dur = 0; if (audio) { audio.stop(); audio.source = ""; } current = null; queue = []; index = -1; }
+    function _feedVid() {
+        if (!vid || !vidMode) return;
+        var s = sourceFor(current);
+        if (vid.source === s) return;
+        vid.media.playbackRate = rate;
+        vid.source = s;
+    }
+    function toggle() {
+        if (playing) { pause(); return; }
+        if (ytMode) { ytUserPaused = false; if (yt) yt.play(); }
+        else if (vidMode) { if (vid) vid.togglePause(); }
+        else if (current) audio.play();
+    }
+    function pause() {
+        if (!playing) return;
+        var held = _seekHold;
+        _seekHold = false;
+        if (ytMode) { ytUserPaused = true; yt.pause(); }
+        else if (vidMode) { if (vid && !held) vid.togglePause(); }
+        else audio.pause();
+        _save();
+    }
+    function stop() {
+        _save(); _seekHold = false; _resumeTo = 0; _seekShow = -1;
+        if (yt) yt.stop();
+        if (vid) vid.source = "";
+        vidWarm = false;
+        _dropAudio();
+        current = null; queue = []; index = -1;
+    }
     function seekTo(ms) {
-        if (!audio) { _resumeTo = 0; return; }
-        var t = Math.max(0, Math.min(ms, duration > 0 ? duration : ms));
-        _seekTarget = t;
         _resumeTo = 0;
-        log("audio seek " + t);
-        _seekTries = 0;
-        audio.seek(t);
-        _seekRetry.restart();
+        if (ytMode) { if (yt) yt.seekTo(Math.max(0, ms)); }
+        else if (_m) {
+            var t = Math.max(0, Math.min(ms, duration > 0 ? duration : ms));
+            _seekShow = t;
+            _seekShowEnd.restart();
+            _m.seek(t);
+        }
     }
     function seekBy(ms) { seekTo(position + ms); }
-    function cycleRate() {
-        var i = rates.indexOf(rate);
-        rate = rates[(i + 1) % rates.length];
-        if (audio && playing) Qt.callLater(function () { player.checkRate(audio.playbackRate); });
+    onRateChanged: {
+        if (yt) yt.setRate(rate);
+        if (vid) vid.media.playbackRate = rate;
     }
-    // media-hub ignores playbackRate; once seen, hide speed for native playback
-    property bool rateSupported: true
-    property bool _rateChecked: false
-    function checkRate(actual) {
-        if (rate === 1 || Math.abs(actual - rate) < 0.01) return;
-        log("rate unsupported, asked " + rate + " got " + actual);
-        rateSupported = false;
-        rate = 1.0;
-        Toast.show(Lang.tr("Playback speed isn't supported on this device."));
-    }
+    function cycleRate() { var i = rates.indexOf(rate); rate = rates[(i + 1) % rates.length]; }
 
     function hasNext() { return _nextIndex(1) >= 0; }
     function hasPrev() { return _nextIndex(-1) >= 0; }
@@ -162,6 +211,7 @@ QtObject {
         } catch (e) { console.log("Player save error: " + e); }
         if (dur > 0) { _progress[k] = Math.min(1, pos / dur); progressRev++; }
     }
+    function _save() { if (current && position > 0) _savePos(key(current), position, duration); }
     // key -> 0..1 listened, for list rows; read once at start (not inside a binding), kept current by _savePos
     property var _progress: ({})
     property int progressRev: 0
@@ -176,96 +226,105 @@ QtObject {
         } catch (e) { console.log("Player progress error: " + e); }
         _progress = m;
     }
-    function _save() { if (current && position > 0) _savePos(key(current), position, duration); }
-    // resume points for video episodes, which play outside this player
-    function resumePoint(ep) { return ep ? _loadPos(key(ep)) : 0; }
-    function savePoint(ep, pos, dur) { if (ep && pos > 0) _savePos(key(ep), pos, dur); }
 
-    // silent until the resume seek lands, so the first seconds don't play; toggled so media-hub's new session gets it
-    property bool _resumeMuted: false
-    function _mute(on) { if (!audio) return; audio.muted = !on; audio.muted = on; }
-    function _unmuteIfSettled() { if (_resumeMuted && _resumeTo <= 0 && _seekTarget < 0) { _resumeMuted = false; _mute(false); } }
-    on_ResumeToChanged: _unmuteIfSettled()
-    on_SeekTargetChanged: _unmuteIfSettled()
-    // media-hub never emits seekableChanged or a Loaded status, so also try once playing with a length
+    function _ended() {
+        if (!current) return;
+        _savePos(key(current), duration, duration);
+        if (autoplayNext && hasNext()) next();
+    }
+
+    // shortcut: debug log for the resume jump, remove once fixed
+    function _log(m) {
+        console.log("[pod] +" + (Date.now() - _resumeStart) + "ms " + m
+                    + (_m ? " | pos=" + _m.position + " state=" + _m.playbackState + " status=" + _m.status
+                            + " seekable=" + _m.seekable : "") + " vid=" + vidMode
+                    + " resumeTo=" + _resumeTo + " hold=" + _seekHold);
+    }
     function _applyResume() {
-        if (audio && _resumeTo > 0 && (audio.seekable || (audio.playbackState === Audio.PlayingState && audio.duration > 0))) {
-            seekTo(_resumeTo);
+        if (_m && _resumeTo > 0 && _m.seekable) { _log("seek -> " + _resumeTo); _m.seek(_resumeTo); _seekAt = Date.now(); }
+    }
+    property real _seekAt: 0
+    // media-hub says "playing" ~3s before audio starts, drops seeks until then, and ignores mute.
+    // So poll: the moment real audio starts, pause, seek, and play once it lands.
+    property bool _seekHold: false
+    property Timer _probe: Timer {
+        interval: 100
+        repeat: true
+        running: player._resumeTo > 0 && !!player._m
+        onTriggered: player._probeTick()
+    }
+    function _probeTick() {
+        var m = _m;
+        var p = m.position;
+        if (p >= _resumeTo - 3000) { _log("probe landed at " + p); _resumeTo = 0; return; }
+        // pipeline still loading
+        if (p < 0) return;
+        if (!_seekHold && m.playbackState === MediaPlayer.PlayingState && Date.now() - _seekAt > 1500) {
+            _log("probe: started at " + p + ", pause + seek");
+            _seekHold = true;
+            m.pause();
+            m.seek(_resumeTo);
+            _seekAt = Date.now();
+        } else if (_seekHold && Date.now() - _seekAt > 2000) {
+            _log("probe: paused seek didn't land, play");
+            _seekHold = false;
+            m.play();
         }
+    }
+    on_ResumeToChanged: {
+        if (_resumeTo > 0 || !_seekHold) return;
+        _seekHold = false;
+        if (_m) _m.play();
+    }
+    // keep retrying until the seek lands
+    function _checkResume() {
+        if (_resumeTo <= 0) return;
+        if (!_m) return;
+        // give up after 10s so it never hangs
+        if (_m.position >= _resumeTo - 3000 || Date.now() - _resumeStart > 10000) { _log("resume done"); _resumeTo = 0; }
+        else if (_m.position > 0 && Date.now() - _seekAt > 1500) _applyResume();
     }
 
     // created on first play; media backend start is slow
     property var audio: null
+    function _dropAudio() { if (!audio) return; var a = audio; audio = null; a.stop(); a.destroy(); }
     function _ensureAudio() { if (!audio) audio = _audioComp.createObject(player); return audio; }
 
     property Component _audioComp: Component {
       Audio {
         playbackRate: player.rate
-        // default 1s ticks make the seek bar step
-        notifyInterval: 500
-        onSeekableChanged: player._applyResume()
-        onDurationChanged: {
-            if (duration > 0) player._dur = duration;
-            player._applyResume();
-        }
-        onPlaybackStateChanged: {
-            player.log("audio state " + playbackState + " pos=" + player._pos);
-            if (playbackState !== Audio.PlayingState) return;
-            if (player._resumeMuted) player._mute(true);
-            player._applyResume();
-            if (!player._rateChecked) { player._rateChecked = true; Qt.callLater(function () { if (player.audio) player.checkRate(player.audio.playbackRate); }); }
-        }
-        onPositionChanged: {
-            if (position < 0) return;
-            player._pos = position;
-            if (player._landed(position)) player._seekTarget = -1;
-        }
-        onStatusChanged: {
-            if (status === Audio.Loaded || status === Audio.Buffered) player._applyResume();
-            if (status === Audio.EndOfMedia && player.current) {
-                player.log("audio ended ep=" + player.current.id);
-                player._savePos(player.key(player.current), player.duration, player.duration);
-                if (player.autoplayNext && player.hasNext()) player.next();
+        // shortcut: media-hub reports the video page's cleared source ("uri  ") here, drop if hub gets per-player sessions
+        onError: if (errorString.indexOf("uri  ") < 0) player.error = errorString || Lang.tr("Couldn't play this episode.")
+      }
+    }
+
+    // resume + autoplay for whichever media is current
+    property Connections _mediaConn: Connections {
+        target: player._m
+        ignoreUnknownSignals: true
+        function onSeekableChanged() { player._log("seekable"); player._applyResume(); }
+        // media-hub drops seeks sent before playback starts
+        function onPositionChanged() {
+            player._checkResume();
+            // 5s slack: video seeks snap to a keyframe
+            if (player._seekShow >= 0 && Math.abs(player._m.position - player._seekShow) < 5000) {
+                player._log("seek landed, target " + player._seekShow);
+                player._seekShow = -1;
             }
         }
-        // media-hub reports another player's cleared source ("uri  ") here; not ours to show
-        onError: {
-            player.log("audio error " + error + " " + errorString);
-            if (errorString.indexOf("uri  ") < 0) player.error = errorString || Lang.tr("Couldn't play this episode.");
+        function onPlaybackStateChanged() { player._log("state"); if (player._m.playbackState === MediaPlayer.PlayingState) player._applyResume(); }
+        function onStatusChanged() {
+            var st = player._m.status;
+            player._log("status");
+            if (st === MediaPlayer.Loaded || st === MediaPlayer.Buffered) player._applyResume();
+            if (st === MediaPlayer.EndOfMedia) player._ended();
         }
-      }
     }
 
     // the app may be suspended or closed before the next tick
     property Connections _appState: Connections {
         target: Qt.application
         function onStateChanged() { if (Qt.application.state !== Qt.ApplicationActive) player._save(); }
-    }
-
-    // never leave the shown time parked on a resume point that couldn't be applied
-    property Timer _resumeGiveUp: Timer {
-        interval: 12000
-        onTriggered: player._resumeTo = 0
-    }
-
-    // media-hub drops a seek sent too soon after play starts: resend until the position lands, then give up
-    property int _seekTries: 0
-    function _landed(pos) { return _seekTarget >= 0 && pos >= _seekTarget - 1500 && pos <= _seekTarget + 6000; }
-    property Timer _seekRetry: Timer {
-        interval: 1500
-        repeat: true
-        onTriggered: {
-            if (!player.audio || player._seekTarget < 0 || player._landed(player._pos)) { player._seekTarget = -1; stop(); return; }
-            if (++player._seekTries > 5) { player._seekTarget = -1; stop(); return; }
-            player.audio.seek(player._seekTarget);
-        }
-    }
-
-    property Settings _prefs: Settings {
-        category: "PodcastPlayer"
-        property alias rate: player.rate
-        property alias autoplayNext: player.autoplayNext
-        property alias rateSupported: player.rateSupported
     }
 
     property Timer _saver: Timer {
