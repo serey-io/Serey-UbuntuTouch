@@ -6,7 +6,7 @@ QtObject {
     id: config
 
     // App version shown in Settings and reported to the web bridge; keep in sync with manifest.json.in "version" on every release.
-    readonly property string appVersion: "1.1.21"
+    readonly property string appVersion: "1.1.22"
 
     // set by a tap that opens the comment box, so KeyboardDismisser leaves it open
     property bool keepKeyboardTap: false

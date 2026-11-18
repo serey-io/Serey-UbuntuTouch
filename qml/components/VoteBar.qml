@@ -479,10 +479,11 @@ RowLayout {
     Item {
         Layout.fillWidth: true
         Layout.preferredHeight: units.gu(3.5)
-        visible: bar.onChain && bar.payout.length > 0 && bar.voteType !== "comment"
 
+        // spacer stays, keeps icons packed left
         CoinValue {
             id: payoutPill
+            visible: bar.onChain && bar.payout.length > 0 && bar.voteType !== "comment"
             anchors { right: parent.right; verticalCenter: parent.verticalCenter }
             // In a side rail the bar's right edge is the window frame, so keep a little air
             // there. Elsewhere the pill sits flush, level with the vote icons on the left.

@@ -84,6 +84,7 @@ Page {
         communityName: Config.communityName
         onOpenCommunityRequested: page.applyCommunity(communityId)
         onOpenPostRequested: Nav.openPost(params)
+        onOpenPodcastRequested: Nav.openPodcast(episodeId)
         // Ignoring the already-selected community stops our own siteUrl() hops from looping
         onSiteNavigated: page.applyCommunity(Config.communityIdForUrl(url))
 

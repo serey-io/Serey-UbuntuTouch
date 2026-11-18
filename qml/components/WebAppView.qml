@@ -100,6 +100,8 @@ FocusScope {
     signal openExternalBrowserRequested(string url)
     // Mini app tapped a blog card: open it in the native reader instead of its own modal
     signal openPostRequested(var params)
+    // web podcast link tapped; "" = list
+    signal openPodcastRequested(string episodeId)
     // params: { subscription_plan_id, method: "crypto"|"stripe" }
     signal buyPlanRequested(var params)
     signal stripeCheckoutIntercepted(string url)
@@ -181,7 +183,16 @@ FocusScope {
                     "  (document.head || document.documentElement).appendChild(meta);" +
                     "});"
 
-                sourceCode: preamble + nativeMarker + perfCss
+                // podcast taps: no web nav, hand to native
+                readonly property string podcastTap: "" +
+                    "window.addEventListener('click', function(e) {" +
+                    "  var a = e.target && e.target.closest && e.target.closest('a[href]');" +
+                    "  if (!a || !/^https?:\\/\\/[^\\/]+(?:\\/[^\\/?#]+)?\\/podcast(?:[\\/?#]|$)/.test(a.href)) return;" +
+                    "  e.preventDefault(); e.stopImmediatePropagation();" +
+                    "  console.log('UBUNTU_BRIDGE:' + JSON.stringify({ id: 0, method: 'openPodcast', params: { url: a.href } }));" +
+                    "}, true);"
+
+                sourceCode: preamble + nativeMarker + perfCss + podcastTap
                             + (webAppView.desktopMode ? "" : mobileSpoof)
             }
         ]
@@ -190,6 +201,13 @@ FocusScope {
         onUrlChanged: {
             var u = webView.url.toString();
             if (u === "") return;
+            // SPA push: undo it, open natively
+            var ep = webAppView._podcastEpisode(u);
+            if (ep !== null) {
+                webView.goBack();
+                webAppView.openPodcastRequested(ep);
+                return;
+            }
             webAppView._loadedUrl = u;
             webAppView.siteNavigated(u);
         }
@@ -258,6 +276,9 @@ FocusScope {
                 // Cancel the web load and hand the code to the native redeem flow.
                 request.action = 255;
                 webAppView.inviteRedeemIntercepted(u);
+            } else if (webAppView._podcastEpisode(u) !== null) {
+                request.action = 255;
+                webAppView.openPodcastRequested(webAppView._podcastEpisode(u));
             }
         }
     }
@@ -419,6 +440,13 @@ FocusScope {
                 }
             });
         }
+    }
+
+    // podcast url -> episode id ("" = list), else null
+    function _podcastEpisode(u) {
+        if (!/^https?:\/\/[^\/]+(?:\/[^\/?#]+)?\/podcast(?:[\/?#]|$)/.test(u)) return null;
+        var m = /[?&]episode=([^&#]+)/.exec(u);
+        return m ? decodeURIComponent(m[1]) : "";
     }
 
     // path+query if `u` is on the site we already have loaded, else "".
@@ -661,6 +689,10 @@ FocusScope {
                 } else {
                     _sendError(id, "Missing author or permlink");
                 }
+                break;
+            case "openPodcast":
+                var ep = webAppView._podcastEpisode(String(params.url || ""));
+                if (ep !== null) webAppView.openPodcastRequested(ep);
                 break;
             case "openExternalBrowser":
                 if (params.url) {

@@ -12,6 +12,16 @@ Item {
     readonly property var c: comment ? comment : ({})
     readonly property var replies: c.replies || []
     property int depth: 0
+    // tiktok style: whole thread flat under top comment
+    property string replyTo: ""
+    readonly property var _flatReplies: depth === 0 ? _flatten(replies, "", []) : []
+    function _flatten(list, parentAuthor, out) {
+        for (var i = 0; i < list.length; i++) {
+            out.push({ data: list[i], replyTo: parentAuthor });
+            _flatten(list[i].replies || [], list[i].author || "", out);
+        }
+        return out;
+    }
     // always expanded, no collapse toggle
     property bool repliesExpanded: true
     property bool topLevel: true
@@ -110,7 +120,10 @@ Item {
 
                 Label {
                     width: parent.width
-                    text: c.author || ""
+                    text: item.replyTo && item.replyTo !== c.author
+                          ? (c.author || "") + " <font color='" + Style.textSecondary + "'>▸ " + item.replyTo + "</font>"
+                          : (c.author || "")
+                    textFormat: Text.StyledText
                     font.pixelSize: Style.fontRegular
                     font.weight: Font.DemiBold
                     color: Style.textPrimary
@@ -323,9 +336,9 @@ Item {
             }
         }
 
-        // Nested replies: only indent one level deep; deeper replies stay flat
+        // replies: one indent, flat list
         Item {
-            visible: item.repliesExpanded && item.replies.length > 0
+            visible: item.repliesExpanded && item._flatReplies.length > 0
             width: parent.width
             height: visible ? repliesCol.height : 0
 
@@ -357,13 +370,14 @@ Item {
 
                 Repeater {
                     // Only instantiate reply rows while expanded; collapsing frees them.
-                    model: item.repliesExpanded ? item.replies : []
+                    model: item.repliesExpanded ? item._flatReplies : []
                     delegate: Loader {
                         id: replyLoader
                         width: repliesCol.width
                         property var replyData: modelData
                         Component.onCompleted: setSource(Qt.resolvedUrl("CommentItem.qml"), {
-                            comment:  replyData,
+                            comment:  replyData.data,
+                            replyTo:  replyData.replyTo,
                             topLevel: false,
                             compact:  repliesCol.ownerCompact,
                             depth:    Math.min(repliesCol.ownerDepth + 1, 1)

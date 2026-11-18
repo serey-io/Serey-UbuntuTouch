@@ -798,6 +798,29 @@ MainView {
                 allowSidePanel: false
             });
         }
+        // mini app podcast: episode on active stack, else Podcast tab
+        function onOpenPodcast(episodeId) {
+            var cid = Config.communityId;
+            var key = FeedCache.podcastKey(cid);
+            var toTab = function () { root.currentTab = 3; root._ensureTab(3); };
+            var show = function (rows) {
+                var ep = null;
+                for (var i = 0; i < rows.length && !ep; i++)
+                    if (String(rows[i].id) === episodeId) ep = rows[i];
+                if (!ep || !root.activeStack) return false;
+                // Global queue skips Cambodia, like the Podcast tab
+                var queue = cid > 0 ? rows : rows.filter(function (e) { return !Config.hiddenCommunityIds[String(e.communityId)]; });
+                root.activeStack.push(Qt.resolvedUrl("pages/PodcastEpisodePage.qml"), { episode: ep, queue: queue });
+                return true;
+            };
+            if (!episodeId) { toTab(); return; }
+            if (show(FeedCache.peek(key) || [])) return;
+            var agg = cid <= 0 || !!Config.topLevelCommunityIds[cid];
+            FeedCache.request(key,
+                function (ok, err) { return PodcastService.listFor(Config.baseUrl, cid, agg, ok, err); },
+                function (rows) { if (!show(rows || [])) toTab(); },
+                function () { toTab(); });
+        }
         function onEditCaption(post) {
             var stack = root.activeStack;
             if (stack) stack.push(Qt.resolvedUrl("pages/EditCaptionPage.qml"), { post: post });

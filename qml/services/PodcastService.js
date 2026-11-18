@@ -203,3 +203,14 @@ function update(baseUrl, id, body, token, onOk, onErr) {
 function remove(baseUrl, id, token, onOk, onErr) {
     return Http.delWithBody(baseUrl, "/podcast/delete-by-id/" + id, { deleted_reason: "Deleted by owner" }, token, onOk, onErr);
 }
+
+// episode comments, same shape as post replies
+function comments(baseUrl, id, token, onOk, onErr) {
+    return Http.get(baseUrl, "/podcast/comments/" + id, null, token,
+        function (data) { onOk(((data || {}).replies || []).map(M.toComment)); }, onErr);
+}
+
+// no permlink = new; no parent = top-level
+function saveComment(baseUrl, id, body, token, onOk, onErr) {
+    return Http.post(baseUrl, "/podcast/comments/" + id, body, token, onOk, onErr);
+}
